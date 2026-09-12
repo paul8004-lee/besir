@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body, #map { margin: 0; padding: 0; width: 100%; height: 100%; }
+    #msg { position: absolute; top: 50%; left: 0; right: 0; transform: translateY(-50%);
+           text-align: center; font: 14px -apple-system, sans-serif; color: #888; }
+  </style>
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=__APPKEY__&autoload=false"></script>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="msg">지도를 불러오는 중…</div>
+  <script>
+    let map, overlays = [];
+    let pending = null;
+    let lastData = null;
+
+    function ready() { return typeof kakao !== 'undefined' && kakao.maps && map; }
+
+    function showError(text) {
+      const m = document.getElementById('msg');
+      m.style.display = 'block';
+      m.style.color = '#ff6b6b';
+      m.innerHTML = text;
+    }
+
+    function diag(t){ try{ window.webkit.messageHandlers.log.postMessage(String(t)); }catch(e){} }
+
+    function init() {
+      diag('init: kakao=' + (typeof kakao));
+      if (typeof kakao === 'undefined' || !kakao.maps) {
+        showError('카카오맵 SDK 로드 실패<br>JavaScript 키 / 네트워크 확인');
+        return;
+      }
+      kakao.maps.load(function () {
+        diag('maps.load callback fired');
+        try {
+          map = new kakao.maps.Map(document.getElementById('map'), {
+            center: new kakao.maps.LatLng(37.5665, 126.9780),
+            level: 6
+          });
+          diag('map created OK');
+          document.getElementById('msg').style.display = 'none';
+          if (pending) { renderRoute(pending); pending = null; }
+        } catch (e) {
+          diag('map create error: ' + e.message);
+          showError('카카오맵 표시 실패: ' + e.message);
+        }
+      });
+    }
+
+    // SDK가 일정 시간 내 준비 안 되면(도메인 미등록 등) 안내.
+    setTimeout(function () {
+      diag('timeout: kakao=' + (typeof kakao) +
+           ' maps=' + (typeof kakao !== 'undefined' && !!kakao.maps) +
+           ' map=' + (!!map));
+      if (!ready()) showError('지도를 불러오지 못했습니다.<br>카카오 콘솔 JavaScript SDK 도메인에 <b>http://localhost:8089</b> 등록 후 다시 시도하세요.');
+    }, 5000);
+
+    // data: {origin:{lat,lng}|null, dest:{lat,lng,name}, path:[{lat,lng}], mode}
+    function renderRoute(data) {
+      if (!ready()) { pending = data; return; }
+      lastData = data;
+      // WKWebView가 0 크기로 생성된 뒤 레이아웃되면 지도 내부 크기가 어긋나
+      // 폴리라인이 사용자가 지도를 움직이기 전까지 그려지지 않는다. relayout으로 강제 갱신.
+      map.relayout();
+      overlays.forEach(o => o.setMap(null));
+      overlays = [];
+      const bounds = new kakao.maps.LatLngBounds();
+
+      function marker(lat, lng, color, label) {
+        const pos = new kakao.maps.LatLng(lat, lng);
+        const m = new kakao.maps.Marker({ position: pos, map: map });
+        overlays.push(m);
+        bounds.extend(pos);
+        if (label) {
+          const ov = new kakao.maps.CustomOverlay({
+            position: pos, yAnchor: 2.2,
+            content: '<div style="padding:2px 6px;background:' + color +
+                     ';color:#fff;border-radius:6px;font:12px sans-serif;white-space:nowrap;">' + label + '</div>'
+          });
+          ov.setMap(map); overlays.push(ov);
+        }
+      }
+
+      if (data.origin) marker(data.origin.lat, data.origin.lng, '#2b7fff', '출발');
+      if (data.dest) marker(data.dest.lat, data.dest.lng, '#ff3b30', data.dest.name || '도착');
+
+      function drawLine(coords, color, dashed) {
+        if (!coords || coords.length < 2) return;
+        var pts = coords.map(function (p) { return new kakao.maps.LatLng(p.lat, p.lng); });
+        var poly = new kakao.maps.Polyline({
+          path: pts, strokeWeight: dashed ? 4 : 6, strokeColor: color,
+          strokeOpacity: dashed ? 0.8 : 0.9, strokeStyle: dashed ? 'shortdash' : 'solid'
+        });
+        poly.setMap(map); overlays.push(poly);
+        pts.forEach(function (p) { bounds.extend(p); });
+      }
+
+      if (data.segments && data.segments.length) {
+        // 도보/지하철/버스/자동차 구간별 색·스타일로 그리기
+        data.segments.forEach(function (seg) {
+          drawLine(seg.coords, seg.color, seg.mode === 'walk');
+        });
+      }
+      // 실제 경로 좌표가 없으면(로딩 중·장거리 대중교통 등) 직선을 그리지 않고
+      // 출발/도착 마커만 표시한다(가짜 경로처럼 보이는 파란 점선 방지).
+
+      if (!bounds.isEmpty()) {
+        map.setBounds(bounds, 40, 40, 40, 40);
+        // 기기에서 폴리라인이 추가됐는데 즉시 칠해지지 않는 경우가 있다(사용자가
+        // 지도를 움직여야 보임). 잠시 후 relayout + setBounds를 다시 호출해
+        // 강제로 다시 그리게 한다(여러 시점에 시도해 기기 속도 편차를 흡수).
+        [80, 250, 600].forEach(function (ms) {
+          setTimeout(function () {
+            if (!ready()) return;
+            map.relayout();
+            map.setBounds(bounds, 40, 40, 40, 40);
+          }, ms);
+        });
+      }
+    }
+
+    // 뷰 크기가 바뀌면(첫 레이아웃 포함) 지도를 다시 맞추고 마지막 경로를 다시 그린다.
+    window.addEventListener('resize', function () {
+      if (ready() && lastData) renderRoute(lastData);
+    });
+
+    window.renderRoute = renderRoute;
+    init();
+  </script>
+</body>
+</html>

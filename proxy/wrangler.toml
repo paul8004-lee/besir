@@ -1,0 +1,23 @@
+name = "besir-proxy"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+# Workers AI 바인딩 — Cloudflare 자체 인프라에서 모델을 실행해 외부 호출(Gemini 등)이
+# 겪던 "데이터센터 IP 차단" 문제 자체가 없다. 별도 키/토큰 불필요.
+[ai]
+binding = "AI"
+
+# ⚠️ Smart Placement 비활성화(2026-09-09): 켜봤더니 오히려 Gemini가 차단하는 특정 지역으로
+# 실행 위치가 고정돼(요청마다 랜덤이 아니라 계속 같은 곳) "User location is not supported"가
+# 거의 매번 발생했다(8/8 실패). 기본(엣지별 랜덤 라우팅)이 그나마 확률적으로 통과 가능해 되돌림.
+
+# 비밀값은 코드/깃에 넣지 않고 wrangler secret 으로 등록한다:
+#   wrangler secret put KAKAO_REST_KEY
+#   wrangler secret put ODSAY_KEY
+#   wrangler secret put OPENAI_KEY      # 대화형 일정 등록(/ai/chat) 기본 백엔드 — 2026-09-12 도입
+#   wrangler secret put ANTHROPIC_KEY   # Claude 대화형 일정 등록용(현재 미사용)
+#   wrangler secret put APP_TOKEN
+#
+# (GEMINI_KEY는 2026-09-09 제거됨 — 위 주석 참고)
+#
+# 로컬 개발(`wrangler dev`)에서는 .dev.vars 파일에서 읽는다(아래 README 참고, gitignore됨).

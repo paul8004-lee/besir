@@ -1,0 +1,23 @@
+# 빌드 산출물 — xcodebuild -derivedDataPath 로 만든 것들(합쳐서 600MB 넘는다)
+build/
+build-device/
+DerivedData/
+
+# Cloudflare Worker 시크릿. CLAUDE.md의 "비밀값은 앱에 두지 않는다" 계약이
+# 저장소에도 그대로 적용된다 — 카카오·ODsay·OpenAI 키가 여기 들어 있다.
+proxy/.dev.vars
+proxy/.dev.vars.*
+proxy/.wrangler/
+.env
+.env.*
+
+proxy/node_modules/
+
+# 개인 Xcode 상태(창 배치, 브레이크포인트, 서명 계정). 공유하면 서로 덮어쓴다.
+**/xcuserdata/
+*.xcuserstate
+
+.DS_Store
+
+# xcodegen 결과물이 아니라 실험용으로 남은 사본
+besir-iOS copy-Info.plist
