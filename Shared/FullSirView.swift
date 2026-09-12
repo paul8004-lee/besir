@@ -441,7 +441,7 @@ private struct MealScheduleSheet: View {
 
     private func save() async {
         saving = true
-        await store.addActivityWithTravel(
+        let made = await store.addActivityWithTravel(
             title: target.place.name,
             location: target.place,
             startDate: start,
@@ -452,12 +452,13 @@ private struct MealScheduleSheet: View {
             returnMode: returnMode,
             bufferMinutes: 5,
             notifyLeadMinutes: 20)
-        // 방금 만든 활동과 식사 기록을 이어 둔다(일정을 지우면 이 기록도 같이 지워지도록).
-        let created = store.activities.last { $0.title == target.place.name && $0.startDate == start }
+        // 식사 기록을 방금 만든 활동에 묶어 둔다(일정을 지우면 이 기록도 같이 지워지도록).
+        // 제목·시각으로 되찾지 않고 id를 직접 받는다 — 되찾는 방식은 같은 이름·같은 시각 활동이
+        // 이미 있을 때 엉뚱한 쪽에 붙었다.
         store.addMeal(category: .diningOut,
                       title: target.place.name,
                       place: target.place,
-                      activityId: created?.id,
+                      activityId: made.activityId,
                       plannedAt: start)
         saving = false
         dismiss()

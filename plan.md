@@ -4,11 +4,12 @@
 > 목적: 사업계획서의 5개 서비스(be healthy/on-time/full/fun/rich sir)를 **어떤 순서로, 어떤 파일/API 단위로** 만들지 정하고, Claude Code(Pro 플랜)가 매일 새 세션에서 그대로 실행할 수 있을 만큼 구체적인 작업 리스트로 쪼갠다.
 > **이 문서는 앞으로 진행되는 besir 세션들의 1차 참조 스펙이다** — 매일 작업 전 이 파일에서 해당 Day 항목을 읽고 시작하고, 계획이 실제와 달라지면(설계 변경, API 제약 발견 등) 이 파일을 그 자리에서 갱신한다.
 
-## 1. 현재 상태 요약 (2026-09-10 "Besir 앱 세션 동기화" 세션 반영 갱신)
+## 1. 현재 상태 요약 (2026-09-12 갱신 — Phase 1 Day 9·10 실제 구현 반영)
 
 > 아래는 세션 `Besir 앱 세션 동기화`(로컬 세션, cwd `~/Projects/besir`)의 실제 진행 내역을 읽어 갱신한 최신 상태다. **Phase 0(AI 파이프라인)은 최초 계획과 다른 아키텍처로 이미 완료됐고, 그 사이 계획에 없던 be on-time sir 고도화 작업이 상당량 추가로 진행됐다.**
 
 - **be on-time sir**: 완성 + 고도화 진행 중. 일정 등록→이동시간 역산→출발알람→카카오맵 경로선→구글 캘린더 양방향 동기화까지 안정 동작. 여기에 더해 **즐겨찾기 장소, 출퇴근 왕복+점심 이동을 포함한 복합 반복 일정, AI 대화 기록 영구 저장, 월/주/일 통합 스와이프 캘린더 UI(드래그로 5분단위 일정 이동 포함)**까지 이번 세션에서 추가됨(§6 Phase 0.5 참고).
+- **be full sir**: Phase 1 Day 6·7·9·10 완료, **Day 8(배달/요리 조사)만 남음**. 전용 화면 `FullSirView`(기준 위치=현재 위치 또는 오늘 일정의 목적지 → 카카오 로컬 검색 → 고른 식당을 "식사 활동 블록 + 왕복 이동"으로 등록), 일정 상세의 "목적지 주변" 섹션, AI 툴 `recommend_meal`까지 동작. **Day 9·10은 계획과 다른 방식으로 구현됐다**(§6 Phase 1 표에 사유 기록) — 신규 `MealSuggestionService` 없이 기존 `PlaceSearch`/`Store.addActivityWithTravel`을 재사용했고, 연결 필드는 `scheduledEventId`가 아니라 `activityId`다. 아직 실기기 확인(Day 12)·코드 검사(Day 11) 전이다.
 - **AI 파이프라인(카카오톡 등에서 공유 텍스트/이미지 → 일정 자동 등록) — 완료, 아키텍처가 최초 계획과 다름**:
   - ~~Anthropic Claude API 배포~~ → **Google Gemini 시도 후 폐기** → Cloudflare Workers AI(`@cf/mistralai/mistral-small-3.1-24b-instruct`) → **현재 OpenAI `gpt-5.6-luna`로 확정(2026-09-12)**.
   - **와이어 포맷은 의도적으로 Gemini `generateContent` 형식을 그대로 유지** — 앱(`AIAssistant.swift`)은 백엔드가 뭐든 몰라도 되고, 백엔드 전환은 프록시의 번역 함수만 고치면 됨. **이 계약을 앞으로도 지킬 것.** 실제로 이번 OpenAI 전환에서 앱 코드는 한 줄도 안 고쳤다 — 계약이 값을 한 첫 사례다.
@@ -69,7 +70,7 @@
   6. 베타 버전 이름은 **`besir-beta-v0.1.0`, `v0.1.1`, `v0.1.2` …** 순으로 올린다(`~/Projects/` 아래, `BETA.md`에 변경 내역·복원 방법 기재).
   7. 베타는 확정 후 **수정하지 않는다**. 이후 작업은 `besir/`(작업본)에서만 하고, 다음 베타를 새로 뜬다.
   - **주의**: `xcodegen generate`를 돌리면 Xcode 서명 계정이 리셋돼 실기기 빌드가 깨진다(`No Account for Team`). 새 소스 파일이나 Info.plist 키를 추가했을 때만 돌리고, 돌린 뒤엔 사용자에게 besir-iOS·besirShare 두 타깃 Team 재선택을 요청해야 한다. 베타 폴더 이름을 바꿀 땐 Xcode에서 그 프로젝트를 먼저 닫는다(안 그러면 "workspace disappeared" 경고가 뜨고, Re-save를 누르면 옛 경로에 껍데기 폴더가 생긴다 — Close가 정답).
-- **베타 v0.1.1 — 아직 안 만듦(2026-09-11)**: Day 7 직후 한 번 만들었다가, 같은 날 사용자 확인 결과 수정 요청(이동수단 분리·활동 겹침 경고 제거·UI 분리·식사 추천 AI)이 들어와 **폐기**했다. 위 규칙 5번은 이 경험에서 나왔다 — Day 8로 넘어갈 때 만든다.
+- **베타 v0.1.1 — 아직 안 만듦(2026-09-12 확인)**: Day 7 직후 한 번 만들었다가, 같은 날 사용자 확인 결과 수정 요청 4건이 들어와 **폐기**했다. 위 규칙 5번은 이 경험에서 나왔다. **네 건 모두 반영 완료(2026-09-12)**: ① 이동수단 분리 → `addActivityWithTravel`의 `outboundMode`/`returnMode`로 출발·복귀를 따로 고른다, ② 활동 겹침 경고 → **없애지 않고** "막지 않고 알려만 주는" 배너로 바꿨다(잠깐 빠져나갔다 오는 등 일부러 겹치게 잡는 경우가 있어서 — `AddEventView.swift:279`), ③ UI 분리 → `RootView`에 서비스 선택을 두고 be full sir를 `FullSirView`로 분리, ④ 식사 추천 AI → `recommend_meal` 툴. **남은 조건은 Day 8뿐** — 규칙 5번대로 "사용자 확인 결과와 추가 요청을 전부 반영한 뒤"에 해당하므로, Day 8을 끝내고 뜬다.
 - **베타 v0.1.0 확정(2026-09-10)**: 경로 `~/Projects/besir-beta-v0.1.0/`. Phase 1 Day 6 착수 직전 + 코드 점검 2차 + 캘린더 중복/알림 수정 + 백그라운드 동기화 + 삭제 묘비까지 반영된 상태. 실기기 설치·실행 확인 완료.
 - **(구) 베타 버전 확정(2026-09-10)**: `~/Projects/besir-beta-20260910/` — Phase 1 착수 직전 상태 **+ 아래 "전체 코드 점검 2차"의 수정까지 전부 반영된** 버전을 베타로 확정(사용자 결정). 실기기 빌드·설치·실행 완료 시점의 소스와 동일(빌드 산출물·node_modules·Xcode 개인설정 제외, `BETA.md`에 내역·복원 방법 기재). Phase 1 작업 중 이 베타로 되돌아갈 수 있다.
 - **AI 사용량(Workers AI neurons) 최적화(2026-09-11)**: 사용자가 "9시가 지났는데 여전히 소진"이라고 보고. 확인 결과 **UTC 자정 초기화라는 내 어제 설명이 틀렸다**(UTC 00:14에도 여전히 4006). 정확한 초기화 주기는 이쪽에서 확인 불가(wrangler OAuth 토큰 권한이 account(read)뿐) — 사용자가 Cloudflare 대시보드 Workers & Pages → AI → 사용량에서 확인해야 함.
@@ -203,24 +204,30 @@
 | Day | 작업 | 대상 파일 | 완료 기준 |
 |---|---|---|---|
 | 6 | ✅ **완료(2026-09-10)** — `Models.swift`에 `MealCategory`(외식/배달/요리, `title`·`systemImage`는 `TransportMode`와 같은 형태) + `MealLog` 추가. `Store`에 `@Published var meals` + `meals.json` 로드/저장(`activities` 패턴 그대로) + `addMeal`/`updateMeal`/`deleteMeal`/`recentMeals(limit:)` 추가. `meals`는 시간표 블록이 아니라 이력이므로 `daysWithSchedule`에 넣지 않음(식당까지 가는 이동은 별도 `ScheduledEvent` 담당) | `Shared/Models.swift`, `Shared/Store.swift` | iOS·macOS 빌드 무경고 통과. JSON 왕복은 `Models.swift`를 직접 컴파일한 검증 스크립트로 12항목 확인(빈 배열, 세 카테고리, place/estimatedCost/scheduledEventId의 nil·비nil, loggedAt, 최신 우선 정렬, 모르는 카테고리는 디코드 실패 → 기존 값 유지) |
-| 7 | ✅ **완료(2026-09-11)** — 프록시 `/kakao/local/keyword`에 `category_group_code`·`x`·`y`·`radius`·`sort`·`page` 전달 추가(배포 완료). `PlaceSearch.nearbyPlaces(category:near:radius:limit:)` — FD6(음식점)/CE7(카페) 거리순. `EventDetailView`에 "목적지 주변" 섹션(펼쳤을 때만 조회 — 상세 열 때마다 장소 API를 쓰지 않으려고). 강남역 좌표로 프록시 직접 호출해 결과 확인. **신규 파일 없이** `PlaceSearch.swift`/`Models.swift`에 넣어 xcodegen 재생성(서명 리셋)을 피함 | (원래 계획) 외식 추천 구현: `PlaceSearch`(또는 `DirectionsService`와 같은 레벨의 신규 `MealSuggestionService`)에서 카카오 로컬 키워드검색 호출 시 `category_group_code=FD6` 파라미터 추가 → 일정 상세(`EventDetailView`)에 "주변 맛집 추천" 섹션 추가, 일정의 `destination` 좌표 기준 반경 검색 | `Shared/PlaceSearch.swift` 또는 신규 `Shared/MealSuggestionService.swift`, `Shared/EventDetailView.swift` | 일정 상세에서 목적지 주변 맛집 리스트 3~5개 표시 확인 |
-| 8 | (조사 Day, 구현 없음) 배달/요리 카테고리 조사: 요기요·배민 공식 오픈 API가 개인 개발자에게 열려있는지 웹 검색으로 확인 → 없을 경우 URL scheme 딥링크(`yogiyo://`, `baemin://` 등 존재 여부) 방식으로 결론. 조사 결과를 이 plan.md의 Day 9 항목 아래에 메모로 추가 | `plan.md`(조사 결과 기록) | 배달 카테고리 구현 방식이 확정되어 다음 세션 프롬프트에 바로 쓸 수 있음 |
-| 9 | AI 채팅 확장: `AIAssistant`에 신규 툴 `recommend_meal(budget?: Int, category?: string)` 추가 — 현재 위치 + 최근 `meals` 이력 + (있다면) `expenses` 예산 정보를 시스템 프롬프트에 주입해 자연어 "저녁 뭐 먹지" 요청 처리 → Day 7의 추천 로직 재사용. **Gemini 형식 툴 선언 계약 유지**(§3) | `Shared/AIAssistant.swift` | AI 채팅에 "저녁 뭐 먹을까"로 물으면 추천 응답 1회 성공 |
-| 10 | be on-time sir 연동: 식사 추천을 사용자가 선택하면 기존 `Store.addEvent` 파이프라인으로 "식사 일정"(제목=식당명, mode 임의/도보 기본) 등록 + `MealLog.scheduledEventId` 연결 | `Shared/Store.swift`, `Shared/MealSuggestionService.swift` | 추천 선택 → 캘린더에도 자동 등록되는 것까지 확인 |
-| 11 | **코드 검사**(§5-1 공통 + 아래 전용 항목) | `Shared/Models.swift`, `Shared/Store.swift`, `Shared/MealSuggestionService.swift`, `Shared/AIAssistant.swift` | 체크리스트 전 항목 확인, 발견 사항은 Day 13로 넘김 |
+| 7 | ✅ **완료(2026-09-11)** — 프록시 `/kakao/local/keyword`에 `category_group_code`·`x`·`y`·`radius`·`sort`·`page` 전달 추가(배포 완료). `PlaceSearch.nearbyPlaces(category:near:radius:limit:)` — FD6(음식점)/CE7(카페) 거리순. `EventDetailView`에 "목적지 주변" 섹션(펼쳤을 때만 조회 — 상세 열 때마다 장소 API를 쓰지 않으려고). 강남역 좌표로 프록시 직접 호출해 결과 확인. **신규 파일 없이** `PlaceSearch.swift`/`Models.swift`에 넣어 xcodegen 재생성(서명 리셋)을 피함. *(원래 계획은 `DirectionsService`와 같은 레벨의 신규 `MealSuggestionService`를 만드는 것이었다 — 위 서명 리셋 문제 때문에 기존 파일에 넣는 쪽으로 바꿨고, Day 10도 같은 이유로 이 결정을 따라갔다.)* | `Shared/PlaceSearch.swift`, `Shared/Models.swift`, `Shared/EventDetailView.swift`, `proxy/src/index.js` | 일정 상세에서 목적지 주변 맛집 리스트 3~5개 표시 확인 |
+| 8 | ⬜ **미완 — Phase 1에서 유일하게 남은 항목(2026-09-12 확인)**. (조사 Day, 구현 없음) 배달/요리 카테고리 조사: 요기요·배민 공식 오픈 API가 개인 개발자에게 열려있는지 웹 검색으로 확인 → 없을 경우 URL scheme 딥링크(`yogiyo://`, `baemin://` 등 존재 여부) 방식으로 결론. 조사 결과를 이 plan.md의 Day 9 항목 아래에 메모로 추가. **현재 `MealCategory.delivery`·`.cooking`은 `Models.swift`에 정의만 돼 있고 이걸 만드는 UI·AI 경로가 없다** — 이 Day의 결론이 나와야 죽은 코드인지 아닌지 판정된다 | `plan.md`(조사 결과 기록) | 배달 카테고리 구현 방식이 확정되어 다음 세션 프롬프트에 바로 쓸 수 있음 |
+| 9 | ✅ **완료(2026-09-12)** — `AIAssistant`에 `recommend_meal` 툴 추가(선언 `AIAssistant.swift:604`, 실행 `executeRecommendMeal`). Day 7의 `PlaceSearch.nearbyPlaces`를 그대로 재사용하고 **Gemini 형식 툴 선언 계약 유지**(§3). **인자가 계획과 다르다**: 계획의 `budget`은 넣지 않았다 — `expenses`는 Phase 3라 주입할 데이터가 아직 없다. 최근 `meals` 이력 주입도 하지 않았다(요청당 고정 토큰을 10,701→5,804로 줄인 직후라 되늘리지 않으려고). 대신 `keyword`/`category`(restaurant·cafe)/`at_iso`/`place_query`/`radius_meters`로 갔고, 기준 위치는 `place_query` → `at_iso`(그 시각에 있을 장소) → 현재 위치 순으로 떨어진다 — 실사용에서 "이따 강남 갔을 때 근처" 형태가 예산보다 훨씬 자주 나왔다 | `Shared/AIAssistant.swift` | AI 채팅에 "저녁 뭐 먹을까"로 물으면 추천 응답 1회 성공 |
+| 10 | ✅ **완료(2026-09-12)** — 계획의 `MealSuggestionService`+`Store.addEvent` 대신 **신규 화면 `FullSirView.swift`** + 기존 `Store.addActivityWithTravel`로 구현. Day 7 직후 들어온 수정 요청(UI 분리·이동수단 분리)을 같이 받느라 경로가 바뀌었다: 식당을 고르면 "식사 활동 블록 + 왕복 이동"이 한 번에 생기고 출발·복귀 이동수단을 각각 고른다. 연결 필드도 계획의 `MealLog.scheduledEventId`가 아니라 **`activityId`** — 묶이는 대상이 이동 일정이 아니라 활동 블록이라서다. 일정을 지우면 아직 안 먹은 기록도 같이 사라진다(`Store.removeUpcomingMeals` → `ScheduleLogic.mealsToRemove`, 이미 지난 식사는 실제 먹은 기록이라 남긴다) | `Shared/FullSirView.swift`(신규), `Shared/Store.swift`, `Shared/RootView.swift` | 추천 선택 → 활동+왕복 이동 등록 + `meals.json` 기록 확인 |
+| 11 | **코드 검사**(§5-1 공통 + 아래 전용 항목) | `Shared/Models.swift`, `Shared/Store.swift`, `Shared/PlaceSearch.swift`, `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` (계획에 있던 `MealSuggestionService.swift`는 만들지 않음) | 체크리스트 전 항목 확인, 발견 사항은 Day 13로 넘김 |
 | 12 | **실기기 테스트**(§5-2 공통 + 아래 전용 시나리오) | - | 체크리스트 전 항목 실행, 결과 기록 |
 | 13 | **안정화**(§5-3 공통) | `STATUS.md` | be full sir MVP 완료, 회귀(기존 be on-time sir 기능) 이상 없음 |
 
-**Phase 1 전용 코드 검사 항목(Day 11)**:
-- [ ] `MealSuggestionService`가 `PlaceSearch`/`DirectionsService`와 같은 프록시 호출 관례(`config.proxyRequest`)를 따르는지
-- [ ] `category_group_code=FD6` 파라미터가 기존 키워드 검색 쿼리 파라미터와 충돌 없이 추가됐는지
-- [ ] `recommend_meal` 툴의 예산/이력 주입이 시스템 프롬프트 길이를 과도하게 늘리지 않는지(최근 N건으로 제한했는지)
+**Phase 1 전용 코드 검사 항목(Day 11)** — *구현이 계획과 달라져 항목도 실제 코드 기준으로 교체함(2026-09-12)*:
+- [ ] `PlaceSearch.nearbyPlaces`가 `DirectionsService`와 같은 프록시 호출 관례(`config.proxyRequest`)를 따르는지 — 계획의 `MealSuggestionService`는 만들지 않았다(xcodegen 재생성=서명 리셋을 피하려고 기존 파일에 넣음)
+- [ ] `category_group_code`·`x`·`y`·`radius`·`sort`·`page`가 기존 키워드 검색 쿼리 파라미터와 충돌 없이 추가됐는지(프록시·앱 양쪽)
+- [ ] `executeRecommendMeal`의 인자 방어 — `radius_meters` 누락 시 1000, `keyword` 빈 문자열, `place_query`/`at_iso` 둘 다 없고 **위치 권한도 거부**된 경로에서 안내 문구로 끝나는지(빈 결과로 크래시하지 않는지)
+- [ ] **`FullSirView.save()`가 `await addActivityWithTravel` 직후 `store.activities.last { 제목·시작시각 일치 }`로 방금 만든 활동을 되찾는다** — 같은 제목·같은 시각 활동이 이미 있으면 엉뚱한 것에 붙고, 못 찾으면 `activityId`가 nil이라 일정을 지워도 식사 기록이 안 지워진다. §5-1의 "`await` 앞뒤로 인덱스/식별자를 재사용" 항목에 정확히 해당 — `addActivityWithTravel`이 만든 활동을 반환하도록 고치는 쪽이 맞다
+- [ ] `recommend_meal` 추가로 툴이 하나 늘었으니 요청당 고정 토큰이 5,804에서 얼마나 늘었는지 재측정(§1 최적화 기록의 기준선 유지)
+- [ ] `MealCategory.delivery`·`.cooking`이 어느 경로로도 생성되지 않는 상태 — Day 8 결론 전까지는 죽은 코드로 지우지 말 것
 
-**Phase 1 전용 실기기 테스트 시나리오(Day 12)**:
-- [ ] 일정 상세에서 "주변 맛집 추천" 3~5개가 실제로 표시되는지(목적지 좌표 기준)
-- [ ] AI 채팅에 "저녁 뭐 먹지"로 물었을 때 추천이 오는지, 즐겨찾기/최근 식사 이력이 있을 때와 없을 때 둘 다
-- [ ] 추천 선택 → `meals.json`에 기록 + 캘린더에 "식사 일정"으로 자동 등록되는지
+**Phase 1 전용 실기기 테스트 시나리오(Day 12)** — *실제 UI 기준으로 교체함(2026-09-12)*:
+- [ ] 일정 상세(`EventDetailView`)의 "목적지 주변" 섹션을 펼쳤을 때만 조회되고 3~5개가 뜨는지(상세를 열기만 해서는 장소 API를 쓰지 않는지도 함께 확인)
+- [ ] be full sir 화면에서 기준 위치를 **현재 위치 ↔ 오늘 일정의 목적지**로 바꿔가며 검색했을 때 각각 그 근처 결과가 나오는지, 거리순/정확도순 정렬이 실제로 다른지
+- [ ] AI 채팅에 "저녁 뭐 먹지"(기준 위치 없음)와 "이따 강남 갔을 때 근처에서"(`at_iso` 경로) 둘 다 물어보고, 검색 결과에 없는 가게를 지어내지 않는지
+- [ ] 식당 선택 → 식사 활동 블록 + 왕복 이동이 캘린더에 실제로 생기는지, 출발·복귀 이동수단을 다르게 골랐을 때 각각 반영되는지, `meals.json`에도 기록되는지
+- [ ] **그 일정을 지웠을 때 아직 안 먹은 식사 기록도 같이 사라지는지, 이미 지난 식사 기록은 남는지**(`ScheduleLogic.mealsToRemove`) — Day 11의 `activityId` nil 문제와 직결되므로 고친 뒤 확인
 - [ ] 카카오 로컬 검색 결과가 0건일 때(외곽 지역 등) 빈 상태 UI가 크래시 없이 뜨는지
+- [ ] 위치 권한을 거부한 상태에서 be full sir 검색·`recommend_meal` 둘 다 안내 문구로 끝나는지
 
 ### Phase 2 — be healthy sir MVP — Day 14~20
 

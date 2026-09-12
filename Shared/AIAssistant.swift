@@ -844,7 +844,7 @@ final class AIAssistant: ObservableObject {
             travelFrom: from, returnTo: to, outboundMode: outboundMode, returnMode: returnMode,
             bufferMinutes: defaultBuffer, notifyLeadMinutes: defaultNotify,
             notifyEnabled: (input["notify_enabled"] as? Bool) ?? true,
-            syncToCalendar: (input["add_to_calendar"] as? Bool) ?? true)
+            syncToCalendar: (input["add_to_calendar"] as? Bool) ?? true).travelLegs
 
         let where_ = place.map { " 장소 '\($0.name)'," } ?? ""
         var summary = "활동 블록 등록 완료 — '\(title)',\(where_) \(Self.when(start)) ~ \(Self.when(end))."

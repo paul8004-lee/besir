@@ -130,7 +130,9 @@ final class Store: ObservableObject {
     /// - `travelFrom`: 여기서 출발해 활동 시작 시각까지 도착하는 구간(도착 기준).
     /// - 가는 편·오는 편의 이동수단은 따로 받는다(갈 땐 지하철, 올 땐 택시처럼 다른 경우가 흔하다).
     /// - `returnTo`: 활동 종료 시각에 출발해 여기로 돌아오는 구간(출발 기준, 버퍼 없음).
-    /// - 반환값은 만들어진 이동 구간 수.
+    /// - 반환값은 만든 활동의 id와 이동 구간 수. **id를 함께 돌려주는 이유**: 호출부가 `await`가 끝난 뒤
+    ///   제목·시작시각으로 방금 만든 활동을 되찾다가, 같은 이름·같은 시각 활동이 이미 있으면 엉뚱한 쪽에
+    ///   붙고 못 찾으면 연결이 통째로 빠졌다(식사 기록이 일정과 함께 안 지워지는 원인이었다).
     @discardableResult
     func addActivityWithTravel(title: String,
                                location: Place?,
@@ -143,7 +145,7 @@ final class Store: ObservableObject {
                                bufferMinutes: Int,
                                notifyLeadMinutes: Int,
                                notifyEnabled: Bool = true,
-                               syncToCalendar: Bool = true) async -> Int {
+                               syncToCalendar: Bool = true) async -> (activityId: UUID, travelLegs: Int) {
         var activity = ActivityBlock(title: title, location: location, startDate: startDate, endDate: endDate)
         activity.syncToCalendar = syncToCalendar
         activities.append(activity)
@@ -157,7 +159,7 @@ final class Store: ObservableObject {
         }
 
         // 이동 구간은 활동 장소를 알아야 만들 수 있다(목적지/출발지가 곧 활동 장소).
-        guard let place = location else { return 0 }
+        guard let place = location else { return (activity.id, 0) }
         var made = 0
         if let from = travelFrom {
             await addEvent(title: title, origin: from, destination: place,
@@ -175,7 +177,7 @@ final class Store: ObservableObject {
                            notifyEnabled: notifyEnabled, syncToCalendar: syncToCalendar)
             made += 1
         }
-        return made
+        return (activity.id, made)
     }
 
     /// recurrenceId를 공유하는 ScheduledEvent(이동 구간)와 같이 묶여 일괄 삭제된다.
