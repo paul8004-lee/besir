@@ -558,7 +558,9 @@ final class Store: ObservableObject {
     /// 같은 출발지·목적지로 여러 요일에 반복되는 일정 한 구간을 한 번에 생성한다(예: "매주 평일 9시 도착").
     /// 출퇴근처럼 여러 구간(등원+복귀+점심 이동 등)을 한 묶음으로 삭제하려면 같은 `recurrenceId`를 넘긴다
     /// (기본값은 새로 생성 — 호출부가 반환받아 이후 구간 호출에 재사용).
-    /// 남용 방지로 최대 12주까지만 생성한다. 반환값은 (실제로 생성된 일정 수, 사용된 recurrenceId).
+    /// 남용 방지로 `maxRecurrenceWeeks`까지만 생성한다 — 숫자를 여기 적어두면 상수와 어긋난다
+    /// (실제로 12주로 적혀 있다가 상수가 26으로 바뀐 뒤에도 남아, SPEC이 이 주석을 옮겨 적었다).
+    /// 반환값은 (실제로 생성된 일정 수, 사용된 recurrenceId).
     @discardableResult
     func addRecurringEvents(title: String,
                             origin: Place,
@@ -790,6 +792,10 @@ final class Store: ObservableObject {
             to: CLLocationCoordinate2D(latitude: event.destination.latitude, longitude: event.destination.longitude))
         guard let seconds = estimate.duration else { return }
         event.travelSeconds = seconds
+        // @MX:DEBT: 출발시각 산식(도착 − 이동 − 버퍼)이 이 파일 세 곳에 복제돼 있다 —
+        //           여기, `adjustBuffer`, `applyCachedArrivalEstimate`.
+        // @MX:CEILING: 세 식이 지금은 글자 그대로 동일하다. 버퍼·반올림·타임존 의미가 달라지는 순간 깨진다.
+        // @MX:UPGRADE: 버퍼 의미를 바꾸거나 네 번째 호출처가 생기면 Store의 함수 하나로 합친다 (CLAUDE.md 계약 5).
         let departure = event.arrivalDate.addingTimeInterval(-seconds - Double(event.bufferMinutes) * 60)
         event.departureDate = departure
         event.notificationId = scheduleDepartureNotification(
@@ -891,7 +897,7 @@ final class Store: ObservableObject {
                 adjustBuffer(t.id, deltaMinutes: minutes)
             }
         }
-        save()   // 회차마다 저장하면(12주 반복이면 60번) 드래그를 놓을 때 눈에 띄게 멈춘다 — 한 번만.
+        save()   // 회차마다 저장하면(26주 반복이면 130번) 드래그를 놓을 때 눈에 띄게 멈춘다 — 한 번만.
     }
 
     /// 같은 반복 그룹(activity의 recurrenceId)에서 그 활동과 같은 날, 그 활동 장소로 향하는(도착형)/
@@ -938,6 +944,7 @@ final class Store: ObservableObject {
             // 버퍼는 반대로 변한다(출발을 늦추려면 버퍼가 줄어야 함).
             newBuffer = max(0, min(180, event.bufferMinutes - deltaMinutes))
             event.bufferMinutes = newBuffer
+            // @MX:DEBT: 출발시각 산식 3중 복제 — 전체 내용은 `applyEstimate(to:)`의 마커 참고.
             event.departureDate = event.arrivalDate.addingTimeInterval(-travel - Double(newBuffer) * 60)
         case .departure:
             // 자유단 = 도착시각(= 출발 + 이동 + 버퍼). 도착을 deltaMinutes만큼 늦추려면 버퍼가 늘어야 함.
@@ -967,6 +974,7 @@ final class Store: ObservableObject {
         event.anchor = .arrival
         if let nid = event.notificationId { notifications.cancel(id: nid) }
         event.travelSeconds = travelSeconds
+        // @MX:DEBT: 출발시각 산식 3중 복제 — 전체 내용은 `applyEstimate(to:)`의 마커 참고.
         let departure = event.arrivalDate.addingTimeInterval(-travelSeconds - Double(event.bufferMinutes) * 60)
         event.departureDate = departure
         event.notificationId = scheduleDepartureNotification(
@@ -987,8 +995,8 @@ final class Store: ObservableObject {
     }
 
     /// iOS는 앱 하나가 예약해둘 수 있는 로컬 알림을 64개까지만 유지하고, 그걸 넘긴 요청은
-    /// **조용히 버린다**(가장 먼저 울릴 64개만 남김). 12주짜리 반복 일정을 하루 4구간
-    /// (등원·복귀·점심 왕복)으로 만들면 240건이라, 3주쯤 뒤 회차부터는 알림이 아예 오지 않는다 —
+    /// **조용히 버린다**(가장 먼저 울릴 64개만 남김). 26주짜리 반복 일정을 하루 4구간
+    /// (등원·복귀·점심 왕복)으로 만들면 520건이라, 3주쯤 뒤 회차부터는 알림이 아예 오지 않는다 —
     /// 앱은 notificationId를 갖고 있으니 예약된 줄 알지만 실제로는 없는 상태가 된다.
     ///
     /// 그래서 "알림 시각이 가장 가까운 것부터 limit건"만 실제로 예약해두고, 앱이 foreground로

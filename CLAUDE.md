@@ -67,6 +67,26 @@ cd proxy && npm test && npx wrangler deploy
 베타 폴더 이름을 바꿀 땐 Xcode에서 그 프로젝트를 **먼저 닫는다**. "workspace disappeared" 경고가
 뜨면 답은 **Close**다(Re-save를 누르면 옛 경로에 껍데기 폴더가 생긴다).
 
+## 작업을 시작할 때 — 하네스 전문가 배정 (사용자 지시, 매번 적용)
+
+besir 작업은 명령 이름(`/moai run`이든 자연어 요청이든)이 아니라 **하는 일**로 판단한다.
+무엇을 건드릴지 정해지는 즉시 아래 표로 명단을 뽑고, 시작 전에 사용자에게 한 줄로 알린다.
+**사용자가 매번 지목해야 한다면 그건 내 쪽 실패다.**
+
+| 이 조건이면 | 부르는 전문가 |
+|---|---|
+| `Shared/`의 SwiftUI 뷰를 건드리거나 새 화면 설계 | `ui-design` |
+| Swift 기능 신규·수정, `Store`에 배열 추가 | `swift-impl` |
+| AI 툴·`proxy/`·AI 백엔드 변경 | `ai-tooling` |
+| **구현을 바꿨음 / 실기기 배포 전 / Day 마무리** | `code-safety` |
+| **실기기 배포 전 / Day 마무리 / "뭘 확인해야 하나"** | `ux-check` |
+
+- 걸리는 조건이 없으면 부르지 않는다 — 0명도 정상적인 답이다.
+- 읽기 전용(빌드 게이트, 문서 인용 대조, 코드 열람)은 직접 한다. 하네스를 부르는 기준은
+  **"코드를 바꿨거나, 바꾼 것을 판정해야 할 때"**다.
+- 매니페스트 Sprint Contract의 `hazard_coverage`는 **"검사하지 않은 것 = 실패"**다.
+  0건을 찾는 건 통과지만, 렌즈를 안 돌린 채 끝내는 건 통과가 아니다.
+
 ## Day를 끝낼 때 (사용자 지시, 매번 적용)
 
 1. **요구사항 체크리스트**를 새로 만든다 — AI 채팅만이 아니라 **앱 전체 기능**을 쓰다 마주칠 상황 전부.
@@ -96,15 +116,18 @@ cd proxy && npm test && npx wrangler deploy
 - `Store.deleteEverythingForTesting()` + [SettingsView.swift:103](Shared/SettingsView.swift#L103)의 "일정 모두 삭제" 블록
 - `AIAssistant.transcriptForDebugging()` + [AIChatView.swift:56](Shared/AIChatView.swift#L56)의 대화 복사 버튼
 
-## AI 백엔드 (2026-09-12 현재)
+## AI 백엔드 (2026-09-13 현재)
 
 OpenAI **`gpt-5.6-luna`**, `/v1/responses` 엔드포인트, `reasoning.effort = "medium"`.
 모델과 추론 강도는 [proxy/src/index.js](proxy/src/index.js)의 상수 두 줄이다.
 
 - chat completions가 아니라 responses를 쓰는 이유: 전자는 함수 도구 + `reasoning_effort` 조합을 거부한다.
 - 인자 누락이 재발하면 `gpt-5.6-terra`로 올린다. 대화가 답답하면 effort를 `low`로 내린다.
-- Workers AI(mistral)는 `OPENAI_KEY`가 없을 때만 타는 폴백으로 남아 있다. luna 검증이 끝나면
-  `proxyWorkersAI`·`toOpenAIRequest`·`WORKERS_AI_MODEL`·`wrangler.toml`의 `[ai]` 바인딩을 함께 지운다.
+- **폴백은 없다.** Workers AI 경로(`proxyWorkersAI`·`toOpenAIRequest`·`toGeminiShape`·
+  `WORKERS_AI_MODEL`·`wrangler.toml`의 `[ai]`)는 2026-09-13 삭제됐다. `OPENAI_KEY`가 없으면
+  `/ai/chat`이 503 `openai_key_missing`으로 즉시 끊긴다 — 조용히 다른 모델로 넘어가지 않는다.
+  프록시는 Cloudflare **Worker**로 계속 돌아간다(`wrangler deploy`) — 없앤 건 Cloudflare
+  **Workers AI**(모델 서비스)지 Worker가 아니다. 둘을 섞어 쓰지 않는다.
 - 프록시 변환층은 조용히 깨지면 앱에서 "처리 중 문제가 생겼어요"로만 보인다.
   **배포 전 `cd proxy && npm test`를 돌린다.**
 

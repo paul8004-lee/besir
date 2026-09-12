@@ -453,7 +453,7 @@ final class AIAssistant: ObservableObject {
         - 이동만 필요: create_schedule. "3시까지 가야 해"→arrival_iso / "6시에 출발할래"→departure_iso (둘 중 하나만).
         - 그 장소에 머무는 시간이 있으면: create_activity. **오가는 이동도 필요하면 travel_from_query/return_to_query를 같이 넣어 한 번에** 만든다(그래야 활동과 이동이 묶여 같이 움직이고 같이 지워진다. create_schedule로 따로 만들면 안 묶임).
           예) "8~10시 강남에서 친구 만나고 집에 올래" → create_activity(place_query:강남역, start/end, travel_from_query:집, return_to_query:집) 한 번.
-        - 반복: create_recurring_schedule. "평일"=월~금. 주기 안 말하면 8주(최대 26). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1), "공휴일 빼고"=skip_holidays:true.
+        - 반복: create_recurring_schedule. "평일"=월~금. 주기는 사용자 말대로(최대 26주). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1), "공휴일 빼고"=skip_holidays:true.
           "9시부터 18시까지"면 9시=arrival_time, 18시=return_time(왕복 원하는지 확인). 점심은 보통 같은 건물이라 lunch_place_query를 **비워둔다** — "밖에서" 같이 명시할 때만 채운다.
         - 이미 있는 일정 고치기: update_schedule (지우고 새로 만들지 말 것).
         - 방금 만든 반복 그룹의 수단/버퍼/알림만: update_recurring_schedule. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
@@ -551,7 +551,8 @@ final class AIAssistant: ObservableObject {
                     "start_date": ["type": "STRING", "description": "시작일 'yyyy-MM-dd'(기본 오늘)"],
                     "weeks": ["type": "INTEGER", "description": "반복 주수. 기본 8, 최대 26."],
                     "every_n_weeks": ["type": "INTEGER", "description": "2=격주"],
-                    "nth_week_of_month": ["type": "INTEGER", "description": "월 단위: 그 달 n번째 요일(1~4, -1=마지막)"],
+                    "nth_week_of_month": ["type": "INTEGER", "description": "**\"매월\"이라고 말했을 때만**: 그 달 n번째 요일(1~4, -1=마지막)"],
+                    "confirm_recurrence": ["type": "BOOLEAN", "description": "주기를 되묻는 응답을 받고 사용자가 확인했을 때 true"],
                     "skip_holidays": ["type": "BOOLEAN", "description": "true=한국 공휴일 제외"],
                     "mode_this_time": mode,
                     "buffer_minutes": ["type": "INTEGER", "description": "도착 여유(분)"],
@@ -901,6 +902,8 @@ final class AIAssistant: ObservableObject {
         guard !weekdays.isEmpty else {
             return "반복 요일을 이해하지 못했어요. 요일을 다시 말씀해 주세요."
         }
+        // 장소 검색(네트워크)보다 먼저 본다 — 어차피 되돌려 보낼 호출이면 길찾기·검색을 낭비할 이유가 없다.
+        if let ask = recurringArgumentIssue(input, weekdayCount: weekdays.count) { return ask }
         // 매주(기본) / 격주 / 매월 n번째 요일 / 공휴일 제외를 하나의 규칙으로 묶는다.
         let rule = RecurrenceRule(weekdays: weekdays,
                                   everyNWeeks: max(1, intValue(input["every_n_weeks"]) ?? 1),
@@ -950,7 +953,10 @@ final class AIAssistant: ObservableObject {
             activityCount += activityLeg
         }
 
-        // 3) 점심시간 — 대부분 이동이 없는 활동 블록만 추가(같은 건물). 장소가 근무지와 다르면 왕복 이동 구간도 추가.
+        // 3) 점심시간 — 활동 블록은 항상 추가하고, 왕복 이동 구간은 `lunch_place_query`가 있고
+        //    검색에 성공했을 때만 붙인다. **장소를 근무지와 비교하지는 않는다** — 같은 장소를 적어도
+        //    이동 구간이 생긴다(`isSamePlace` 가드는 create_schedule 경로 전용).
+        //    예전 주석이 "장소가 다르면 추가"라고 잘못 적혀 있었고, SPEC REQ-021이 그걸 옮겨 적었다.
         if let lsStr = input["lunch_start"] as? String, let (lsH, lsM) = parseTime(lsStr),
            let leStr = input["lunch_end"] as? String, let (leH, leM) = parseTime(leStr) {
             let lunchQuery = (input["lunch_place_query"] as? String)?.trimmingCharacters(in: .whitespaces)
@@ -988,6 +994,53 @@ final class AIAssistant: ObservableObject {
         }
 
         return "등록 완료 — '\(title)' 총 \(totalCount)건 등록했어요: \(parts.joined(separator: ", ")). 출발지 '\(origin.name)' ↔ 목적지 '\(dest.name)', 이동수단 \(mode.title). 전체를 지우려면 아무 일정이나 열어 '반복 일정 전체 삭제'를 눌러주세요."
+    }
+
+    /// 반복 일정을 만들기 **전에** 인자를 점검한다. 되돌려 보낼 이유가 있으면 모델에게 줄 안내를,
+    /// 없으면 nil. 프롬프트로 타이르지 않고 실행부에서 막는 이유는, 여기 걸리는 게 전부 "모델이
+    /// 인자를 잘못 채운" 경우라 코드가 확실하고 매 요청 토큰도 더 먹지 않기 때문이다.
+    ///
+    /// ① 주기 인자(`nth_week_of_month`·`every_n_weeks`)는 사용자가 말했을 때만 채워야 하는데,
+    ///    "평일 9시부터 6시까지" 한 문장에 모델이 `nth_week_of_month:1`을 얹어 매달 1~7일에만
+    ///    일정이 생긴 적이 있다(9/1~9/7, 10/1~10/7 …). 요일이 3개 이상이면 "매월 첫째 주 평일
+    ///    전체" 같은 아주 드문 요청이 아닌 한 잘못 채운 것이다.
+    /// ② 기간(`weeks`)을 비우면 조용히 8주가 적용된다. 요일이 많은 = 오래 다니는 일정은 사용자가
+    ///    직접 정하길 기대하므로 되묻는다(요일 1~2개짜리는 그대로 8주로 둔다 — 매번 물으면 귀찮다).
+    ///
+    /// 값을 조용히 버리는 건 조용히 따르는 것만큼 나쁘다. **아직 만들지 않았다**고 알리고 무엇을
+    /// 붙여 다시 부르면 되는지까지 준다 — on_conflict·confirm_many와 같은 방식이다(탈출 인자 없이
+    /// 되묻기만 하면 모델이 같은 호출을 그대로 반복한다).
+    private func recurringArgumentIssue(_ input: [String: Any], weekdayCount: Int) -> String? {
+        let nth = intValue(input["nth_week_of_month"])
+        // 1~4·-1 밖의 값은 사용자가 뭐라 했든 규칙으로 표현할 수 없다 — 확인으로 통과시키지 않는다.
+        if let nth, nth != -1, !(1...4).contains(nth) {
+            return "아직 만들지 않았어요. nth_week_of_month에 쓸 수 없는 값(\(nth))이 들어왔어요 — 1~4와 -1(마지막)만 됩니다. 매주 반복이면 그 인자를 빼고, 매월 반복이 맞으면 값을 고쳐서 다시 호출해."
+        }
+
+        // 요일 3개 이상 = "평일 전체" 같은 통근형. 주기 인자와 같이 오면 십중팔구 잘못 채운 것이다.
+        let many = weekdayCount >= 3
+        let interval = max(1, intValue(input["every_n_weeks"]) ?? 1)
+        var asks: [String] = []
+        if many, (input["confirm_recurrence"] as? Bool) != true {
+            var cycle: String? = nil
+            // "매월 1번째 주"는 어색해서 사용자에게 그대로 전달되면 티가 난다 — 서수로 읽어준다.
+            if let nth { cycle = "매월 \(Self.nthWeekLabel(nth)) 주에만" }
+            else if interval > 1 { cycle = "\(interval)주 간격으로만" }
+            if let cycle {
+                asks.append("· \(cycle) 반복하게 돼 있는데 요일은 \(weekdayCount)개예요. 매주 반복이 맞으면 nth_week_of_month·every_n_weeks를 빼고, 그 주기가 정말 맞으면 confirm_recurrence:true를 붙여 다시 호출해.")
+            }
+        }
+        if many, intValue(input["weeks"]) == nil {
+            asks.append("· 언제부터 몇 주간 다니는지 아직 안 정해졌어요. 사용자에게 물어보고 start_date·weeks를 채워 다시 호출해(최대 26주. 사용자가 안 정하면 weeks:8).")
+        }
+        guard !asks.isEmpty else { return nil }
+        // 두 가지가 같이 걸리면 한 번에 묻는다 — 나눠 물으면 사용자가 두 번 답해야 한다.
+        return "아직 만들지 않았어요. 아래를 **한 번에** 사용자에게 확인하고, 답을 들으면 같은 인자에 고쳐서 다시 호출해.\n" + asks.joined(separator: "\n")
+    }
+
+    private static let nthWeekLabels = ["첫째", "둘째", "셋째", "넷째"]
+    private static func nthWeekLabel(_ nth: Int) -> String {
+        (1...4).contains(nth) ? nthWeekLabels[nth - 1] : "마지막"
     }
 
     /// 이 대화에서 방금 만든 반복 일정 그룹을 새로 만들지 않고 그대로 수정한다(이동수단·버퍼·알림).
