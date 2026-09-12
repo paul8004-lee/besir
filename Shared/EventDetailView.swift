@@ -38,12 +38,6 @@ struct EventDetailView: View {
     @State private var calendarStatus = ""
     @State private var addingToCalendar = false
 
-    // 주변 맛집 추천(be full sir).
-    @State private var nearby: [NearbyPlace] = []
-    @State private var nearbyCategory: MealCategoryFilter = .restaurant
-    @State private var loadingNearby = false
-    @State private var nearbyLoaded = false
-
     private var destCoord: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: event.destination.latitude, longitude: event.destination.longitude)
     }
@@ -71,8 +65,6 @@ struct EventDetailView: View {
 
                 calendarButton
 
-                nearbySection
-
                 detailRows
             }
             .padding(24)
@@ -89,89 +81,6 @@ struct EventDetailView: View {
         .sheet(isPresented: $showingEdit) {
             AddEventView(editing: event)
         }
-    }
-
-    // MARK: - 주변 맛집 추천 (be full sir)
-
-    /// 목적지 좌표를 기준으로 주변 음식점·카페를 보여준다.
-    /// 화면을 열자마자 부르지 않고 사용자가 펼쳤을 때만 조회한다 — 일정 상세를 열 때마다
-    /// 장소 검색 API를 쓰면 낭비이고, 대부분은 경로만 확인하고 닫는다.
-    @ViewBuilder
-    private var nearbySection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Label("목적지 주변", systemImage: "fork.knife")
-                    .font(.headline)
-                Spacer()
-                if loadingNearby { ProgressView().controlSize(.small) }
-                Button(nearbyLoaded ? "새로고침" : "추천 보기") {
-                    Task { await loadNearby() }
-                }
-                .buttonStyle(.borderless)
-                .disabled(loadingNearby)
-            }
-
-            if nearbyLoaded {
-                Picker("종류", selection: $nearbyCategory) {
-                    ForEach(MealCategoryFilter.allCases) { c in
-                        Label(c.title, systemImage: c.systemImage).tag(c)
-                    }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: nearbyCategory) { Task { await loadNearby() } }
-
-                if nearby.isEmpty && !loadingNearby {
-                    Text("주변 1km 안에서 찾지 못했어요.")
-                        .font(.callout).foregroundStyle(.secondary)
-                } else {
-                    ForEach(nearby) { item in
-                        nearbyRow(item)
-                    }
-                }
-            } else {
-                Text("'\(event.destination.name)' 주변의 \(nearbyCategory.title)을(를) 찾아드려요.")
-                    .font(.caption).foregroundStyle(.secondary)
-            }
-        }
-        .padding(14)
-        .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
-    }
-
-    private func nearbyRow(_ item: NearbyPlace) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: nearbyCategory.systemImage)
-                .foregroundStyle(Theme.activity)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.place.name).font(.subheadline).bold()
-                HStack(spacing: 6) {
-                    if !item.category.isEmpty {
-                        Text(item.category).font(.caption).foregroundStyle(.secondary)
-                    }
-                    if let d = item.distanceText {
-                        Text("· \(d)").font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-                if !item.place.address.isEmpty {
-                    Text(item.place.address).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
-                }
-            }
-            Spacer()
-            if let urlString = item.url, let url = URL(string: urlString) {
-                Link(destination: url) {
-                    Image(systemName: "arrow.up.forward.square")
-                }
-                .buttonStyle(.borderless)
-            }
-        }
-        .padding(.vertical, 4)
-    }
-
-    private func loadNearby() async {
-        loadingNearby = true
-        nearby = await store.placeSearch.nearbyPlaces(category: nearbyCategory, near: destCoord)
-        loadingNearby = false
-        nearbyLoaded = true
     }
 
     /// 일정의 이동수단·출발지·목적지가 바뀌면 경로를 다시 불러오기 위한 키.

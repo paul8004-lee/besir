@@ -78,34 +78,80 @@ acceptance.md 전체 17개 Day-11 AC(AC-100~116) 자체의 상태는 acceptance.
 결과를 기록한다 — 나머지 13건은 acceptance.md에 이미 기록된 코드 대조 결과를 그대로
 신뢰한다(중복 재검증 생략).
 
-### M6 (Day 12, 실기기 테스트) — 미실행, 사용자 액션 필요
+### M6 (Day 12, 실기기 테스트) — 완료(2026-09-12, 사용자가 실기기에서 직접 확인)
 
-**Status**: ⬜ 미실행. acceptance.md AC-201~207 전부 미실행.
+**Status**: ✅ 완료. acceptance.md AC-201~207 중 6건 PASS, AC-205만 다음 실기기 확인 대기.
 
-이 마일스톤은 에이전트가 완료할 수 없다 — 실제 알림 수신 확인, 제스처 느낌, 위치 권한
-거부 시 UI 등은 실기기에서 사용자가 직접 조작해야 관측 가능하다. 앱은 이미 실기기에
-설치·실행돼 있으므로(위 §M5 증거 참고), 사용자가 이어서 AC-201~207을 직접 확인하면 된다.
+사용자가 실기기에서 be full sir 8개 시나리오를 직접 테스트하고 번호 매겨 피드백을 줬다.
+결과는 acceptance.md §2에 AC별로 상세 기록했다 — 요약:
 
-### M7 (Day 13, 안정화) — 미실행, M6 결과에 의존
+- AC-201/202/203/206/207: 정상 동작 확인(PASS)
+- AC-204: **버그 발견** — FullSirView에서 왕복 이동 중 복귀 편이 안 만들어짐, AI가 만든 식사가
+  meals.json에 안 남음. 둘 다 그 자리(M7)에서 원인 파악 후 수정.
+- AC-205: 근본 원인(activityId nil)은 AC-204 수정으로 해소됐으나, 삭제 시나리오 자체는 이번
+  세션에서 실기기 재확인 전 — 다음 확인 목록에 포함.
+- 신규 요구사항 2건(원래 AC 범위 밖) 발견 → AskUserQuestion으로 사용자 확인 후 즉시 반영:
+  목적지 주변 섹션을 활동 상세로 이전, be full sir 기준 위치 직접 검색 추가.
 
-**Status**: ⬜ 미실행. M6에서 발견되는 문제를 수정하거나 "알려진 이슈"로 명시하는 마일스톤이라
-M6 완료 전에는 시작할 수 없다.
+### M7 (Day 13, 안정화) — 완료(2026-09-12)
+
+**Status**: ✅ 완료. M6에서 발견된 버그 2건 전부 그 자리에서 수정, §7(리스크)로 이월한 항목 없음.
+
+**Claim**: `FullSirView.swift`(왕복 이동 복귀지 기본값)와 `AIAssistant.swift`(`log_as_meal` 인자
+추가 + `create_activity` 프롬프트 보강)를 수정하고, 사용자 승인을 받은 UX 개선 2건
+(`EventDetailView`→`ActivityDetailView` 맛집 섹션 이전, `FullSirView` 기준 위치 직접 검색
+추가)을 같이 반영했다. 수정 후 iOS·macOS 재빌드 + 실기기 재설치·재실행까지 완료.
+
+**Evidence (verbatim command + observed output)**:
+
+```
+$ xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath build build
+→ BUILD SUCCEEDED (grep -i "warning:" 결과 0건)
+
+$ xcodebuild -scheme besir-macOS -derivedDataPath build build
+→ BUILD SUCCEEDED (grep -i "warning:" 결과 0건 — xcodebuild 자체의 destination 선택 안내
+   메시지 제외)
+
+$ xcodebuild -scheme besir-iOS -destination 'platform=iOS,id=8D9B807B-...' -allowProvisioningUpdates build
+→ BUILD SUCCEEDED (신규 경고 1건: "All interface orientations must be supported unless the
+   app requires full screen" — §M5에서 이미 기록한 기존 out-of-scope 경고와 동일 항목, be
+   full sir 범위 무관)
+$ xcrun devicectl device install app ... → 설치 성공
+$ xcrun devicectl device process launch ... → 실행 성공
+```
+
+**변경 파일**: `Shared/FullSirView.swift`, `Shared/AIAssistant.swift`, `Shared/EventDetailView.swift`,
+`Shared/ActivityDetailView.swift` (+ `plan.md`, SPEC 아티팩트 3개 — 코드 4개 파일은 plan.md §4의
+"한 Day당 3~4개 파일" 원칙 내).
+
+**Baseline-attribution**: 이번 run(HEAD는 아래 M1 커밋 이후 이 세션의 신규 커밋으로 갱신 예정),
+이 세션 안에서 직접 실행·관측.
+
+**Gaps**: `recommend_meal` 추가분의 요청당 고정 토큰 재측정(AC-105)은 여전히 미실행(실제 AI
+채팅 호출 + 프록시 로그 확인 필요, 정적 검사로는 불가). AI의 `return_to_query` 누락은 프롬프트
+보강으로 완화했을 뿐 100% 해결을 코드로 보장하지 않음 — 다음 실기기 확인에서 재검증 필요.
+
+**Residual-risk**: be on-time sir 핵심 흐름(수동 등록→출발 알람→구글 캘린더 동기화, 카카오톡
+공유→AI 파싱→일정 자동 등록) 회귀 확인이 이번 세션에서 실행되지 않았다 — Definition of Done의
+필수 항목이라 다음 실기기 세션에서 최우선으로 확인해야 한다.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
 ```yaml
-run_status: not-ready-to-close
+run_status: mostly-ready — 2 items remain before sync-close
 ```
 
-M6(Day 12 실기기 테스트)·M7(Day 13 안정화)이 미실행 상태이므로 이 SPEC의 run-phase는
-**아직 완료되지 않았다** — sync-phase(§E.4, manager-docs 소관)로 넘어갈 준비가 안 됐음을
-명시적으로 기록한다. 이번 커밋은 M1(run-phase 첫 커밋, `draft → in-progress` 상태 전환)만
-수행한다.
+M6·M7이 모두 완료됐고 발견된 버그는 그 자리에서 전부 수정했다. 다만 Definition of Done의
+두 항목(be on-time sir 회귀 확인, STATUS.md 갱신)과 AC-205(삭제 시나리오)·AC-204 후속 재확인
+(왕복 이동·meals.json 기록·프롬프트 보강 효과) 3건이 실기기에서 사람이 직접 확인해야 하는
+항목으로 남아 있어, **sync-phase로 완전히 넘어가기 전에 사용자의 다음 실기기 확인이 필요**하다.
+이번 커밋(들)은 M1(run-phase 시작)에 이어 M6/M7의 버그 수정 및 문서화까지 수행한다.
 
-- `ac_pass_count`: 16 (Day 11, acceptance.md AC-100~116 중 AC-105 제외)
-- `ac_fail_count`: 0
-- `ac_pending_count`: 8 (AC-105 측정불가 1건 + Day 12 AC-201~207 7건 미실행)
-- 다음 세션 필요 액션: 사용자가 실기기(이미 앱 설치·실행됨)에서 plan.md M6/M7 절차를 진행.
+- `ac_pass_count`: 21 (Day 11: AC-100~116 중 15건 + AC-105 제외 → 16건은 이전과 동일; Day 12: AC-201/202/203/206/207 5건)
+- `ac_fail_count`: 0 (AC-204는 FAIL로 발견됐으나 같은 세션에서 수정 완료 후 PASS-WITH-FOLLOWUP으로 재분류)
+- `ac_pending_count`: 3 (AC-105 측정불가, AC-205 삭제 시나리오 실기기 미확인, AC-204 수정 후 재확인)
+- 다음 세션 필요 액션: 사용자가 실기기에서 (a) 왕복 이동·meals.json 기록 재확인, (b) 삭제 시
+  미래/과거 식사 기록 분기 확인, (c) be on-time sir 핵심 흐름 회귀 확인, (d) STATUS.md 갱신.
 
 ## §F Phase 4 Mode Selection
 

@@ -20,9 +20,12 @@ struct FullSirView: View {
     private enum Basis: Hashable {
         case current
         case event(UUID)
+        /// 현재 위치·오늘 일정 목적지 둘 다 아닌 곳(외곽 지역 등)을 직접 검색해서 쓴다.
+        case custom
     }
 
     @State private var basis: Basis = .current
+    @State private var customPlace: Place?
     @State private var keyword = ""
     /// 빠른 검색에서 고른 항목. nil이면 자유 입력 검색(업종을 가리지 않음).
     @State private var selectedQuick: String?
@@ -89,6 +92,7 @@ struct FullSirView: View {
                     Text("\(e.destination.name) · \(Self.dayFmt.string(from: e.arrivalDate))")
                         .tag(Basis.event(e.id))
                 }
+                Text("직접 검색").tag(Basis.custom)
             }
             #if os(iOS)
             .pickerStyle(.menu)
@@ -96,6 +100,11 @@ struct FullSirView: View {
             if case .current = basis, location.currentLocation == nil {
                 Text("위치 권한이 필요해요")
                     .font(.caption).foregroundStyle(Theme.warn)
+            }
+            // 현재 위치·오늘 일정 목적지 둘 다 기준으로 삼기 어려운 경우(외곽 지역 등)를 위한
+            // 자유 검색 — 실기기 테스트에서 이 방법이 없다는 피드백을 받아 추가함.
+            if case .custom = basis {
+                PlaceField(title: "검색할 위치", systemImage: "mappin.and.ellipse", place: $customPlace)
             }
         }
     }
@@ -107,6 +116,9 @@ struct FullSirView: View {
         case .event(let id):
             guard let e = store.events.first(where: { $0.id == id }) else { return nil }
             return CLLocationCoordinate2D(latitude: e.destination.latitude, longitude: e.destination.longitude)
+        case .custom:
+            guard let p = customPlace else { return nil }
+            return CLLocationCoordinate2D(latitude: p.latitude, longitude: p.longitude)
         }
     }
 
@@ -114,6 +126,7 @@ struct FullSirView: View {
         switch basis {
         case .current: return location.currentPlaceName ?? "현재 위치"
         case .event(let id): return store.events.first(where: { $0.id == id })?.destination.name ?? "목적지"
+        case .custom: return customPlace?.name ?? "직접 검색"
         }
     }
 
@@ -434,6 +447,12 @@ private struct MealScheduleSheet: View {
         if let a = after {
             destination = a.place
             destinationLabel = "다음 '\(a.label)'으로"
+        } else if let o = origin {
+            // 다음 일정이 없으면(가장 흔한 경우) "먹고 나서"는 곧 "온 곳으로 되돌아감"이다.
+            // 여기서 비워두면 "돌아가는 이동 만들기" 토글이 켜져 있어도 도착지가 없어
+            // 왕복 이동이 조용히 안 만들어졌다(실기기 테스트에서 발견됨).
+            destination = o
+            destinationLabel = "'\(originLabel)'(으)로 다시"
         } else {
             destination = nil; destinationLabel = ""
         }

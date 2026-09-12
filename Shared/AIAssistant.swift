@@ -458,6 +458,7 @@ final class AIAssistant: ObservableObject {
         - 이미 있는 일정 고치기: update_schedule (지우고 새로 만들지 말 것).
         - 방금 만든 반복 그룹의 수단/버퍼/알림만: update_recurring_schedule. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
         - 먹을 곳: recommend_meal. 메뉴를 좁혀 말하면(일식→초밥) keyword에 그대로 넣어 재검색. 시각만 말하면 at_iso.
+          추천 중 하나로 일정을 잡아 달라 하면 create_activity를 부르되 **log_as_meal:true**를 꼭 넣는다(안 넣으면 '최근 먹은 것' 목록에 안 남는다).
         - 등록 없이 소요시간만: check_travel_time.
         - 기억/잊기: remember_fact / forget_fact.
 
@@ -511,7 +512,7 @@ final class AIAssistant: ObservableObject {
             ]
         ], [
             "name": "create_activity",
-            "description": "그 장소에 머무는 일회성 활동 1건. travel_from_query/return_to_query를 같이 주면 오가는 이동까지 한 번에 만들어 활동과 묶는다(따로 만들면 안 묶임).",
+            "description": "그 장소에 머무는 일회성 활동 1건. travel_from_query/return_to_query를 같이 주면 오가는 이동까지 한 번에 만들어 활동과 묶는다(따로 만들면 안 묶임). **왕복이면 return_to_query를 빠뜨리지 마라** — 없으면 돌아오는 이동이 아예 안 만들어진다.",
             "parameters": [
                 "type": "OBJECT",
                 "properties": [
@@ -520,12 +521,13 @@ final class AIAssistant: ObservableObject {
                     "start_iso": ["type": "STRING", "description": "시작 ISO"],
                     "end_iso": ["type": "STRING", "description": "종료 ISO"],
                     "travel_from_query": ["type": "STRING", "description": "가는 이동의 출발지(선택)"],
-                    "return_to_query": ["type": "STRING", "description": "오는 이동의 도착지(선택)"],
+                    "return_to_query": ["type": "STRING", "description": "오는 이동의 도착지(선택). travel_from_query를 채웠고 왕복이면 이것도 같이 채운다(보통 travel_from_query와 같은 값)."],
                     "mode_this_time": mode,
                     "travel_mode_this_time": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "가는 편만 다른 수단일 때만"],
                     "return_mode_this_time": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "오는 편만 다른 수단일 때만(예: 갈 땐 지하철, 올 땐 택시)"],
                     "notify_enabled": notifyFlag,
-                    "add_to_calendar": calFlag
+                    "add_to_calendar": calFlag,
+                    "log_as_meal": ["type": "BOOLEAN", "description": "식사 활동이면 true — '최근 먹은 것' 목록에도 남는다. 기본 false."]
                 ],
                 "required": ["title", "start_iso", "end_iso"]
             ]
@@ -839,12 +841,18 @@ final class AIAssistant: ObservableObject {
         if (from != nil || to != nil) && place == nil {
             return "이동까지 만들려면 활동 장소(place_query)가 필요해요. 어디서 하는 일정인지 물어봐 주세요."
         }
-        let madeLegs = await store.addActivityWithTravel(
+        let result = await store.addActivityWithTravel(
             title: title, location: place, startDate: start, endDate: end,
             travelFrom: from, returnTo: to, outboundMode: outboundMode, returnMode: returnMode,
             bufferMinutes: defaultBuffer, notifyLeadMinutes: defaultNotify,
             notifyEnabled: (input["notify_enabled"] as? Bool) ?? true,
-            syncToCalendar: (input["add_to_calendar"] as? Bool) ?? true).travelLegs
+            syncToCalendar: (input["add_to_calendar"] as? Bool) ?? true)
+        let madeLegs = result.travelLegs
+        // FullSirView.save()와 같은 방식 — 제목·시각으로 되찾지 않고 방금 만든 활동의 id를 직접 받는다.
+        if (input["log_as_meal"] as? Bool) == true {
+            store.addMeal(category: .diningOut, title: title, place: place,
+                          activityId: result.activityId, plannedAt: start)
+        }
 
         let where_ = place.map { " 장소 '\($0.name)'," } ?? ""
         var summary = "활동 블록 등록 완료 — '\(title)',\(where_) \(Self.when(start)) ~ \(Self.when(end))."

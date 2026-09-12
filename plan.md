@@ -208,9 +208,9 @@
 | 8 | ⬜ **미완 — Phase 1에서 유일하게 남은 항목(2026-09-12 확인)**. (조사 Day, 구현 없음) 배달/요리 카테고리 조사: 요기요·배민 공식 오픈 API가 개인 개발자에게 열려있는지 웹 검색으로 확인 → 없을 경우 URL scheme 딥링크(`yogiyo://`, `baemin://` 등 존재 여부) 방식으로 결론. 조사 결과를 이 plan.md의 Day 9 항목 아래에 메모로 추가. **현재 `MealCategory.delivery`·`.cooking`은 `Models.swift`에 정의만 돼 있고 이걸 만드는 UI·AI 경로가 없다** — 이 Day의 결론이 나와야 죽은 코드인지 아닌지 판정된다 | `plan.md`(조사 결과 기록) | 배달 카테고리 구현 방식이 확정되어 다음 세션 프롬프트에 바로 쓸 수 있음 |
 | 9 | ✅ **완료(2026-09-12)** — `AIAssistant`에 `recommend_meal` 툴 추가(선언 `AIAssistant.swift:604`, 실행 `executeRecommendMeal`). Day 7의 `PlaceSearch.nearbyPlaces`를 그대로 재사용하고 **Gemini 형식 툴 선언 계약 유지**(§3). **인자가 계획과 다르다**: 계획의 `budget`은 넣지 않았다 — `expenses`는 Phase 3라 주입할 데이터가 아직 없다. 최근 `meals` 이력 주입도 하지 않았다(요청당 고정 토큰을 10,701→5,804로 줄인 직후라 되늘리지 않으려고). 대신 `keyword`/`category`(restaurant·cafe)/`at_iso`/`place_query`/`radius_meters`로 갔고, 기준 위치는 `place_query` → `at_iso`(그 시각에 있을 장소) → 현재 위치 순으로 떨어진다 — 실사용에서 "이따 강남 갔을 때 근처" 형태가 예산보다 훨씬 자주 나왔다 | `Shared/AIAssistant.swift` | AI 채팅에 "저녁 뭐 먹을까"로 물으면 추천 응답 1회 성공 |
 | 10 | ✅ **완료(2026-09-12)** — 계획의 `MealSuggestionService`+`Store.addEvent` 대신 **신규 화면 `FullSirView.swift`** + 기존 `Store.addActivityWithTravel`로 구현. Day 7 직후 들어온 수정 요청(UI 분리·이동수단 분리)을 같이 받느라 경로가 바뀌었다: 식당을 고르면 "식사 활동 블록 + 왕복 이동"이 한 번에 생기고 출발·복귀 이동수단을 각각 고른다. 연결 필드도 계획의 `MealLog.scheduledEventId`가 아니라 **`activityId`** — 묶이는 대상이 이동 일정이 아니라 활동 블록이라서다. 일정을 지우면 아직 안 먹은 기록도 같이 사라진다(`Store.removeUpcomingMeals` → `ScheduleLogic.mealsToRemove`, 이미 지난 식사는 실제 먹은 기록이라 남긴다) | `Shared/FullSirView.swift`(신규), `Shared/Store.swift`, `Shared/RootView.swift` | 추천 선택 → 활동+왕복 이동 등록 + `meals.json` 기록 확인 |
-| 11 | **코드 검사**(§5-1 공통 + 아래 전용 항목) | `Shared/Models.swift`, `Shared/Store.swift`, `Shared/PlaceSearch.swift`, `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` (계획에 있던 `MealSuggestionService.swift`는 만들지 않음) | 체크리스트 전 항목 확인, 발견 사항은 Day 13로 넘김 |
-| 12 | **실기기 테스트**(§5-2 공통 + 아래 전용 시나리오) | - | 체크리스트 전 항목 실행, 결과 기록 |
-| 13 | **안정화**(§5-3 공통) | `STATUS.md` | be full sir MVP 완료, 회귀(기존 be on-time sir 기능) 이상 없음 |
+| 11 | ✅ **완료(2026-09-12)** — 아래 전용 항목 확인. `FullSirView.save()`의 `activityId` 항목은 실제 코드에선 이미 `made.activityId`를 직접 받는 방식이라(제목·시각 재검색 아님) 해당 없음(계획 당시 우려였고 구현은 처음부터 안전하게 됨) | `Shared/Models.swift`, `Shared/Store.swift`, `Shared/PlaceSearch.swift`, `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` | 체크리스트 전 항목 확인 완료 |
+| 12 | ✅ **완료(2026-09-12, 실기기 테스트 결과 아래 기록)** | - | 결과 기록 완료 |
+| 13 | 🟡 **진행 중(2026-09-12)** — Day 12에서 나온 진짜 버그 2건은 그 자리에서 수정·빌드 확인 완료(아래). 남은 건 UX 설계 결정 2건(사용자 확인 대기)과 Day 8(배달/요리 조사, 여전히 미완) | `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` | 버그 수정 완료 + 사용자 확인 후 STATUS.md 갱신 |
 
 **Phase 1 전용 코드 검사 항목(Day 11)** — *구현이 계획과 달라져 항목도 실제 코드 기준으로 교체함(2026-09-12)*:
 - [ ] `PlaceSearch.nearbyPlaces`가 `DirectionsService`와 같은 프록시 호출 관례(`config.proxyRequest`)를 따르는지 — 계획의 `MealSuggestionService`는 만들지 않았다(xcodegen 재생성=서명 리셋을 피하려고 기존 파일에 넣음)
@@ -220,14 +220,20 @@
 - [ ] `recommend_meal` 추가로 툴이 하나 늘었으니 요청당 고정 토큰이 5,804에서 얼마나 늘었는지 재측정(§1 최적화 기록의 기준선 유지)
 - [ ] `MealCategory.delivery`·`.cooking`이 어느 경로로도 생성되지 않는 상태 — Day 8 결론 전까지는 죽은 코드로 지우지 말 것
 
-**Phase 1 전용 실기기 테스트 시나리오(Day 12)** — *실제 UI 기준으로 교체함(2026-09-12)*:
-- [ ] 일정 상세(`EventDetailView`)의 "목적지 주변" 섹션을 펼쳤을 때만 조회되고 3~5개가 뜨는지(상세를 열기만 해서는 장소 API를 쓰지 않는지도 함께 확인)
-- [ ] be full sir 화면에서 기준 위치를 **현재 위치 ↔ 오늘 일정의 목적지**로 바꿔가며 검색했을 때 각각 그 근처 결과가 나오는지, 거리순/정확도순 정렬이 실제로 다른지
-- [ ] AI 채팅에 "저녁 뭐 먹지"(기준 위치 없음)와 "이따 강남 갔을 때 근처에서"(`at_iso` 경로) 둘 다 물어보고, 검색 결과에 없는 가게를 지어내지 않는지
-- [ ] 식당 선택 → 식사 활동 블록 + 왕복 이동이 캘린더에 실제로 생기는지, 출발·복귀 이동수단을 다르게 골랐을 때 각각 반영되는지, `meals.json`에도 기록되는지
-- [ ] **그 일정을 지웠을 때 아직 안 먹은 식사 기록도 같이 사라지는지, 이미 지난 식사 기록은 남는지**(`ScheduleLogic.mealsToRemove`) — Day 11의 `activityId` nil 문제와 직결되므로 고친 뒤 확인
-- [ ] 카카오 로컬 검색 결과가 0건일 때(외곽 지역 등) 빈 상태 UI가 크래시 없이 뜨는지
-- [ ] 위치 권한을 거부한 상태에서 be full sir 검색·`recommend_meal` 둘 다 안내 문구로 끝나는지
+**Phase 1 전용 실기기 테스트 시나리오(Day 12)** — *실제 UI 기준으로 교체함(2026-09-12)*, **사용자가 실기기에서 직접 확인한 결과(2026-09-12)를 반영**:
+- [x] 일정 상세의 "목적지 주변" 섹션 — 정상 동작. **다만 사용자 피드백**: 이동 일정보다 활동 일정 쪽에 있는 게 더 자연스러워 보인다는 의견 → UX 결정 필요(아래 "남은 결정" 참고)
+- [x] 기준 위치를 현재 위치 ↔ 일정 목적지로 바꿔가며 검색 — 정상 동작
+- [x] AI 채팅 추천이 실제 검색 결과에 있는 가게만 말함(할루시네이션 없음) — 확인됨
+- [x] **버그 발견 → 수정 완료**: `FullSirView`에서 식당을 고르면 식사 활동 블록만 생기고 왕복 이동은 안 생겼다. 원인: `applyDestinationSuggestion`이 "다음 일정"이 있을 때만 복귀지를 채우고, 없으면(가장 흔한 경우) `destination`을 그냥 nil로 비웠다 — "돌아가는 이동 만들기" 토글이 켜져 있어도 도착지가 없어 조용히 안 만들어짐. **수정**: 다음 일정이 없으면 출발지(`origin`)로 되돌아가는 것으로 기본값 설정. 같은 증상이 AI `create_activity`에도 있었다(갈 때 이동만 생기고 올 때가 안 생김) — 이쪽은 모델이 `return_to_query`를 종종 빠뜨리는 문제라 툴 설명에 "왕복이면 반드시 채워라"를 강조하는 프롬프트 보강으로 완화(모델 준수 여부는 재확인 필요)
+- [x] **버그 발견 → 수정 완료**: AI가 만들어준 식사 일정이 "최근 먹은 것" 목록에 안 남았다. 원인: `executeCreateActivity`가 활동+이동만 만들고 `store.addMeal`을 호출하지 않았다(`meals.json` 연결은 `FullSirView` 경로에만 있었음). **수정**: `create_activity`에 `log_as_meal` 인자 추가 — true면 `FullSirView.save()`와 동일하게 `addMeal(activityId:)`까지 호출. 시스템 프롬프트에도 추천→예약 흐름에서 반드시 넣으라고 명시
+- [x] 카카오 로컬 검색 결과 0건 — 빈 상태 UI 정상
+- [x] 위치 권한 거부 — 정상 동작(안내 문구로 종료)
+- [ ] **새로 발견된 요구사항(버그 아님, 기능 없음)**: be full sir 화면에서 "현재 위치/오늘 일정 목적지" 외에 기준 위치를 직접 검색하는 기능이 없어 외곽 지역을 기준으로 찾을 방법이 없음 → UX 결정 필요(아래 참고)
+- [ ] 참고 의견(액션 없음): 랭체인 같은 구조를 붙이면 AI가 미묘하게 잘못 이해하는 부분이 줄어들지 않겠냐는 제안 — 지금 당장 필요한 변경은 아니라 메모만 남김. 재발하는 인자 누락이 계속되면 검토
+
+**남은 결정(사용자 확인 필요)** — 위 두 항목은 버그가 아니라 설계 선택이라 코드를 더 건드리기 전에 확인받는다:
+1. "목적지 주변" 맛집 섹션을 이동 일정 상세에서 활동 일정 상세로 옮길지, 양쪽 다 둘지, 지금 그대로 둘지
+2. be full sir에 기준 위치 직접 검색(자유 위치) 기능을 지금 추가할지, 다음으로 미룰지
 
 ### Phase 2 — be healthy sir MVP — Day 14~20
 
