@@ -1,10 +1,10 @@
 ---
 id: SPEC-ONTIME-001
 title: "be on-time sir — 일정·이동시간·출발알람·캘린더 동기화 (as-built)"
-version: "0.2.0"
+version: "0.2.1"
 status: draft
 created: "2026-09-12"
-updated: "2026-09-13"
+updated: "2026-09-14"
 author: "manager-spec"
 priority: P1
 phase: "v0.1.1 target"
@@ -22,6 +22,7 @@ tier: L
 |---|---|---|
 | 0.1.0 | 2026-09-12 | 최초 작성 — 이미 완성·상용 중인 be on-time sir의 현재 동작을 GEARS로 정식화(as-built). plan.md §1/§6 Phase 0.5, CLAUDE.md 계약, 코드베이스(Store/ContentView/AIAssistant/GoogleCalendarService 등) 직접 확인 근거 |
 | 0.2.0 | 2026-09-13 | plan-audit FAIL(0.55, Tier L 통과선 0.85) 지적 반영 — 코드와 어긋난 서술 4건 정정(반복 한도 12주→`maxRecurrenceWeeks` 26주, 점심 이동 생략 조건, REQ-001의 출발시각 단일 출처, `AfterFirstUnlock` 의미 반전) + 깨진 파일·심볼 인용 교체 + CLAUDE.md 계약 2·3·5후반·6을 Out of Scope에 명시 |
+| 0.2.1 | 2026-09-14 | 미검증이던 REQ 17건을 함수 본문과 1:1 대조 — 15건은 근거 일치 확인, 2건 정정. REQ-060은 삭제된 Workers AI 경로를 인용하고 있어(커밋 `860e121`이 유발한 드리프트) 현행 단일 백엔드 상태로 교체, REQ-042는 재업로드가 `autoAddToCalendar`·`wantsCalendarSync` 두 게이트에 걸렸다는 사실을 누락해 보강 |
 
 ## 0. 이 SPEC의 성격
 
@@ -60,7 +61,7 @@ tier: L
 
 - **REQ-040 (Ubiquitous)**: The `GoogleCalendarService` shall propagate local schedule/activity create and delete operations to the linked Google Calendar (`createEvent(for:)` for `ScheduledEvent`/`ActivityBlock`, `deleteEvent(id:)`), and the `Store` shall route every deletion path through a single function, `removeFromCalendar(_:)`, which records a tombstone in `deleted_gcal_ids.json` (`deletedGoogleEventIds`) before attempting remote deletion.
 - **REQ-041 (Event-detected)**: **When** `Store.syncWithGoogle()` finds a remote item absent locally, it shall check the tombstone set first; **when** the id is tombstoned, the item shall NOT be re-imported (prevents a previously-deleted schedule from resurrecting via sync).
-- **REQ-042 (Event-driven)**: **When** `syncWithGoogle()` confirms a tombstoned id is genuinely absent from the remote calendar, the `Store` shall clear that id from `deletedGoogleEventIds` (cleanup happens only after remote-absence is confirmed, never immediately after a local delete); **when** `Store.reconcileActivities(remote:tombstones:)` runs, it shall additionally re-upload activities whose remote copy vanished, treat a remote item matching an existing activity's title and time within ±60 seconds as a duplicate import, and delete remote besir-tagged items with no matching local activity.
+- **REQ-042 (Event-driven)**: **When** `syncWithGoogle()` confirms a tombstoned id is genuinely absent from the remote calendar, the `Store` shall clear that id from `deletedGoogleEventIds` (cleanup happens only after remote-absence is confirmed, never immediately after a local delete); **when** `Store.reconcileActivities(remote:tombstones:)` runs, it shall additionally re-upload activities whose remote copy vanished (`Shared/Store.swift:1258-1266` — 원격에서 사라진 활동은 `:1217-1225`에서 `googleEventId`만 비워두고 여기서 다시 올린다. **무조건은 아니다** — `config.autoAddToCalendar`가 켜져 있고 그 활동이 `wantsCalendarSync`일 때만 올라간다), treat a remote item matching an existing activity's title and time within ±60 seconds as a duplicate import (`:1234-1236` — 제목 일치 **그리고** 시작·종료 양쪽이 각각 60초 이내), and delete remote besir-tagged items with no matching local activity (`:1250`).
 - **REQ-043 (Ubiquitous)**: Every locally-created besir calendar event/activity shall be created with `reminders: {useDefault: false, overrides: []}`, and any lingering reminder override discovered on a besir-tagged remote item during reconciliation shall be cleared via `clearReminders(id:)`.
 
 ### 2.6 통합 스와이프 캘린더 UI
@@ -72,7 +73,7 @@ tier: L
 
 ### 2.7 AI 채팅 CRUD + 장기 기억
 
-- **REQ-060 (Ubiquitous)**: The `AIAssistant` shall speak only the Gemini `generateContent` wire format; backend swaps (Workers AI ↔ OpenAI) shall require zero changes to `AIAssistant.swift`, translation living entirely in `proxy/src/index.js`.
+- **REQ-060 (Ubiquitous)**: The `AIAssistant` shall speak only the Gemini `generateContent` wire format, so that a backend swap requires zero changes to `AIAssistant.swift`, translation living entirely in `proxy/src/index.js`. 이 계약은 `Shared/AIAssistant.swift:9`에 주석으로 명시돼 있고, 형식은 `functionCall`(`:187`)·`functionResponse`(`:193`)·`inlineData`(`:238`)·`candidates`(`:312`)로 실제 사용된다. 계약의 실증: Gemini → Workers AI → OpenAI 세 차례 백엔드를 갈아끼우는 동안 앱 코드는 바뀌지 않았다. **다만 현재 백엔드는 OpenAI 하나뿐이다** — Workers AI 경로는 2026-09-13(커밋 `860e121`) 삭제됐으므로 "두 백엔드 사이 전환"은 더 이상 존재하는 경로가 아니며 폴백도 없다. 백엔드 현황의 SSOT는 `CLAUDE.md`의 "AI 백엔드" 절이다.
 - **REQ-061 (Ubiquitous)**: The `AIAssistant` tool loop shall expose exactly these 11 tools: `create_schedule`, `create_activity`, `create_recurring_schedule`, `update_recurring_schedule`, `update_schedule`, `list_schedules`, `recommend_meal`, `check_travel_time`, `remember_fact`, `forget_fact`, `delete_schedule`.
 - **REQ-062 (Event-driven)**: **When** `create_schedule` reports a conflict, the assistant shall ask the user to choose `on_conflict: "ignore"` or `"late_arrival"` and re-invoke the same tool with that argument added; **when** `delete_schedule` reports more than 5 non-recurring matches, the assistant shall re-confirm and re-invoke with `confirm_many: true` — in both cases never re-asking the same question in a loop.
 - **REQ-063 (Ubiquitous)**: The `AIAssistant` shall persist conversation history to `ai_history.json` and long-term user-stated preferences to `ai_memory.json` via `remember_fact`/`forget_fact`, surviving app relaunch and reinstall; **when** a tool-call turn fails, it shall roll history back to its pre-turn state rather than persisting a broken turn that would repeat the same failure on every subsequent request.
