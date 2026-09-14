@@ -442,24 +442,28 @@ final class AIAssistant: ObservableObject {
             "\n- 사용자의 즐겨찾기 장소: \(store.favorites.map { $0.label }.joined(separator: ", ")). 출발지·목적지·점심장소가 이 이름과 일치하면 그 이름을 그대로 써(origin_query/destination_query/lunch_place_query)."
         // 값으로 저장된 선호는 문장과 따로, 도구 인자에 그대로 넣으라고 못 박아 전달한다
         // (문장만 주면 모델이 해석을 건너뛰고 기본값을 쓰는 일이 있었다).
+        //
+        // 이동수단은 이 목록에서 빼고 따로 적는다. buffer/notify는 "채워라", mode_this_time은
+        // "비워둬라"로 방향이 정반대인데 한 줄에 "도구 인자에 그대로 채워라"로 묶어 놓는 바람에
+        // 절대 규칙 2와 정면으로 부딪쳤고, 실기기에서 모델이 규칙 2 쪽을 따르면서 INTEGER에는
+        // 없는 '비움'을 0으로 대신 써 저장된 여유·알림 10분이 0으로 덮였다.
         var prefs: [String] = []
-        if let m = store.config.preferredMode, let mode = TransportMode(rawValue: m) {
-            prefs.append("mode=\"\(m)\"(\(mode.title))")
-        }
         if let b = store.config.preferredBuffer { prefs.append("buffer_minutes=\(b)") }
         if let n = store.config.preferredNotify { prefs.append("notify_lead_minutes=\(n)") }
         let prefsBlock = prefs.isEmpty ? "" :
-            "\n- **저장된 기본값 — 묻지 말고 도구 인자에 그대로 채워라**: " + prefs.joined(separator: ", ")
+            "\n- **저장된 기본값 — 묻지 말고 생성 도구 인자에 이 숫자를 그대로 채워라**: " + prefs.joined(separator: ", ")
+        let modeBlock = store.config.preferredMode.flatMap { TransportMode(rawValue: $0) }
+            .map { "\n- 저장된 기본 이동수단: \($0.title) — 앱이 알아서 쓴다. mode_this_time은 **비워둬라**." } ?? ""
         let factsBlock = rememberedFacts.isEmpty ? "" :
             "\n\n## 기억하고 있는 것(새로 묻지 말고 활용해)\n" + rememberedFacts.map { "- \($0)" }.joined(separator: "\n")
         return """
         besir 일정 도우미. 사용자 말(또는 공유받은 텍스트·이미지)에서 일정을 파악해 도구로 등록한다.
         이미지면 표·텍스트를 읽어 여러 일정이면 각각 도구를 호출한다.
-        지금: \(nowStr) (KST) / 현재 위치(참고용, 출발지 기본값 아님): \(loc)\(favoritesLine)\(prefsBlock)\(factsBlock)
+        지금: \(nowStr) (KST) / 현재 위치(참고용, 출발지 기본값 아님): \(loc)\(favoritesLine)\(prefsBlock)\(modeBlock)\(factsBlock)
 
         # 절대 규칙
         1. 실제 데이터가 필요한 질문(뭐가 등록됐나·몇 건·삭제/수정 대상)은 반드시 list_schedules를 먼저 호출하고 그 결과만 말한다. 제목·시각·건수·가게이름을 지어내면 안 된다.
-        2. 이동수단·도착여유(buffer)·알림(notify)에 **저장된 기본값이 있으면 그 인자를 아예 비워둬라** — 앱이 알아서 기본값을 넣는다. 네가 값을 채우면 기본값을 덮어쓴다. 사용자가 이번 요청에서 다르게 말했을 때만 채운다. 기본값도 없고 사용자도 말하지 않았으면 **임의로 정하지 말고 물어본다**.
+        2. 일정을 만들 때 도착여유(buffer_minutes)·알림(notify_lead_minutes)은 위 "저장된 기본값" 줄의 숫자를 **그대로 채운다** — 비우거나 0으로 대신하지 마라(0은 "여유 없이"라는 진짜 요청이다). 이동수단은 반대로 mode_this_time을 **비워야** 저장된 수단이 쓰인다. 사용자가 이번 요청에서 다르게 말했으면 그 값을 넣고, 저장된 값도 없고 사용자도 말하지 않았으면 **임의로 정하지 말고 물어본다**.
         3. 출발지: **사용자가 말했으면 반드시 origin_query에 넣어라**(말로만 "회사에서"라고 쓰고 인자를 비우면 엉뚱한 곳에서 출발하는 일정이 만들어진다). 말하지 않았으면 즐겨찾기 "집"을 쓰되, 그것도 없으면 물어본다.
            단 **check_travel_time은 예외**: 등록이 아니라 조회라 되물을 필요가 없다. 바로 호출한다.
         4. 물어서 답을 들으면 그 자리에서 remember_fact로 저장하되, **값은 mode/buffer_minutes/notify_lead_minutes 인자에 넣어라**(문장만 저장하면 다음에 안 쓰인다).
@@ -511,6 +515,22 @@ final class AIAssistant: ObservableObject {
                                    "description": "**이번 요청에서만 다른 수단을 쓸 때만** 채운다(예: \"오늘은 걸어갈래\"). 그 외에는 반드시 비워둔다 — 비우면 저장된 기본 이동수단이 쓰인다. 기본값도 없고 사용자도 말 안 했으면 물어본다."]
         let notifyFlag: [String: Any] = ["type": "BOOLEAN", "description": "false=알림 끔. 기본 true."]
         let calFlag: [String: Any] = ["type": "BOOLEAN", "description": "false=구글 캘린더에 안 올림. 기본 true."]
+        // 두 생성 도구가 같은 뜻으로 쓴다 — mode·notifyFlag와 같은 이유로 한 곳에서 만들어 돌려쓴다.
+        // mode와 달리 여기서는 "채워라"가 맞다. "기본값이 있으면 비워둬"로 적었더니, INTEGER에는
+        // 비움을 적을 자리가 없어 모델이 0을 대신 보냈고 저장해 둔 10분이 0으로 덮였다.
+        //
+        // 설명에 **세 가지가 다 있어야** 한다. ① 저장값이 있으면 그 숫자 ② 없으면 물어보기
+        // ③ 0을 비움 대신 쓰지 말기. 하나씩 빠질 때마다 모델에게 열린 길이 줄고, 마지막에 남는 건
+        // "아무 값이나 채우기"다 — 한 번 압축하면서 ②를 날렸더니(원래 create_schedule 쪽의
+        // "모르면 물어볼 것") 저장값이 없는 사용자는 ①이 안 걸리고 ③이 막혀 갈 데가 없었다.
+        // ③은 **명령**으로 적는다("쓰지 마라"). 괄호 안은 이유일 뿐이고, 고쳐야 할 대상이 값의
+        // 뜻이 아니라 "선언된 선택 인자는 다 채운다"는 절차라서 서술형으로는 절차를 못 막는다.
+        //
+        // 줄일 땐 한 인자에 한 글자가 요청당 두 글자인 걸 감안한다 — 호이스팅해도 와이어 비용은
+        // 안 줄고 쓰는 도구마다 복제되기 때문. 다만 인자마다 **두 번**이지 네 번이 아니다
+        // (호출 지점 네 곳은 두 인자를 합친 수). 직렬화해서 세어 확인했다.
+        let bufferArg: [String: Any] = ["type": "INTEGER", "description": "도착 여유(분). 저장된 기본값 있으면 그 숫자를 채우고, 없으면 물어봐라. 0을 비움 대신 쓰지 마라(0=여유 없이)."]
+        let notifyArg: [String: Any] = ["type": "INTEGER", "description": "출발 몇 분 전 알림. 저장된 기본값 있으면 그 숫자를 채우고, 없으면 물어봐라. 0을 비움 대신 쓰지 마라(0=출발 시각 알림)."]
         return [[
             "name": "create_schedule",
             "description": "이동 일정 1건 등록(머무는 시간 없이 이동만).",
@@ -523,8 +543,8 @@ final class AIAssistant: ObservableObject {
                     "arrival_iso": ["type": "STRING", "description": "도착 시각 ISO(예: 2026-07-06T15:00:00). 도착 기준."],
                     "departure_iso": ["type": "STRING", "description": "출발 시각 ISO. 출발 기준(버퍼 0). arrival_iso와 둘 중 하나만."],
                     "mode_this_time": mode,
-                    "buffer_minutes": ["type": "INTEGER", "description": "도착 여유(분). 모르면 물어볼 것."],
-                    "notify_lead_minutes": ["type": "INTEGER", "description": "출발 몇 분 전 알림. 모르면 물어볼 것."],
+                    "buffer_minutes": bufferArg,
+                    "notify_lead_minutes": notifyArg,
                     "notify_enabled": notifyFlag,
                     "add_to_calendar": calFlag,
                     "on_conflict": ["type": "STRING", "enum": ["ignore", "late_arrival"],
@@ -577,8 +597,8 @@ final class AIAssistant: ObservableObject {
                     "confirm_recurrence": ["type": "BOOLEAN", "description": "주기를 되묻는 응답을 받고 사용자가 확인했을 때 true"],
                     "skip_holidays": ["type": "BOOLEAN", "description": "true=한국 공휴일 제외"],
                     "mode_this_time": mode,
-                    "buffer_minutes": ["type": "INTEGER", "description": "도착 여유(분)"],
-                    "notify_lead_minutes": ["type": "INTEGER", "description": "출발 몇 분 전 알림"]
+                    "buffer_minutes": bufferArg,
+                    "notify_lead_minutes": notifyArg
                 ],
                 "required": ["title", "destination_query", "weekdays", "arrival_time"]
             ]
@@ -1014,11 +1034,19 @@ final class AIAssistant: ObservableObject {
             activityCount += lunchActivity
         }
 
+        // 활동 블록도 합계에 넣는다. "총 N건" 뒤에 나열한 항목을 사용자가 그대로 세어보기 때문에,
+        // 목록에는 적으면서 합계에서만 빼면 숫자가 안 맞는다(실기기에서 "총 4건"이라 해놓고 6건을
+        // 나열했다). 이동이냐 활동이냐는 앱의 구분이고, 사용자에겐 캘린더에 생긴 항목이 전부
+        // 같은 "건"이다 — 같은 반복 그룹이라 지울 때도 같이 지워진다.
         if activityCount > 0 {
+            totalCount += activityCount
             parts.append("시간표(활동) 블록 \(activityCount)건")
         }
 
-        return "등록 완료 — '\(title)' 총 \(totalCount)건 등록했어요: \(parts.joined(separator: ", ")). 출발지 '\(origin.name)' ↔ 목적지 '\(dest.name)', 이동수단 \(mode.title). 전체를 지우려면 아무 일정이나 열어 '반복 일정 전체 삭제'를 눌러주세요."
+        // 실제로 적용된 여유·알림을 적는다. 모델이 뭘 보냈든 사용자는 **결과**를 보게 된다 —
+        // 위 totalCount 수정과 같은 이유다. 값을 적용하는 네 경로 중 여기만 둘 다 안 보여줬고,
+        // 하필 그 경로에서 0으로 덮인 35건이 아무도 모르게 기기까지 갔다.
+        return "등록 완료 — '\(title)' 총 \(totalCount)건 등록했어요: \(parts.joined(separator: ", ")). 출발지 '\(origin.name)' ↔ 목적지 '\(dest.name)', 이동수단 \(mode.title), 도착 여유 \(buffer)분, 출발 \(notify)분 전 알림. 전체를 지우려면 아무 일정이나 열어 '반복 일정 전체 삭제'를 눌러주세요."
     }
 
     /// `nth_week_of_month`를 읽는 **단 한 곳**(가드와 RecurrenceRule이 같은 값을 보게 — 계약 5).
@@ -1153,10 +1181,17 @@ final class AIAssistant: ObservableObject {
         // ("주로 자동차로 다녀"라고 기억시켜도 preferredMode가 비어 있던 문제.)
         let mode = (input["mode"] as? String).flatMap { TransportMode(rawValue: $0) } ?? Self.mode(in: fact)
         if let mode { config.preferredMode = mode.rawValue; saved.append("이동수단 \(mode.title)") }
-        if let b = intValue(input["buffer_minutes"]) ?? Self.minutes(in: fact, near: ["여유"]) {
+        // 여기서만 0을 버린다(weeksArgument와 같은 모양). 생성 도구의 0은 이번 한 건짜리
+        // 진짜 요청이라 그대로 두지만, 여기서 저장된 0은 **영구적이고 전역**이라 이후 모든
+        // 일정이 여유·알림 0으로 만들어진다 — 되돌리려면 사용자가 설정을 직접 고쳐야 한다.
+        // 같은 실수여도 값이 사는 수명이 달라서 판단을 달리한다.
+        // (문장에서 읽는 Self.minutes는 이미 v > 0만 돌려주므로 걸러낼 게 없다.)
+        if let b = intValue(input["buffer_minutes"]).flatMap({ $0 > 0 ? $0 : nil })
+            ?? Self.minutes(in: fact, near: ["여유"]) {
             config.preferredBuffer = b; saved.append("도착 여유 \(b)분")
         }
-        if let n = intValue(input["notify_lead_minutes"]) ?? Self.minutes(in: fact, near: ["알림", "분 전"]) {
+        if let n = intValue(input["notify_lead_minutes"]).flatMap({ $0 > 0 ? $0 : nil })
+            ?? Self.minutes(in: fact, near: ["알림", "분 전"]) {
             config.preferredNotify = n; saved.append("알림 \(n)분 전")
         }
         if !saved.isEmpty { store.updateConfig(config) }
