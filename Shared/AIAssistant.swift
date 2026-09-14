@@ -4,9 +4,12 @@ import CoreLocation
 /// LLM 대화로 자연어 일정을 이해해 besir 앱에 자동 등록하는 도우미.
 ///
 /// 보안 설계: AI 백엔드는 앱에 없다. 앱은 Cloudflare Worker 프록시의 `/ai/chat`으로
-/// 대화 본문을 POST 하고, 프록시가 실제 모델(Workers AI, 2026-09-09부터)을 실행해
-/// 같은 형식으로 응답을 돌려준다 — 백엔드가 바뀌어도(추후 Claude/GPT 등) 이 클래스는
-/// 그대로 두고 프록시만 바꾸면 되도록, 요청/응답은 Gemini generateContent 형식을 그대로 쓴다.
+/// 대화 본문을 POST 하고, 프록시가 실제 모델을 호출해 같은 형식으로 응답을 돌려준다 —
+/// 백엔드가 바뀌어도 이 클래스는 그대로 두고 프록시만 바꾸면 되도록, 요청/응답은 Gemini
+/// generateContent 형식을 그대로 쓴다. 실제로 Gemini → Workers AI → OpenAI 세 번을
+/// 이 클래스 수정 없이 통과했다. 현재 모델이 무엇인지는 여기 적지 않는다 — 그 사실이
+/// 이 주석에 복제되는 순간 낡는다(실제로 낡았다). SSOT는 `proxy/src/index.js`의 상수와
+/// `CLAUDE.md`의 "AI 백엔드" 절이다.
 ///
 /// 흐름: 사용자 발화(또는 다른 앱에서 공유받은 텍스트/이미지) → 모델이 `create_schedule`
 /// 툴 호출 → 앱이 목적지를 카카오 검색(또는 즐겨찾기)으로 해석하고 현재 위치를 출발지로
@@ -34,6 +37,24 @@ final class AIAssistant: ObservableObject {
     /// 이번 대화에서 가장 최근에 만든 반복 일정 그룹 — "방금 만든 거 자동차로 바꿔줘" 같은 수정
     /// 요청이 새로 만들지 않고 이 그룹을 그대로 갱신하도록(update_recurring_schedule) 참조한다.
     private var lastRecurrenceId: UUID?
+    /// 반복 주기를 되물을 때 **무엇을 물었는지**. 모델이 되묻기도 전에 스스로
+    /// `confirm_recurrence:true`를 붙여 보내는 바람에 "요일 3개 이상 + 주기 인자" 가드가 통째로
+    /// 사라진 적이 있다(평일 5일짜리 출근 일정이 7건만 생겼다) — 묻지도 않았는데 온 확인은 확인이 아니다.
+    ///
+    /// "물어봤다"는 사실만 Bool로 들고 있으면 그 확인이 **엉뚱한 호출에서** 쓰인다. 두 길이 실제로 열린다:
+    /// 한 턴에 툴 호출이 배열로 여러 개 오면(runLoop이 그대로 순회한다) 앞 호출이 켠 걸 뒤 호출이
+    /// 주워 쓰고, 되묻고 나서 아무 호출도 통과하지 못한 채 대화가 흘러가면(사용자가 딴 얘기를 하거나
+    /// 툴 루프가 5회를 다 써서 안내가 모델 아닌 사용자에게 가면) 그 확인이 남아 나중의 무관한
+    /// 반복 요청을 그냥 통과시킨다. 그래서 조합 자체를 들고 같은 조합일 때만 인정한다.
+    ///
+    /// 히스토리에 저장하지 않는다: 앱을 껐다 켜서 이 값이 풀리면 한 번 더 되묻는 게 전부지만,
+    /// 반대로 살아남으면 묻지도 않고 통과한다 — 틀렸을 때 손해가 작은 쪽으로 둔다.
+    private struct RecurrenceAsk: Equatable {
+        let nth: Int?
+        let interval: Int
+        let weekdayCount: Int
+    }
+    private var recurrenceConfirmAsk: RecurrenceAsk?
 
     /// 사용자에 대해 오래 기억해둘 사실(주로 쓰는 이동수단 등). 대화 기록(ai_history.json)과 달리
     /// "새 대화 시작"으로 지워지지 않는다 — 매번 새로 물어보지 않도록 시스템 프롬프트에 항상 포함된다.
@@ -162,6 +183,7 @@ final class AIAssistant: ObservableObject {
     func resetConversation() {
         contents = []
         lastRecurrenceId = nil
+        recurrenceConfirmAsk = nil
         bubbles = [.init(role: .assistant,
             text: "안녕하세요! 등록할 일정을 말로 알려주세요.\n예: \"내일 오후 3시에 강남역에서 친구 만나기\"\n다른 앱에서 일정표를 공유해주셔도 돼요.")]
         saveHistory()
@@ -453,7 +475,7 @@ final class AIAssistant: ObservableObject {
         - 이동만 필요: create_schedule. "3시까지 가야 해"→arrival_iso / "6시에 출발할래"→departure_iso (둘 중 하나만).
         - 그 장소에 머무는 시간이 있으면: create_activity. **오가는 이동도 필요하면 travel_from_query/return_to_query를 같이 넣어 한 번에** 만든다(그래야 활동과 이동이 묶여 같이 움직이고 같이 지워진다. create_schedule로 따로 만들면 안 묶임).
           예) "8~10시 강남에서 친구 만나고 집에 올래" → create_activity(place_query:강남역, start/end, travel_from_query:집, return_to_query:집) 한 번.
-        - 반복: create_recurring_schedule. "평일"=월~금. 주기는 사용자 말대로(최대 26주). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1), "공휴일 빼고"=skip_holidays:true.
+        - 반복: create_recurring_schedule. "평일"=월~금. 주기는 사용자 말대로(최대 26주). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1, 매월 아니면 0), "공휴일 빼고"=skip_holidays:true.
           "9시부터 18시까지"면 9시=arrival_time, 18시=return_time(왕복 원하는지 확인). 점심은 보통 같은 건물이라 lunch_place_query를 **비워둔다** — "밖에서" 같이 명시할 때만 채운다.
         - 이미 있는 일정 고치기: update_schedule (지우고 새로 만들지 말 것).
         - 방금 만든 반복 그룹의 수단/버퍼/알림만: update_recurring_schedule. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
@@ -551,7 +573,7 @@ final class AIAssistant: ObservableObject {
                     "start_date": ["type": "STRING", "description": "시작일 'yyyy-MM-dd'(기본 오늘)"],
                     "weeks": ["type": "INTEGER", "description": "반복 주수. 기본 8, 최대 26."],
                     "every_n_weeks": ["type": "INTEGER", "description": "2=격주"],
-                    "nth_week_of_month": ["type": "INTEGER", "description": "**\"매월\"이라고 말했을 때만**: 그 달 n번째 요일(1~4, -1=마지막)"],
+                    "nth_week_of_month": ["type": "INTEGER", "description": "**\"매월\"이라고 말했을 때만**: 그 달 n번째 요일(1~4, -1=마지막). 매월이 아니면 0"],
                     "confirm_recurrence": ["type": "BOOLEAN", "description": "주기를 되묻는 응답을 받고 사용자가 확인했을 때 true"],
                     "skip_holidays": ["type": "BOOLEAN", "description": "true=한국 공휴일 제외"],
                     "mode_this_time": mode,
@@ -906,13 +928,13 @@ final class AIAssistant: ObservableObject {
         if let ask = recurringArgumentIssue(input, weekdayCount: weekdays.count) { return ask }
         // 매주(기본) / 격주 / 매월 n번째 요일 / 공휴일 제외를 하나의 규칙으로 묶는다.
         let rule = RecurrenceRule(weekdays: weekdays,
-                                  everyNWeeks: max(1, intValue(input["every_n_weeks"]) ?? 1),
-                                  nthWeekOfMonth: intValue(input["nth_week_of_month"]),
+                                  everyNWeeks: everyNWeeksArgument(input),
+                                  nthWeekOfMonth: nthWeekArgument(input),
                                   skipHolidays: (input["skip_holidays"] as? Bool) ?? false)
         let mode = resolvedMode(input["mode_this_time"])
         let buffer = intValue(input["buffer_minutes"]) ?? defaultBuffer
         let notify = intValue(input["notify_lead_minutes"]) ?? defaultNotify
-        let weeks = intValue(input["weeks"]) ?? 8
+        let weeks = weeksArgument(input) ?? 8
         let startDate = (input["start_date"] as? String).flatMap(parseDay) ?? Date()
         let originQuery = input["origin_query"] as? String
 
@@ -931,6 +953,9 @@ final class AIAssistant: ObservableObject {
         }
         let recurrenceId = leg1.recurrenceId
         lastRecurrenceId = recurrenceId
+        // 확인은 **실제로 만들어졌을 때** 소진된다. 가드를 통과한 자리에서 지우면 그 뒤 출발지·목적지
+        // 해석이나 날짜 계산이 실패했을 때 멀쩡한 확인이 같이 날아가, 모델이 사용자에게 같은 걸 또 묻는다.
+        recurrenceConfirmAsk = nil
         var totalCount = leg1.count
         var parts = ["등원/출근 \(leg1.count)건(도착 \(String(format: "%02d:%02d", hour, minute)))"]
 
@@ -996,6 +1021,47 @@ final class AIAssistant: ObservableObject {
         return "등록 완료 — '\(title)' 총 \(totalCount)건 등록했어요: \(parts.joined(separator: ", ")). 출발지 '\(origin.name)' ↔ 목적지 '\(dest.name)', 이동수단 \(mode.title). 전체를 지우려면 아무 일정이나 열어 '반복 일정 전체 삭제'를 눌러주세요."
     }
 
+    /// `nth_week_of_month`를 읽는 **단 한 곳**(가드와 RecurrenceRule이 같은 값을 보게 — 계약 5).
+    ///
+    /// 0은 오류가 아니라 "해당 없음"으로 읽는다. 이 모델은 선언된 선택 인자를 비워두지 못하고 전부
+    /// 채워 보낸다 — 같은 호출에 lunch_start·lunch_end·return_time이 빈 문자열로 같이 왔다. 문자열은
+    /// 빈 값으로 "없음"을 말할 수 있지만 INTEGER에는 그 자리가 0뿐이다. 빈 문자열을 resolvedMode·
+    /// resolveOrigin이 조용히 흘려보내는 것과 같은 처리를 숫자 쪽에도 해준다.
+    /// 툴 선언과 시스템 프롬프트에도 "매월이 아니면 0"이라고 적어 뒀다 — 앱만 알고 모델은 모르면,
+    /// 되돌려 보낼 때 모델이 쓸 수 있는 탈출로가 없어 선언에 적힌 1~4·-1 중 하나를 다시 고른다.
+    ///
+    /// **인자마다 따로 판단한다 — 0을 일괄로 "없음" 처리하는 헬퍼로 합치지 말 것.**
+    /// · `nth_week_of_month`·`weeks`는 0에 뜻이 없다("0번째 주"도 "0주짜리 반복"도 없다).
+    ///   그래서 0은 모델의 "없음"으로만 읽힌다.
+    /// · `buffer_minutes`·`notify_lead_minutes`의 0은 사용자가 실제로 할 수 있는 말이다
+    ///   ("여유 없이", "출발 시각에 알림" — 실제로 executeCreateSchedule이 출발 기준 일정에 0을 넣는다).
+    ///   여기까지 없앰 처리하면 진짜 요청을 버리고 기억해둔 기본값을 조용히 끼워 넣는다.
+    ///   아래 recurringArgumentIssue 주석의 "값을 조용히 버리는 건 조용히 따르는 것만큼 나쁘다"가
+    ///   정확히 그 경우다. 그 둘은 그대로 둔다.
+    private func nthWeekArgument(_ input: [String: Any]) -> Int? {
+        guard let nth = intValue(input["nth_week_of_month"]), nth != 0 else { return nil }
+        return nth
+    }
+
+    /// `weeks`를 읽는 **단 한 곳**(되묻기 판단과 실제 생성이 같은 값을 보게 — 계약 5).
+    ///
+    /// 0은 위와 같은 이유로 "아직 안 정해짐"이다. 걸러내지 않으면 되묻기 조건(`== nil`)이 빗나가
+    /// 사용자에게 기간을 묻지도 않고, Store의 `min(max(weeks, 1), maxRecurrenceWeeks)`가 1주로
+    /// 깎아 한 주짜리 반복이 조용히 만들어진다 — 등록은 "성공"인데 결과가 틀린,
+    /// nth_week_of_month와 똑같은 모양이다. 음수도 같은 이유로 막는다(역시 1주로 깎인다).
+    private func weeksArgument(_ input: [String: Any]) -> Int? {
+        guard let weeks = intValue(input["weeks"]), weeks > 0 else { return nil }
+        return weeks
+    }
+
+    /// `every_n_weeks`를 읽는 **단 한 곳**(가드와 RecurrenceRule이 같은 값을 보게 — 계약 5).
+    /// 위 둘과 달리 Int?가 아니라 Int다: 0도 없음도 "매주"라는 같은 뜻이라 호출부가 구분할 게 없다.
+    /// 두 곳에 `max(1, ... ?? 1)`이 똑같이 적혀 있었다 — 지금은 값이 같지만 한쪽만 고쳐지면
+    /// 되묻기 판단과 실제 생성이 서로 다른 주기를 보게 된다(렌더링·히트테스트가 어긋났던 그 모양).
+    private func everyNWeeksArgument(_ input: [String: Any]) -> Int {
+        max(1, intValue(input["every_n_weeks"]) ?? 1)
+    }
+
     /// 반복 일정을 만들기 **전에** 인자를 점검한다. 되돌려 보낼 이유가 있으면 모델에게 줄 안내를,
     /// 없으면 nil. 프롬프트로 타이르지 않고 실행부에서 막는 이유는, 여기 걸리는 게 전부 "모델이
     /// 인자를 잘못 채운" 경우라 코드가 확실하고 매 요청 토큰도 더 먹지 않기 때문이다.
@@ -1007,30 +1073,39 @@ final class AIAssistant: ObservableObject {
     /// ② 기간(`weeks`)을 비우면 조용히 8주가 적용된다. 요일이 많은 = 오래 다니는 일정은 사용자가
     ///    직접 정하길 기대하므로 되묻는다(요일 1~2개짜리는 그대로 8주로 둔다 — 매번 물으면 귀찮다).
     ///
+    /// ①의 확인(`confirm_recurrence`)은 **앱이 그 조합을 실제로 되물은 뒤**에만 인정한다(`recurrenceConfirmAsk`).
+    ///
     /// 값을 조용히 버리는 건 조용히 따르는 것만큼 나쁘다. **아직 만들지 않았다**고 알리고 무엇을
     /// 붙여 다시 부르면 되는지까지 준다 — on_conflict·confirm_many와 같은 방식이다(탈출 인자 없이
     /// 되묻기만 하면 모델이 같은 호출을 그대로 반복한다).
     private func recurringArgumentIssue(_ input: [String: Any], weekdayCount: Int) -> String? {
-        let nth = intValue(input["nth_week_of_month"])
+        let nth = nthWeekArgument(input)
         // 1~4·-1 밖의 값은 사용자가 뭐라 했든 규칙으로 표현할 수 없다 — 확인으로 통과시키지 않는다.
         if let nth, nth != -1, !(1...4).contains(nth) {
-            return "아직 만들지 않았어요. nth_week_of_month에 쓸 수 없는 값(\(nth))이 들어왔어요 — 1~4와 -1(마지막)만 됩니다. 매주 반복이면 그 인자를 빼고, 매월 반복이 맞으면 값을 고쳐서 다시 호출해."
+            return "아직 만들지 않았어요. nth_week_of_month에 쓸 수 없는 값(\(nth))이 들어왔어요. **nth_week_of_month:0**으로 두고 나머지 인자는 그대로 둔 채 다시 호출해 — 매주 반복이 됩니다. 사용자가 '매월 몇째 주'라고 말한 게 확실할 때만, 몇째 주인지 사용자에게 먼저 물어보고 답을 들은 뒤에 다시 호출해."
         }
 
         // 요일 3개 이상 = "평일 전체" 같은 통근형. 주기 인자와 같이 오면 십중팔구 잘못 채운 것이다.
         let many = weekdayCount >= 3
-        let interval = max(1, intValue(input["every_n_weeks"]) ?? 1)
+        let interval = everyNWeeksArgument(input)
         var asks: [String] = []
-        if many, (input["confirm_recurrence"] as? Bool) != true {
+        // 확인은 앱이 ①을 **이 조합 그대로** 되물었을 때만 유효하다 — 모델이 스스로 켜서 보낸 값도,
+        // 다른 호출에 대해 받아둔 확인도 확인이 아니다.
+        let asked = RecurrenceAsk(nth: nth, interval: interval, weekdayCount: weekdayCount)
+        let confirmed = recurrenceConfirmAsk == asked && (input["confirm_recurrence"] as? Bool) == true
+        if many, !confirmed {
             var cycle: String? = nil
             // "매월 1번째 주"는 어색해서 사용자에게 그대로 전달되면 티가 난다 — 서수로 읽어준다.
             if let nth { cycle = "매월 \(Self.nthWeekLabel(nth)) 주에만" }
             else if interval > 1 { cycle = "\(interval)주 간격으로만" }
             if let cycle {
-                asks.append("· \(cycle) 반복하게 돼 있는데 요일은 \(weekdayCount)개예요. 매주 반복이 맞으면 nth_week_of_month·every_n_weeks를 빼고, 그 주기가 정말 맞으면 confirm_recurrence:true를 붙여 다시 호출해.")
+                // 여기가 유일한 되묻기 지점이다 — 이 조합을 그대로 다시 들고 오는 호출의
+                // confirm_recurrence만 진짜 확인으로 친다.
+                recurrenceConfirmAsk = asked
+                asks.append("· \(cycle) 반복하게 돼 있는데 요일은 \(weekdayCount)개예요. 매주 반복이 맞으면 nth_week_of_month:0·every_n_weeks:1로 두고, 그 주기가 정말 맞으면 confirm_recurrence:true를 붙여 다시 호출해.")
             }
         }
-        if many, intValue(input["weeks"]) == nil {
+        if many, weeksArgument(input) == nil {
             asks.append("· 언제부터 몇 주간 다니는지 아직 안 정해졌어요. 사용자에게 물어보고 start_date·weeks를 채워 다시 호출해(최대 26주. 사용자가 안 정하면 weeks:8).")
         }
         guard !asks.isEmpty else { return nil }
