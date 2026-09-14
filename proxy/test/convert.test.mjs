@@ -5,7 +5,7 @@
 //
 // 실행: npm test   (프록시 배포 전에 돌릴 것)
 
-import { toResponsesRequest, responsesToGeminiShape, toOpenAIRequest, toGeminiShape } from "../src/index.js";
+import { toResponsesRequest, responsesToGeminiShape } from "../src/index.js";
 import assert from "node:assert";
 
 // 2턴짜리 히스토리: user → model(도구호출) → function(결과) → model(텍스트+도구호출) → function(결과) → user(+이미지)
@@ -31,7 +31,7 @@ function sampleBody() {
 const tests = [];
 function test(name, fn) { tests.push([name, fn]); }
 
-// ── OpenAI Responses (현재 기본 백엔드) ──────────────────────────────────────
+// ── OpenAI Responses (유일한 백엔드) ─────────────────────────────────────────
 
 test("system은 instructions로 빠지고 input에는 안 들어간다", () => {
   const { instructions, input } = toResponsesRequest(sampleBody());
@@ -87,32 +87,7 @@ test("인자 JSON이 깨져도 던지지 않고 빈 인자로 넘긴다", () => 
   assert.deepEqual(g.candidates[0].content.parts, [{ functionCall: { name: "f", args: {} } }]);
 });
 
-// ── Workers AI 폴백(chat completions) ───────────────────────────────────────
-// luna 검증이 끝나면 이 섹션과 대상 함수를 함께 지운다.
-
-test("[폴백] system이 맨 앞 메시지가 된다", () => {
-  const { messages } = toOpenAIRequest(sampleBody());
-  assert.equal(messages[0].role, "system");
-});
-
-test("[폴백] tool_call_id가 유일하고 tool 메시지가 순서대로 참조한다", () => {
-  const { messages } = toOpenAIRequest(sampleBody());
-  const callIds = messages.flatMap((m) => (m.tool_calls || []).map((t) => t.id));
-  const toolIds = messages.filter((m) => m.role === "tool").map((m) => m.tool_call_id);
-  assert.equal(new Set(callIds).size, callIds.length, "중복 tool_call id");
-  assert.deepEqual(toolIds, callIds, "호출 id와 결과 id 불일치");
-});
-
-test("[폴백] 이미지가 섞인 user 턴은 배열 content가 된다", () => {
-  const { messages } = toOpenAIRequest(sampleBody());
-  const last = messages[messages.length - 1];
-  assert.equal(last.content[1].image_url.url, "data:image/jpeg;base64,AAAA");
-});
-
-test("[폴백] 응답 역변환", () => {
-  const g = toGeminiShape({ choices: [{ message: { content: "네", tool_calls: [{ function: { name: "f", arguments: '{"a":1}' } }] } }] });
-  assert.deepEqual(g.candidates[0].content.parts, [{ text: "네" }, { functionCall: { name: "f", args: { a: 1 } } }]);
-});
+// (구) Workers AI 폴백 섹션은 2026-09-13 제거 — 폴백 백엔드 자체가 없어졌다.
 
 // ── 실행 ────────────────────────────────────────────────────────────────────
 

@@ -14,8 +14,9 @@
  * (구) GEMINI_KEY 시크릿·Gemini 연동은 2026-09-09 제거됨: Cloudflare Worker가 전 세계
  * 여러 위치에서 실행되는데 그중 일부(데이터센터 IP 대역)를 Gemini 무료 티어가 지역과
  * 무관하게 차단해("User location is not supported") 성공률이 10~50%로 들쭉날쭉했다.
- * 지금은 **Workers AI 바인딩**(env.AI, wrangler.toml [ai])으로 대체 — Cloudflare 자체
- * 인프라에서 모델이 돌아 외부 호출 자체가 없으므로 이 문제가 구조적으로 없다. 별도 키 불필요.
+ * 그 뒤 쓰던 Workers AI 바인딩(env.AI, wrangler.toml [ai])도 2026-09-13 제거됨 — luna로
+ * 확정돼 비교 기준선이 필요 없어졌다. OpenAI는 데이터센터 IP를 차단하지 않아 Gemini 때의
+ * 문제가 재발하지 않는다. 되살릴 일이 생기면 이 시점의 커밋을 참고한다.
  *
  * 라우트:
  *   GET  /kakao/directions?origin=lng,lat&destination=lng,lat[&priority=RECOMMEND]
@@ -24,8 +25,7 @@
  *   GET  /odsay/loadLane?mapObject=
  *   POST /claude/messages   (본문을 Anthropic /v1/messages 로 중계, 키는 서버가 붙임)
  *   POST /ai/chat           (Gemini generateContent 형식의 본문을 받아 OpenAI로 실행하고
- *                            같은 Gemini 형식 응답으로 돌려준다 — 앱은 백엔드가 뭐든 몰라도 됨.
- *                            OPENAI_KEY가 없으면 (구) Workers AI로 자동 폴백)
+ *                            같은 Gemini 형식 응답으로 돌려준다 — 앱은 백엔드가 뭐든 몰라도 됨)
  *
  * 인증: 헤더 `X-App-Token: <APP_TOKEN>` 필요.
  */
@@ -56,11 +56,6 @@ const OPENAI_MODEL = "gpt-5.6-luna";
 // 전자는 "Function tools with reasoning_effort are not supported"로 거부한다(실측 2026-09-12) —
 // 도구를 쓰려면 추론을 none으로 꺼야 하는데, 인자 누락을 줄이려고 옮겨온 마당에 그건 앞뒤가 안 맞는다.
 const OPENAI_REASONING_EFFORT = "medium";
-
-// (구) Workers AI 폴백 — OPENAI_KEY 미설정 시에만 쓴다.
-// 함수 호출 + 한국어 정확도 실측 확인(2026-09-09). 주의: 같은 자리에서 테스트한
-// @cf/meta/llama-3.3-70b-instruct-fp8-fast는 함수 호출 인자 안의 한국어가 깨져 나왔음(제외).
-const WORKERS_AI_MODEL = "@cf/mistralai/mistral-small-3.1-24b-instruct";
 
 // ODsay 키는 도메인(Referer) 검사를 한다. ODsay 콘솔에 등록한 도메인과 맞춰 보낸다.
 const ODSAY_REFERER = "https://localhost";
@@ -105,10 +100,13 @@ export default {
         if (request.method !== "POST") {
           return json(405, { error: "method_not_allowed" });
         }
+        // 폴백이 없으므로 키가 없으면 여기서 분명하게 끊는다 — 그냥 태우면 OpenAI가
+        // "Bearer undefined"로 401을 주고, 그건 쿼터 초과·모델명 오타와 구분이 안 된다.
+        if (!env.OPENAI_KEY) {
+          return json(503, { error: "openai_key_missing" });
+        }
         const geminiBody = await request.json();
-        return env.OPENAI_KEY
-          ? await proxyOpenAI(geminiBody, env)
-          : await proxyWorkersAI(geminiBody, env);
+        return await proxyOpenAI(geminiBody, env);
       }
 
       // 이하 라우트는 GET 전용
@@ -160,67 +158,6 @@ async function proxyClaude(request, env) {
     body,
   });
   return passthrough(resp);
-}
-
-// Gemini generateContent 형식 요청 바디를 OpenAI chat completion 형식(messages/tools)으로
-// 옮긴다. 앱(AIAssistant.swift)의 요청/응답 파싱 코드는 그대로 두고 백엔드만 여기서
-// 갈아끼우기 위한 층이다 — 백엔드를 바꿔도 앱은 안 건드린다.
-function toOpenAIRequest(geminiBody) {
-  const messages = [];
-
-  const systemText = (geminiBody.system_instruction?.parts || []).map((p) => p.text || "").join("\n");
-  if (systemText) messages.push({ role: "system", content: systemText });
-
-  // tool_call id는 대화 **전체**에서 유일해야 한다. 턴마다 0부터 다시 세면 여러 턴이 쌓인
-  // 히스토리에서 같은 id가 반복돼 assistant 턴 ↔ tool 턴 짝이 모호해진다.
-  // 도구 결과는 호출과 같은 순서로 바로 뒤따라오므로, 발급한 id를 큐에 넣고 순서대로 꺼내 쓴다.
-  let seq = 0;
-  const pendingIds = [];
-
-  for (const c of geminiBody.contents || []) {
-    const parts = c.parts || [];
-    if (c.role === "model") {
-      const text = parts.filter((p) => p.text).map((p) => p.text).join("\n");
-      const toolCalls = parts
-        .filter((p) => p.functionCall)
-        .map((p) => {
-          const id = toolCallId(seq++);
-          pendingIds.push(id);
-          return {
-            id,
-            type: "function",
-            function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args || {}) },
-          };
-        });
-      messages.push({ role: "assistant", content: text || null, tool_calls: toolCalls.length ? toolCalls : undefined });
-    } else if (c.role === "function") {
-      parts
-        .filter((p) => p.functionResponse)
-        .forEach((p) => {
-          const id = pendingIds.shift() || toolCallId(seq++);
-          messages.push({ role: "tool", tool_call_id: id, content: JSON.stringify(p.functionResponse.response || {}) });
-        });
-    } else {
-      const content = [];
-      for (const p of parts) {
-        if (p.text) content.push({ type: "text", text: p.text });
-        if (p.inlineData) {
-          content.push({ type: "image_url", image_url: { url: `data:${p.inlineData.mimeType};base64,${p.inlineData.data}` } });
-        }
-      }
-      messages.push({ role: "user", content: content.length === 1 && content[0].type === "text" ? content[0].text : content });
-    }
-  }
-
-  const geminiTools = geminiBody.tools?.[0]?.functionDeclarations || [];
-  const tools = geminiTools.length
-    ? geminiTools.map((fd) => ({
-        type: "function",
-        function: { name: fd.name, description: fd.description, parameters: lowercaseSchemaTypes(fd.parameters) },
-      }))
-    : undefined;
-
-  return { messages, tools };
 }
 
 // Gemini generateContent 형식 → OpenAI Responses 형식(instructions/input/tools).
@@ -286,9 +223,9 @@ function toResponsesRequest(geminiBody) {
 // 기본 백엔드. 키는 서버(시크릿)가 붙이고 앱에는 나가지 않는다.
 async function proxyOpenAI(geminiBody, env) {
   const { instructions, input, tools } = toResponsesRequest(geminiBody);
-  // ⚠️ 임시 캡처(2026-09-12) — 실제 앱이 보내는 프롬프트·툴 선언을 한 번 떠서
-  //    테스트 하네스를 만들기 위한 것. 캡처 끝나면 이 블록을 지운다.
-  console.log("BESIR_CAPTURE " + JSON.stringify({ instructions, tools, input }));
+  // 대화 본문은 어떤 형태로도 로그에 남기지 않는다 — 임시 캡처를 넣었다가
+  // 사용자 대화 전체가 Worker 로그에 쌓이던 적이 있다. 디버깅이 필요하면
+  // 본문 대신 길이·아이템 수 같은 메타값만 찍는다.
   const resp = await fetch(OPENAI_RESPONSES, {
     method: "POST",
     headers: {
@@ -338,36 +275,12 @@ function responsesToGeminiShape(result) {
   return { candidates: [{ content: { parts, role: "model" }, finishReason: "STOP" }] };
 }
 
-// (구) 폴백 백엔드 — OPENAI_KEY가 없을 때만 탄다.
-// ⚠️ luna 검증이 끝나면 이 함수와 toOpenAIRequest, WORKERS_AI_MODEL, wrangler.toml의 [ai]
-//    바인딩을 함께 지운다. 지금은 luna와 비교할 기준선으로만 남겨둔 것이다.
-async function proxyWorkersAI(geminiBody, env) {
-  const { messages, tools } = toOpenAIRequest(geminiBody);
-  const result = await env.AI.run(WORKERS_AI_MODEL, { messages, tools });
-  return json(200, toGeminiShape(result));
-}
-
-// 일부 Workers AI 모델(예: mistral-small-3.1)은 tool_call id를 "영숫자 9자"로 강제한다.
-// OpenAI는 제약이 없지만 두 백엔드가 같은 변환을 쓰도록 좁은 쪽에 맞춰 둔다.
+// "영숫자 9자" 고정 폭인 이유: 지금 쓰는 OpenAI는 call_id 모양에 제약이 없지만, 예전
+// 폴백이던 Workers AI의 mistral-small-3.1이 이 형식을 강제했다. 남겨둔 건 관성이 아니라
+// 이미 저장된 대화 히스토리가 이 모양의 id로 짝지어져 있기 때문이다 — 폭을 바꾸면 기존
+// 대화의 호출↔결과 짝이 어긋난다.
 function toolCallId(i) {
   return "tc" + String(i).padStart(7, "0");
-}
-
-// Workers AI(OpenAI 호환) 응답 → Gemini generateContent 응답 모양으로 변환.
-function toGeminiShape(result) {
-  const msg = result.choices?.[0]?.message || {};
-  const parts = [];
-  if (msg.content) parts.push({ text: msg.content });
-  for (const tc of msg.tool_calls || []) {
-    let args = {};
-    try {
-      args = JSON.parse(tc.function.arguments);
-    } catch (e) {
-      /* 인자 파싱 실패 시 빈 객체로(앱 쪽에서 필수 필드 누락으로 처리됨) */
-    }
-    parts.push({ functionCall: { name: tc.function.name, args } });
-  }
-  return { candidates: [{ content: { parts, role: "model" }, finishReason: "STOP" }] };
 }
 
 // Gemini 툴 스키마는 type을 대문자(STRING/OBJECT 등)로 쓰는데 OpenAI 호환 스키마는 소문자를 쓴다.
@@ -451,4 +364,4 @@ async function passthrough(resp) {
 
 // 아래는 test/convert.test.mjs 전용 내보내기다.
 // Cloudflare Workers는 default export만 핸들러로 쓰므로 런타임 동작에는 영향이 없다.
-export { toResponsesRequest, responsesToGeminiShape, toOpenAIRequest, toGeminiShape, lowercaseSchemaTypes };
+export { toResponsesRequest, responsesToGeminiShape, lowercaseSchemaTypes };

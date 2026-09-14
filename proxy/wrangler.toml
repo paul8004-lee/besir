@@ -2,10 +2,9 @@ name = "besir-proxy"
 main = "src/index.js"
 compatibility_date = "2024-11-01"
 
-# Workers AI 바인딩 — Cloudflare 자체 인프라에서 모델을 실행해 외부 호출(Gemini 등)이
-# 겪던 "데이터센터 IP 차단" 문제 자체가 없다. 별도 키/토큰 불필요.
-[ai]
-binding = "AI"
+# (구) Workers AI 바인딩 [ai]/binding="AI"는 2026-09-13 제거됨 — OpenAI gpt-5.6-luna로
+# 확정되면서 폴백 백엔드가 필요 없어졌다(src/index.js의 proxyWorkersAI도 같이 삭제).
+# 되살릴 일이 생기면 이 시점의 커밋에서 바인딩과 함수를 함께 되돌려야 한다.
 
 # ⚠️ Smart Placement 비활성화(2026-09-09): 켜봤더니 오히려 Gemini가 차단하는 특정 지역으로
 # 실행 위치가 고정돼(요청마다 랜덤이 아니라 계속 같은 곳) "User location is not supported"가

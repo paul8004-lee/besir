@@ -20,8 +20,8 @@
   - **모델**: `gpt-5.6-luna`($0.20/$1.20, 캐시 입력 $0.02). 측정된 고정 비용 5,804토큰/요청(시스템 1,812 + 툴 3,992) 기준 작업당 약 6원. 인자 누락이 재발하면 `gpt-5.6-terra`($2/$12)로 올린다 — `proxy/src/index.js`의 `OPENAI_MODEL` 한 줄.
   - **⚠️ chat completions가 아니라 `/v1/responses`를 쓴다**: 전자는 "Function tools with reasoning_effort are not supported"로 거부한다(실측). 도구를 쓰려면 추론을 꺼야 하는데, 인자 누락을 줄이려고 옮겨온 마당에 앞뒤가 안 맞아 엔드포인트를 바꿨다. Responses는 대화가 `messages`가 아니라 평평한 `input` 아이템 배열이고 도구 호출·결과가 `function_call`/`function_call_output` 아이템으로 들어간다.
   - **같이 고친 버그**: `tool_call_id`를 턴마다 0부터 다시 세어 히스토리에 같은 id가 중복됐다(mistral은 넘어갔지만 OpenAI에서는 호출↔결과 짝이 틀어질 수 있음). 대화 전체에서 유일한 번호를 쓰도록 수정.
-  - **테스트**: `proxy/test/convert.test.mjs`(11건) — 변환층이 조용히 깨지면 앱에서는 "처리 중 문제가 생겼어요"로만 보여 원인을 못 찾는다. **배포 전 `cd proxy && npm test` 필수.** 실제 호출로 1턴 도구 호출·다중 턴 도구 결과 재전송 모두 확인.
-  - **폴백**: `OPENAI_KEY`가 없으면 Workers AI로 자동 폴백. luna 검증이 끝나면 `proxyWorkersAI`·`toOpenAIRequest`·`WORKERS_AI_MODEL`·`wrangler.toml`의 `[ai]` 바인딩을 함께 지운다.
+  - **테스트**: `proxy/test/convert.test.mjs`(7건) — 변환층이 조용히 깨지면 앱에서는 "처리 중 문제가 생겼어요"로만 보여 원인을 못 찾는다. **배포 전 `cd proxy && npm test` 필수.** 실제 호출로 1턴 도구 호출·다중 턴 도구 결과 재전송 모두 확인.
+  - **폴백 제거(2026-09-13)**: luna로 확정돼 `proxyWorkersAI`·`toOpenAIRequest`·`toGeminiShape`·`WORKERS_AI_MODEL`·`wrangler.toml`의 `[ai]` 바인딩·폴백 테스트 4건을 모두 삭제(테스트 11→7건). **이제 백엔드는 하나뿐이라 `OPENAI_KEY`가 없으면 `/ai/chat`이 503 `openai_key_missing`으로 즉시 끊긴다** — 예전처럼 조용히 다른 모델로 넘어가지 않는다. `toolCallId`는 `toResponsesRequest`도 쓰므로 남겼다(지우면 현역 경로가 깨진다).
   - **아직 안 한 것**: strict 함수 호출(구조화 출력). 켜려면 모든 선택 인자를 `required` + nullable로 바꾸고 앱이 명시적 `null`을 "없음"으로 처리해야 해서 회귀 위험이 있다. luna로 테스트 시퀀스를 돌려보고 인자 누락이 남으면 그때 켠다.
   - **실행부 방어는 남겨둔다**: `resolvedMode`/`resolveOrigin`의 빈 값 처리, `isSamePlace` 50m 가드, `list_schedules`의 자기교정 브랜치. 모델을 바꿨다고 먼저 걷어내지 않고, 테스트로 불필요해진 것을 확인한 뒤 지운다. (luna도 `mode_this_time`을 빈 문자열로 채우는 것이 실측됐다 — 앱이 이미 trim 후 빈 값을 "없음"으로 보기 때문에 문제되지 않았다.)
   - `ANTHROPIC_KEY`·`GEMINI_KEY` 시크릿은 여전히 남아 있으나 쓰이지 않는다(지워도 무방).
@@ -168,13 +168,13 @@
 ### Phase 0 — AI 카카오톡 공유 파이프라인 완성 — ✅ 완료 (당초 계획과 다른 아키텍처로 구현됨)
 
 **당초 계획**: Anthropic Claude API 키를 프록시에 배포 + URL scheme 기반 Share Extension 핸드오프.
-**실제 구현(더 나은 방향으로 확정됨)**: Gemini를 시도했다가 Cloudflare 엣지 IP가 Gemini 무료 티어에 지역 무관 차단당하는 문제(성공률 10~50%)를 겪고 **Cloudflare Workers AI**(`@cf/mistralai/mistral-small-3.1-24b-instruct`)로 완전 전환 — 외부 호출 자체가 없어져 그 문제가 구조적으로 사라짐. Share Extension은 URL scheme이 아니라 **App Group 파일 큐**(`SharedInbox.swift`)로 구현됨. 상세는 §1 참고.
+**실제 구현(더 나은 방향으로 확정됨)**: Gemini를 시도했다가 Cloudflare 엣지 IP가 Gemini 무료 티어에 지역 무관 차단당하는 문제(성공률 10~50%)를 겪고 Cloudflare Workers AI(`@cf/mistralai/mistral-small-3.1-24b-instruct`)로 전환했다가, 함수 호출 신뢰도 때문에 **2026-09-12 OpenAI `gpt-5.6-luna`로 최종 확정**(폴백이던 Workers AI 경로는 2026-09-13 삭제). 백엔드를 세 번 갈아끼우는 동안 앱 코드는 한 줄도 안 바뀌었다 — 와이어 포맷을 Gemini `generateContent` 형식으로 고정한 계약 덕분이다. Share Extension은 URL scheme이 아니라 **App Group 파일 큐**(`SharedInbox.swift`)로 구현됨. 상세는 §1 참고.
 
 | 항목 | 상태 | 비고 |
 |---|---|---|
 | AI 백엔드 확보 | ✅ 완료 | 당시 Cloudflare Workers AI(무료). **2026-09-12 OpenAI `gpt-5.6-luna`로 교체** — 함수 호출 신뢰도 때문. `/ai/chat` 라우트는 그대로 |
 | Share Extension(텍스트) | ✅ 완료, 실기기 성공 확인 | App Group 큐 + 앱 포그라운드 drain 방식 |
-| Share Extension(이미지) | ✅ 완료 | `inlineData` → Workers AI `image_url`로 프록시가 번역, 모델이 비전 지원(Mistral Small 3.1) |
+| Share Extension(이미지) | ✅ 완료 | `inlineData` → OpenAI Responses `input_image`로 프록시가 번역(`toResponsesRequest`), luna가 비전 지원. 2026-09-12 이전엔 Workers AI `image_url`이었다 |
 | 파싱 실패/2차 API 실패 시 오표시 버그 | ✅ 수정 완료 | 등록 자체는 성공했는데 확인 메시지 호출만 실패해 에러로 잘못 뜨던 문제 |
 | **다음 세션에서 재확인 필요** | ⏳ 미확인 | 월간 캘린더 스와이프 렉 수정, 탭→상세정보 시트 전환 수정 — 둘 다 아이폰에 설치까지는 됐고 실제 라이브 재테스트만 남음(§6 Day 5) |
 
@@ -321,7 +321,8 @@
 
 - **배달앱(요기요/배민) 공식 API**: 개인 개발자 개방 여부 미확인 — Day 8에서 조사 후 딥링크 대안으로 스코프를 낮출 가능성 높음.
 - **금융 API(토스 등)**: 마이데이터 사업자 등록 없이는 공식 연동 불가 가능성 높음 — be rich sir는 애초에 "수동 입력 + 분석"으로 스코프를 낮춤(Phase 3 설계에 반영됨).
-- **Cloudflare Workers AI 무료 티어 일일 한도**: 정확한 실측치 미확인. be full/healthy/fun sir의 AI 추천 툴이 추가되면 호출량이 늘어나므로 Phase 5(Day 34)에서 실제 사용량 기준으로 재점검 필요.
-- **Workers AI 모델의 한국어 tool-calling 안정성**: 현재 모델(`mistral-small-3.1-24b-instruct`)은 검증됐지만, Cloudflare가 모델을 폐지/교체할 수 있음(Gemini에서 실제로 겪은 일) — 모델 상수(`WORKERS_AI_MODEL`)가 죽으면 가장 먼저 확인할 지점.
+- **OpenAI 사용 비용**: 작업당 약 6원(luna, 고정 5,804토큰 기준)까지만 실측됐고 **월 총액은 미실측**. be full/healthy/fun sir의 AI 추천 툴이 추가되면 호출량이 늘어나므로 Phase 5(Day 34)에서 실사용 기준으로 재점검하고 OpenAI 대시보드에 월 한도를 건다. 프록시는 `APP_TOKEN`만 있으면 누구나 부를 수 있어 **레이트리밋이 곧 비용 방어**다.
+- **백엔드가 하나뿐이라 폴백이 없다(2026-09-13~)**: `OPENAI_KEY`가 빠지거나 `OPENAI_MODEL`("gpt-5.6-luna")이 폐지되면 `/ai/chat`이 그대로 끊긴다(키 없음은 503 `openai_key_missing`, 모델 폐지는 `openai_error`). AI 채팅이 안 될 때 **가장 먼저 확인할 지점**이고, 조치는 `proxy/src/index.js`의 `OPENAI_MODEL` 한 줄 교체다.
+- **luna의 한국어 tool-calling 안정성**: 인자 누락이 재발하면 `gpt-5.6-terra`($2/$12)로 올린다 — 같은 상수 한 줄. 실행부 방어(`resolvedMode`/`resolveOrigin`/`isSamePlace` 50m 가드/`list_schedules` 자기교정)는 테스트로 불필요함을 확인하기 전까지 걷어내지 않는다.
 - **1인 개발 기준**이므로 Day 38까지는 "매일 온전히 이 작업만 했을 때" 가정. 실제 캘린더 일수는 더 길어질 수 있음(실제로 Phase 0는 예상보다 훨씬 오래 걸렸고 계획에 없던 Phase 0.5까지 발생함) — **순서를 지키는 것이 날짜를 지키는 것보다 중요**하다. Phase당 코드 검사/실기기 테스트/안정화 3일이 추가되면서 전체 일수가 늘었지만, 이 3일은 건너뛰지 않는다 — 회귀를 놓치면 다음 Phase가 이전 Phase 위에 쌓이는 구조상 문제가 누적된다.
 - ~~Claude 비전 지원 모델 확인~~, ~~ShareExtension URL scheme 핸드오프 불확실성~~ — 둘 다 해소됨(Workers AI 비전 지원 확인, App Group 파일 큐 방식으로 확정).
