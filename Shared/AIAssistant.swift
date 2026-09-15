@@ -56,6 +56,15 @@ final class AIAssistant: ObservableObject {
     }
     private var recurrenceConfirmAsk: RecurrenceAsk?
 
+    /// 반복 그룹 수정에서 여유·알림에 0이 왔을 때 되물은 조합. `RecurrenceAsk`와 같은 이유로
+    /// 값 자체를 들고 있다 — 다른 조합에 대해 받아둔 확인이 뒤의 무관한 0을 통과시키면 안 된다.
+    private struct ZeroUpdateAsk: Equatable {
+        let recurrenceId: UUID
+        let buffer: Int?
+        let notify: Int?
+    }
+    private var zeroUpdateConfirmAsk: ZeroUpdateAsk?
+
     /// 사용자에 대해 오래 기억해둘 사실(주로 쓰는 이동수단 등). 대화 기록(ai_history.json)과 달리
     /// "새 대화 시작"으로 지워지지 않는다 — 매번 새로 물어보지 않도록 시스템 프롬프트에 항상 포함된다.
     @Published private(set) var rememberedFacts: [String] = []
@@ -184,6 +193,7 @@ final class AIAssistant: ObservableObject {
         contents = []
         lastRecurrenceId = nil
         recurrenceConfirmAsk = nil
+        zeroUpdateConfirmAsk = nil
         bubbles = [.init(role: .assistant,
             text: "안녕하세요! 등록할 일정을 말로 알려주세요.\n예: \"내일 오후 3시에 강남역에서 친구 만나기\"\n다른 앱에서 일정표를 공유해주셔도 돼요.")]
         saveHistory()
@@ -611,7 +621,8 @@ final class AIAssistant: ObservableObject {
                     // 여긴 "바꿔줘"라는 명시적 수정이라 값을 채우는 게 정상이다(생성 도구의 override와 다름).
                     "mode": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "바꿀 이동수단(안 바꾸면 비움)"],
                     "buffer_minutes": ["type": "INTEGER", "description": "바꿀 도착 여유(분)"],
-                    "notify_lead_minutes": ["type": "INTEGER", "description": "바꿀 알림(분)"]
+                    "notify_lead_minutes": ["type": "INTEGER", "description": "바꿀 알림(분)"],
+                    "confirm_zero": ["type": "BOOLEAN", "description": "0으로 바꾸는 게 맞냐고 되묻는 응답을 받고 사용자가 확인했을 때 true"]
                 ],
                 "required": []
             ]
@@ -655,7 +666,7 @@ final class AIAssistant: ObservableObject {
                     "category": ["type": "STRING", "enum": ["restaurant", "cafe"], "description": "기본 restaurant"],
                     "at_iso": ["type": "STRING", "description": "이 시각에 있을 장소 주변에서 찾는다"],
                     "place_query": ["type": "STRING", "description": "기준 장소 직접 지정(at_iso보다 우선)"],
-                    "radius_meters": ["type": "INTEGER", "description": "반경(m). 기본 1000."]
+                    "radius_meters": ["type": "INTEGER", "description": "반경(m). 사용자가 범위를 말하지 않았으면 0 — 기본 1000m로 찾는다."]
                 ],
                 "required": []
             ]
@@ -1154,18 +1165,74 @@ final class AIAssistant: ObservableObject {
         let mode = (input["mode"] as? String).flatMap { TransportMode(rawValue: $0) }
         let buffer = intValue(input["buffer_minutes"])
         let notify = intValue(input["notify_lead_minutes"])
+        // 인자를 하나도 안 보내는 경우는 이 모델에선 사실상 없지만(선택 인자를 전부 채운다),
+        // 사람이 도구를 직접 부르거나 모델이 바뀌면 다시 살아나는 길이라 남겨둔다.
         guard mode != nil || buffer != nil || notify != nil else {
             return "무엇을 바꿀지 알려주세요(이동수단, 도착 여유, 알림 시각 중)."
         }
+        if let ask = zeroUpdateIssue(recurrenceId, buffer: buffer, notify: notify, input: input) { return ask }
         let count = await store.updateRecurringSeries(recurrenceId, mode: mode, bufferMinutes: buffer, notifyLeadMinutes: notify)
         guard count > 0 else {
             return "그 반복 일정을 더 이상 찾을 수 없어요(이미 삭제됐을 수 있어요)."
         }
+        // 확인은 실제로 반영됐을 때 소진된다(생성 쪽과 같은 자리·같은 이유) — 남겨두면 나중에
+        // 같은 조합으로 온 0이 되묻지도 않고 통과한다.
+        zeroUpdateConfirmAsk = nil
         var changes: [String] = []
         if let mode { changes.append("이동수단 \(mode.title)") }
         if let buffer { changes.append("도착 여유 \(buffer)분") }
         if let notify { changes.append("출발 \(notify)분 전 알림") }
         return "반복 일정 \(count)건을 수정했어요: \(changes.joined(separator: ", "))."
+    }
+
+    /// 반복 그룹 수정에서 여유·알림에 온 0을 곧이곧대로 적용하지 않고 되묻는다.
+    ///
+    /// 이 모델은 선언된 선택 인자를 비우지 못해 INTEGER에 0을 채운다. 그래서 "수단만 바꿔줘"가
+    /// buffer_minutes:0·notify_lead_minutes:0을 달고 오고, 그대로 적용하면 통근 시리즈 35건의
+    /// 여유·알림이 통째로 0이 된다. 반대로 `remember_fact`처럼 0을 조용히 버릴 수도 없다 —
+    /// 여기서는 "여유 없이로 바꿔줘"가 실제로 가능한 요청이라 버리면 기능이 사라진다.
+    ///
+    /// 그래서 되묻되, **탈출구를 숫자로 준다**. 모델은 인자를 비울 수 없으니 "그대로 둬라"는
+    /// 지시를 따를 방법이 없고, 값 목록을 보여주면 거기서 아무거나 골라 온다(`nth_week_of_month`에
+    /// -1을 골라 35건을 7건으로 만든 적이 있다). 지금 시리즈에 들어 있는 값을 그대로 알려주면
+    /// 모델이 고를 것 없이 되돌려 보낼 수 있다 — 단 그 값이 0인 경우는 예외라서 아래에서 갈라진다.
+    ///
+    /// 확인(`confirm_zero`)은 **앱이 그 조합을 실제로 되물은 뒤**에만 인정한다 — 모델이 첫 호출에
+    /// 스스로 켜서 보낸 확인으로 가드가 통째로 무력해진 적이 있다(`recurrenceConfirmAsk`와 같은 이유).
+    private func zeroUpdateIssue(_ recurrenceId: UUID, buffer: Int?, notify: Int?, input: [String: Any]) -> String? {
+        let zeroBuffer = buffer == 0
+        let zeroNotify = notify == 0
+        guard zeroBuffer || zeroNotify else { return nil }
+
+        let asked = ZeroUpdateAsk(recurrenceId: recurrenceId, buffer: buffer, notify: notify)
+        if zeroUpdateConfirmAsk == asked && (input["confirm_zero"] as? Bool) == true { return nil }
+
+        // 탈출구로 돌려줄 현재 값은 시리즈의 첫 회차에서 읽는다(updateRecurringSeries와 같은 정렬).
+        // 시리즈가 이미 사라졌으면 되물을 근거가 없으니 통과시키고, 뒤의 count > 0 가드가 안내한다.
+        guard let current = store.events.filter({ $0.recurrenceId == recurrenceId })
+            .min(by: { $0.arrivalDate < $1.arrivalDate }) else { return nil }
+
+        // 복원 경로가 있는 갈래에서는 그것을 먼저 적는다. 이 가드가 실제로 잡는 건 "수단만 바꿔줘"에 딸려온
+        // 0이고 그때 옳은 행동은 복원 쪽인데, 파괴 경로가 앞에 있으면 모델이 먼저 읽은 쪽을 집는다
+        // (`nth_week_of_month` 안내문의 값 목록에서 -1을 집어 35건을 7건으로 만든 것과 같은 자리다).
+        //
+        // 현재 값이 이미 0이면 복원 탈출구 자체를 주지 않는다 — "그대로 둬라"와 "0으로 바꿔라"가
+        // 같은 와이어 값이라, 알려준 0이 그대로 돌아와 가드를 다시 발동시키고 안내만 반복하다
+        // 툴 루프 상한에서 턴이 끝난다(이동수단 변경은 끝내 일어나지 않는다).
+        var asks: [String] = []
+        if zeroBuffer {
+            asks.append(current.bufferMinutes == 0
+                ? "· 도착 여유는 이미 0분이라 이 값은 바뀌는 게 없어요. buffer_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해."
+                : "· 도착 여유를 0분으로 바꾸게 돼 있어요. 여유는 건드리는 게 아니었으면 buffer_minutes:\(current.bufferMinutes)으로 다시 호출하고, 정말 여유 없이가 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+        }
+        if zeroNotify {
+            asks.append(current.notifyLeadMinutes == 0
+                ? "· 알림은 이미 출발 0분 전이라 이 값은 바뀌는 게 없어요. notify_lead_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해."
+                : "· 알림을 출발 0분 전으로 바꾸게 돼 있어요. 알림은 건드리는 게 아니었으면 notify_lead_minutes:\(current.notifyLeadMinutes)로 다시 호출하고, 정말 그게 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+        }
+        // 되물은 조합을 여기서만 기록한다 — 이 조합 그대로 다시 오는 호출의 confirm_zero만 진짜 확인이다.
+        zeroUpdateConfirmAsk = asked
+        return "아직 바꾸지 않았어요. 아래를 **먼저 사용자에게 확인**하고 답을 들은 뒤에 다시 호출해.\n" + asks.joined(separator: "\n")
     }
 
     /// 사용자에 대한 사실을 장기 기억에 저장한다(대화 초기화와 무관하게 유지, 다음 시스템 프롬프트부터 반영).
@@ -1355,7 +1422,9 @@ final class AIAssistant: ObservableObject {
     private func executeRecommendMeal(_ input: [String: Any]) async -> String {
         let keyword = (input["keyword"] as? String)?.trimmingCharacters(in: .whitespaces)
         let category: MealCategoryFilter = (input["category"] as? String) == "cafe" ? .cafe : .restaurant
-        let radius = intValue(input["radius_meters"]) ?? 1000
+        // 0은 "범위를 안 정했다"로 읽는다 — 이 모델은 선택 인자를 비우지 못해 INTEGER에 0을 채운다.
+        // 그대로 두면 PlaceSearch가 하한 100m로 올려 반경 100m 검색이 되고, 결과가 거의 안 나온다.
+        let radius = intValue(input["radius_meters"]).flatMap { $0 > 0 ? $0 : nil } ?? 1000
 
         var basis: Place?
         var basisNote = ""
