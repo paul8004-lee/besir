@@ -1041,7 +1041,14 @@ final class AIAssistant: ObservableObject {
         let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? 0)
 
         guard let origin = await resolveOrigin(input["origin_query"] as? String) else {
-            return placeNotFound((input["origin_query"] as? String) ?? "출발지")
+            // 카드의 "현재 위치" 칩은 내부 토큰을 그대로 싣는다. 위치 권한 거부로 실패했을 때 이 토큰이
+            // 메시지에 섞여 나가면 사용자에게 그대로 노출되고, "더 정확한 장소명" 안내도 지금 여기엔
+            // 맞지 않으니(여기보다 정확한 장소명은 없다) 별도 안내로 갈린다.
+            let originQuery = (input["origin_query"] as? String)?.trimmingCharacters(in: .whitespaces)
+            if originQuery == Self.currentLocationToken {
+                return "현재 위치를 확인하지 못했어요. 위치 권한을 켜주시거나 어디서 출발하는지 알려주세요."
+            }
+            return placeNotFound(originQuery ?? "출발지")
         }
         guard let dest = await resolveDestination(destQuery) else { return placeNotFound(destQuery) }
 
