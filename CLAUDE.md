@@ -54,7 +54,18 @@ xcodebuild -scheme besir-macOS -derivedDataPath build build
 
 # 프록시
 cd proxy && npm test && npx wrangler deploy
+
+# AI 인자 가드 드라이버 — 모델 없이 결정적으로 돈다(API 할당량 안 씀)
+cat Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd.swift \
+  && swiftc -o /tmp/gd /tmp/gd.swift Shared/Store.swift Shared/Models.swift \
+       Shared/Config.swift Shared/PlaceSearch.swift Shared/DirectionsService.swift \
+       Shared/LocationManager.swift Shared/NotificationManager.swift \
+       Shared/GoogleCalendarService.swift Shared/SharedInbox.swift -parse-as-library \
+  && /tmp/gd
 ```
+
+AI 인자 가드를 고쳤으면 `Tools/GuardDriver.swift`의 단언도 같이 갱신한다 — 이유와 제약은
+그 파일 머리말에 있다.
 
 **⚠️ `xcodegen generate`를 돌리면 Xcode 서명 계정이 리셋된다**(`No Account for Team`).
 돌린 뒤에는 사용자에게 **besir-iOS·besirShare 두 타깃 모두** Team 재선택을 요청해야 한다.
