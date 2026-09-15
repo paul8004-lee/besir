@@ -800,8 +800,8 @@ final class AIAssistant: ObservableObject {
 
         let mode = resolvedMode(input["mode_this_time"])
         // 출발 기준 구간은 버퍼 개념이 없다(도착 여유를 둘 대상이 없음).
-        let buffer = anchor == .departure ? 0 : (intValue(input["buffer_minutes"]) ?? defaultBuffer)
-        let notify = intValue(input["notify_lead_minutes"]) ?? defaultNotify
+        let buffer = anchor == .departure ? 0 : Store.clampBuffer(intValue(input["buffer_minutes"]) ?? defaultBuffer)
+        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? defaultNotify)
 
         guard let origin = await resolveOrigin(input["origin_query"] as? String) else {
             return "현재 위치를 아직 확인하지 못했어요. 위치 권한을 켠 뒤 다시 시도해 주세요."
@@ -991,8 +991,8 @@ final class AIAssistant: ObservableObject {
                                   nthWeekOfMonth: nthWeekArgument(input),
                                   skipHolidays: (input["skip_holidays"] as? Bool) ?? false)
         let mode = resolvedMode(input["mode_this_time"])
-        let buffer = intValue(input["buffer_minutes"]) ?? defaultBuffer
-        let notify = intValue(input["notify_lead_minutes"]) ?? defaultNotify
+        let buffer = Store.clampBuffer(intValue(input["buffer_minutes"]) ?? defaultBuffer)
+        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? defaultNotify)
         let weeks = weeksArgument(input) ?? 8
         let startDate = (input["start_date"] as? String).flatMap(parseDay) ?? Date()
         let originQuery = input["origin_query"] as? String

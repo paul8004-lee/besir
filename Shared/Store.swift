@@ -34,6 +34,15 @@ final class Store: ObservableObject {
     /// 반복 이벤트(RRULE)를 써야 하는데, 이 앱은 회차를 개별 일정으로 다루는 구조라 큰 변경이 된다.
     static let maxRecurrenceWeeks = 26
 
+    /// 도착 여유의 허용 범위. 음수는 출발을 그만큼 늦추고, 과도한 값은 실수다 — 수동 조정·AI 생성·
+    /// AI 수정이 같은 한도를 쓰도록 한곳에 둔다(계약 5. 예전엔 이 식이 세 곳에 복사돼 있었고,
+    /// 그래서 AI 생성 경로만 클램프가 빠진 채 남아 있었다).
+    static func clampBuffer(_ minutes: Int) -> Int { max(0, min(180, minutes)) }
+
+    /// 알림 리드타임은 음수면 "출발한 뒤에 알린다"가 되어 무의미하다. 상한은 두지 않는다 —
+    /// "하루 전에 알려줘" 같은 요청이 실재한다.
+    static func clampNotifyLead(_ minutes: Int) -> Int { max(0, minutes) }
+
     let notifications: NotificationManager
 
     private var eventsURL: URL {
@@ -679,8 +688,8 @@ final class Store: ObservableObject {
             if let mode { event.mode = mode }
             // 출발 기준(귀가 등) 구간은 버퍼 개념이 없다 — 항상 0으로 강제. 음수 버퍼는 매 회차
             // 늦게 출발하게 만들므로, 수동 조정(adjustBuffer)과 같은 상하한으로 묶는다.
-            if let bufferMinutes { event.bufferMinutes = (event.anchor == .departure) ? 0 : max(0, min(180, bufferMinutes)) }
-            if let notifyLeadMinutes { event.notifyLeadMinutes = notifyLeadMinutes }
+            if let bufferMinutes { event.bufferMinutes = (event.anchor == .departure) ? 0 : Self.clampBuffer(bufferMinutes) }
+            if let notifyLeadMinutes { event.notifyLeadMinutes = Self.clampNotifyLead(notifyLeadMinutes) }
             switch event.anchor ?? .arrival {
             case .arrival:
                 if !firstDone {
@@ -969,14 +978,14 @@ final class Store: ObservableObject {
         case .arrival:
             // 자유단 = 출발시각(= 도착 - 이동 - 버퍼). 드래그로 출발을 deltaMinutes만큼 옮기려면
             // 버퍼는 반대로 변한다(출발을 늦추려면 버퍼가 줄어야 함).
-            newBuffer = max(0, min(180, event.bufferMinutes - deltaMinutes))
+            newBuffer = Self.clampBuffer(event.bufferMinutes - deltaMinutes)
             event.bufferMinutes = newBuffer
             // @MX:DEBT: 출발시각 산식 3중 복제 — 전체 내용은 `applyEstimate(to:)`의 마커 참고.
             event.departureDate = event.arrivalDate.addingTimeInterval(-travel - Double(newBuffer) * 60)
         case .departure:
             // 자유단 = 도착시각(= 출발 + 이동 + 버퍼). 도착을 deltaMinutes만큼 늦추려면 버퍼가 늘어야 함.
             guard let dep = event.departureDate else { return }
-            newBuffer = max(0, min(180, event.bufferMinutes + deltaMinutes))
+            newBuffer = Self.clampBuffer(event.bufferMinutes + deltaMinutes)
             event.bufferMinutes = newBuffer
             event.arrivalDate = dep.addingTimeInterval(travel + Double(newBuffer) * 60)
         }

@@ -75,6 +75,12 @@ extension AIAssistant {
         recurringArgumentIssue(input, weekdayCount: weekdayCount)
     }
 
+    // 생성 경로 단언(O절)용 — 클램프는 create_schedule·create_recurring_schedule 두 곳에도
+    // 걸려 있는데, 수정 경로(updateRecurringSeries)만 검사하던 시절에 음수가 두 생성 경로를
+    // 뚫고 지나간 적이 있다.
+    func drvCreate(_ input: [String: Any]) async -> String { await executeCreateSchedule(input) }
+    func drvCreateRecurring(_ input: [String: Any]) async -> String { await executeCreateRecurringSchedule(input) }
+
 }
 
 @main
@@ -315,6 +321,70 @@ struct Drv {
         let bufN4 = store.events.first { $0.recurrenceId == ridN4 }?.bufferMinutes
         aiN4.drvCheck("음수 buffer_minutes는 0으로 묶인다(-5 저장 아님)",
                       bufN4 == 0, "buffer=\(bufN4.map(String.init) ?? "nil")")
+
+        // ── O. 클램프 저장값 — N절의 음수 단언은 수정 경로만 봤고, 그 시절 음수 buffer_minutes가
+        //      세 경로 중 두 곳(create_schedule·create_recurring_schedule)을 뚫고 지나갔는데도
+        //      드라이버는 초록이었다. 여기선 되돌린 문구가 아니라 **저장된 이벤트의 값**을 본다.
+        //      출발지·목적지는 즐겨찾기로 둔다 — 드라이버는 위치 권한·장소 검색 밖에서 돌므로
+        //      검색 없이 결정적으로 풀려야 한다(캘린더 push는 이미 위에서 꺼뒀다).
+        print("\nO. clampBuffer·clampNotifyLead — 생성 경로의 저장값")
+        store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000)),
+                           FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))]
+
+        store.events = []
+        let aiO1 = fresh()
+        _ = await aiO1.drvCreate(["title": "O-단발", "destination_query": "회사", "origin_query": "집",
+                                  "arrival_iso": "2027-03-01T09:00:00",
+                                  "buffer_minutes": -5, "notify_lead_minutes": -10])
+        let o1 = store.events.first { $0.title == "O-단발" }
+        let o1b = o1?.bufferMinutes, o1n = o1?.notifyLeadMinutes
+        aiO1.drvCheck("create_schedule 음수 buffer(-5)는 0으로 저장된다",
+                      o1b == 0, "buffer=\(o1b.map(String.init) ?? "이벤트 없음")")
+        aiO1.drvCheck("create_schedule 음수 notify(-10)는 0으로 저장된다",
+                      o1n == 0, "notify=\(o1n.map(String.init) ?? "이벤트 없음")")
+
+        store.events = []
+        let aiO2 = fresh()
+        _ = await aiO2.drvCreateRecurring(["title": "O-반복", "destination_query": "회사", "origin_query": "집",
+                                           "weekdays": ["mon"], "arrival_time": "09:00",
+                                           "start_date": "2027-03-01", "weeks": 2,
+                                           "buffer_minutes": -5, "notify_lead_minutes": -10])
+        // 첫 회차만 읽으면 회차마다 다른 값을 못 본다 — N절이 밝힌 결함의 모양 그대로. 전 회차를 본다.
+        // allSatisfy는 빈 배열에서 공히 참이므로 isEmpty를 함께 건다 — 생성 실패가 거짓 초록이 되지 않게.
+        let seriesO = store.events.filter { $0.recurrenceId != nil }
+        aiO2.drvCheck("반복은 2회차 이상 만들어진다(전 회차 검증의 전제)",
+                      seriesO.count >= 2, "count=\(seriesO.count)")
+        aiO2.drvCheck("create_recurring 음수 buffer는 전 회차 0으로 저장된다",
+                      !seriesO.isEmpty && seriesO.allSatisfy { $0.bufferMinutes == 0 },
+                      "buffer들=" + seriesO.map { String($0.bufferMinutes) }.joined(separator: ","))
+        aiO2.drvCheck("create_recurring 음수 notify는 전 회차 0으로 저장된다",
+                      !seriesO.isEmpty && seriesO.allSatisfy { $0.notifyLeadMinutes == 0 },
+                      "notify들=" + seriesO.map { String($0.notifyLeadMinutes) }.joined(separator: ","))
+
+        store.events = []
+        let aiO3 = fresh()
+        _ = await aiO3.drvCreate(["title": "O-상한", "destination_query": "회사", "origin_query": "집",
+                                  "arrival_iso": "2027-03-02T09:00:00",
+                                  "buffer_minutes": 9999, "notify_lead_minutes": 1440])
+        let o3 = store.events.first { $0.title == "O-상한" }
+        let o3b = o3?.bufferMinutes, o3n = o3?.notifyLeadMinutes
+        aiO3.drvCheck("buffer 9999는 상한 180으로 묶인다",
+                      o3b == 180, "buffer=\(o3b.map(String.init) ?? "이벤트 없음")")
+        // 알림은 위쪽으로 묶지 않는다 — "하루 전에 알려줘"(1440분)는 실제 요청이라 상한이 없다.
+        // buffer와 대칭으로 만들면 이 줄이 빨개진다(비대칭이 의도라는 사실을 여기 못 박는다).
+        aiO3.drvCheck("notify 1440은 묶이지 않고 그대로 저장된다(상한 없음은 의도)",
+                      o3n == 1440, "notify=\(o3n.map(String.init) ?? "이벤트 없음")")
+
+        store.events = []
+        let aiO4 = fresh()
+        _ = await aiO4.drvCreate(["title": "O-출발기준", "destination_query": "집", "origin_query": "회사",
+                                  "departure_iso": "2027-03-02T18:00:00", "buffer_minutes": 30])
+        // 출발 기준 구간은 도착 여유를 둘 대상이 없어 클램프 이전부터 buffer를 항상 0으로 뒀다 —
+        // 새 클램프가 이 규칙을 덮어쓰지 않는지 지킨다.
+        let o4 = store.events.first { $0.title == "O-출발기준" }
+        let o4b = o4?.bufferMinutes
+        aiO4.drvCheck("출발 기준 create_schedule은 buffer 30을 보내도 0으로 저장한다",
+                      o4b == 0, "buffer=\(o4b.map(String.init) ?? "이벤트 없음")")
 
         print("\n\(drvPass)/\(drvPass + drvFail) 통과")
         exit(drvFail == 0 ? 0 : 1)
