@@ -301,10 +301,12 @@ final class AIAssistant: ObservableObject {
     /// 실패 원인을 사용자가 이해하고 다음 행동을 정할 수 있는 문구로 바꾼다.
     private static func userMessage(for error: Error) -> String {
         if (error as? AIError)?.kind == .quotaExceeded {
+            // 백엔드 이름과 초기화 시각을 적지 않는다 — 860e121로 백엔드가 바뀐 뒤에도 옛
+            // Workers AI 문구가 살아 있어, 없는 서비스를 말하고 틀린 초기화 시각을 안내했다.
+            // 한도가 언제 풀리는지 앱은 알 수 없으니 아는 것(다른 등록 수단)만 말한다.
             return """
-            오늘 쓸 수 있는 AI 사용량을 다 썼어요(Cloudflare Workers AI 일일 무료 한도).
-            한국 시간 오전 9시(UTC 자정)에 초기화되니 그 뒤에 다시 시도해 주세요.
-            그 전에 등록해야 한다면 오른쪽 위 + 버튼으로 직접 추가하실 수 있어요.
+            AI 사용량 한도를 다 썼어요. 나중에 다시 시도해 주세요.
+            그 전에 등록해야 할 일정이 있다면 오른쪽 위 + 버튼으로 직접 추가하실 수 있어요.
             """
         }
         return "죄송해요, 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요."
@@ -445,8 +447,15 @@ final class AIAssistant: ObservableObject {
 
     private static func classify(status: Int, body: Data) -> AIError {
         let text = String(data: body, encoding: .utf8) ?? ""
-        // Workers AI 일일 무료 한도(neurons) 소진: `{"error":"upstream_error","detail":"AiError: 4006: ..."}`
-        if text.contains("4006") || text.localizedCaseInsensitiveContains("neurons") {
+        // OpenAI 쿼터 소진: 프록시가 429에 {"error":"openai_error","detail":…(OpenAI 원문)}로 돌려주므로
+        // insufficient_quota 마커가 detail에 그대로 남는다. 상태코드만(429 전부)으로 몰면 일시적
+        // rate limit까지 "사용량 소진"이 되고, 마커 문자열만 좇으면 백엔드가 또 바뀌었을 때 옛 값이
+        // 남는다 — 둘을 묶는다. 예전 Workers AI 판별(4006/neurons)은 그 백엔드 삭제(860e121) 뒤
+        // 도달 불가능한 죽은 분기여서, 감지를 고치며 안내문도 같이 고쳤다.
+        let hardQuota = status == 429
+            && (text.localizedCaseInsensitiveContains("insufficient_quota")
+                || text.localizedCaseInsensitiveContains("usage_limit_"))
+        if hardQuota {
             return AIError(kind: .quotaExceeded, detail: text)
         }
         return AIError(kind: .server, detail: "HTTP \(status) \(text.prefix(200))")
@@ -851,7 +860,9 @@ final class AIAssistant: ObservableObject {
         let created = store.events.last { $0.title == title && $0.destination.name == dest.name }
         // 출발지를 함께 남긴다 — 되묻지 않고 자동으로 정해진 경우 엉뚱한 곳일 수 있어
         // 사용자가 바로 알아챌 수 있어야 한다(등록 시점 현재 위치가 굳는 게 이 앱의 약점).
-        var summary = "등록 완료 — 제목 '\(title)', '\(origin.name)' → '\(dest.name)', 이동수단 \(mode.title)."
+        // 적용된 여유도 같이 적는다(b303f41 원칙의 남은 절반) — 요약에 없으면 잘못된 여유가
+        // 등록돼도 사용자가 그 자리에서 보지 못한다.
+        var summary = "등록 완료 — 제목 '\(title)', '\(origin.name)' → '\(dest.name)', 이동수단 \(mode.title), 도착 여유 \(buffer)분."
         // travelSeconds가 없으면 출발·도착이 같은 시각으로 남는다 — 성공한 것처럼 보고하면 안 된다.
         if let c = created, let dep = c.departureDate, c.travelSeconds != nil {
             summary += " 출발 \(Self.when(dep)) → 도착 \(Self.when(c.arrivalDate)), 출발 \(notify)분 전 알림 예약됨."
@@ -1141,6 +1152,14 @@ final class AIAssistant: ObservableObject {
             return "아직 만들지 않았어요. nth_week_of_month에 쓸 수 없는 값(\(nth))이 들어왔어요. **nth_week_of_month:0**으로 두고 나머지 인자는 그대로 둔 채 다시 호출해 — 매주 반복이 됩니다. 사용자가 '매월 몇째 주'라고 말한 게 확실할 때만, 몇째 주인지 사용자에게 먼저 물어보고 답을 들은 뒤에 다시 호출해."
         }
 
+        // weeks 상한도 앱이 말해준다 — Store가 maxRecurrenceWeeks에서 조용히 깎는 것을 요약의
+        // "총 N건"이 대신 알려줄 거라고 기대할 수 없다(2년치를 청한 사용자가 26주를 보고 스스로
+        // 눈치챌 리 없다). c728996이 막은 0/음수의 대칭 절반이다. 숫자는 상수에서 읽는다 — 리터럴로
+        // 적으면 상수가 바뀔 때 안내문만 옛값을 말한다.
+        if let w = intValue(input["weeks"]), w > Store.maxRecurrenceWeeks {
+            return "아직 만들지 않았어요. 최대 \(Store.maxRecurrenceWeeks)주까지만 만들 수 있어요. weeks:\(Store.maxRecurrenceWeeks)로 맞춰 다시 호출하거나, 사용자가 더 원하면 \(Store.maxRecurrenceWeeks)주까지만 만든다고 안내해."
+        }
+
         // 요일 3개 이상 = "평일 전체" 같은 통근형. 주기 인자와 같이 오면 십중팔구 잘못 채운 것이다.
         let many = weekdayCount >= 3
         let interval = everyNWeeksArgument(input)
@@ -1226,9 +1245,7 @@ final class AIAssistant: ObservableObject {
         // 흘러 엉뚱한 그룹을 고칠 수 있는데, 예전 문구("반복 일정 35건을 수정했어요")에는 대상이
         // 없어서 그 오조준이 사후에도 보이지 않았다 — b303f41의 등록 요약과 같은 이유로, 모델이
         // 아니라 출력이 스스로 대조 근거를 들고 있게 한다.
-        let subject = store.events.filter { $0.recurrenceId == recurrenceId }
-            .min(by: { $0.arrivalDate < $1.arrivalDate })
-            .map { "'\($0.title)' " } ?? ""
+        let subject = store.recurringSeries(recurrenceId).first.map { "'\($0.title)' " } ?? ""
         return "\(subject)반복 일정 \(count)건을 수정했어요: \(changes.joined(separator: ", "))."
     }
 
@@ -1254,10 +1271,13 @@ final class AIAssistant: ObservableObject {
         let asked = ZeroUpdateAsk(recurrenceId: recurrenceId, buffer: buffer, notify: notify)
         if zeroUpdateConfirmAsk == asked && (input["confirm_zero"] as? Bool) == true { return nil }
 
-        // 탈출구로 돌려줄 현재 값은 시리즈의 첫 회차에서 읽는다(updateRecurringSeries와 같은 정렬).
-        // 시리즈가 이미 사라졌으면 되물을 근거가 없으니 통과시키고, 뒤의 count > 0 가드가 안내한다.
-        guard let current = store.events.filter({ $0.recurrenceId == recurrenceId })
-            .min(by: { $0.arrivalDate < $1.arrivalDate }) else { return nil }
+        // 현재 값은 회차 전체에서 읽는다(recurringSeries — updateRecurringSeries와 같은 멤버십·정렬).
+        // 첫 회차만 보면 안 된다: 한 회차를 드래그해 여유를 바꾼 시리즈(adjustTravelLeg(wholeSeries:false)
+        // → adjustBuffer)는 회차마다 값이 제각각이라, 첫 회차가 0이라고 "이미 0"이라 말하면 거짓이
+        // 되고 — 사용자는 사실이 아닌 전제에 confirm_zero를 누르며, Store가 나머지 회차까지 0으로
+        // 덮어쓴다. 시리즈가 이미 사라졌으면 되물을 근거가 없으니 통과시키고, 뒤의 count > 0 가드가 안내한다.
+        let series = store.recurringSeries(recurrenceId)
+        guard !series.isEmpty else { return nil }
 
         // 복원 경로가 있는 갈래에서는 그것을 먼저 적는다. 이 가드가 실제로 잡는 건 "수단만 바꿔줘"에 딸려온
         // 0이고 그때 옳은 행동은 복원 쪽인데, 파괴 경로가 앞에 있으면 모델이 먼저 읽은 쪽을 집는다
@@ -1266,16 +1286,30 @@ final class AIAssistant: ObservableObject {
         // 현재 값이 이미 0이면 복원 탈출구 자체를 주지 않는다 — "그대로 둬라"와 "0으로 바꿔라"가
         // 같은 와이어 값이라, 알려준 0이 그대로 돌아와 가드를 다시 발동시키고 안내만 반복하다
         // 툴 루프 상한에서 턴이 끝난다(이동수단 변경은 끝내 일어나지 않는다).
+        //
+        // 회차마다 값이 제각각인 시리즈는 되돌릴 "현재 값" 하나가 없다 — 첫 회차 값을 내미는 건
+        // 방금 막은 거짓과 같은 모양이라, 편차를 사실대로 알리고 0 이외의 값이면 되묻지 않는다는
+        // 탈출구만 준다.
         var asks: [String] = []
         if zeroBuffer {
-            asks.append(current.bufferMinutes == 0
-                ? "· 도착 여유는 이미 0분이라 이 값은 바뀌는 게 없어요. buffer_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해."
-                : "· 도착 여유를 0분으로 바꾸게 돼 있어요. 여유는 건드리는 게 아니었으면 buffer_minutes:\(current.bufferMinutes)으로 다시 호출하고, 정말 여유 없이가 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            let values = series.map(\.bufferMinutes)
+            if values.allSatisfy({ $0 == 0 }) {
+                asks.append("· 도착 여유는 모든 회차가 이미 0분이라 이 값은 바뀌는 게 없어요. buffer_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해.")
+            } else if let lo = values.min(), let hi = values.max(), lo == hi {
+                asks.append("· 도착 여유를 0분으로 바꾸게 돼 있어요. 여유는 건드리는 게 아니었으면 buffer_minutes:\(lo)으로 다시 호출하고, 정말 여유 없이가 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            } else if let lo = values.min(), let hi = values.max() {
+                asks.append("· 도착 여유를 0분으로 바꾸게 돼 있어요. 지금은 회차마다 \(lo)~\(hi)분으로 제각각이라, 확인하면 전부 0분으로 통일돼요. 0 말고 다른 값으로 바꾸고 싶으면 그 숫자를 buffer_minutes에 넣어 다시 호출하고, 정말 전부 여유 없이가 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            }
         }
         if zeroNotify {
-            asks.append(current.notifyLeadMinutes == 0
-                ? "· 알림은 이미 출발 0분 전이라 이 값은 바뀌는 게 없어요. notify_lead_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해."
-                : "· 알림을 출발 0분 전으로 바꾸게 돼 있어요. 알림은 건드리는 게 아니었으면 notify_lead_minutes:\(current.notifyLeadMinutes)로 다시 호출하고, 정말 그게 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            let values = series.map(\.notifyLeadMinutes)
+            if values.allSatisfy({ $0 == 0 }) {
+                asks.append("· 알림은 모든 회차가 이미 출발 0분 전이라 이 값은 바뀌는 게 없어요. notify_lead_minutes:0 그대로 confirm_zero:true를 붙여 다시 호출해.")
+            } else if let lo = values.min(), let hi = values.max(), lo == hi {
+                asks.append("· 알림을 출발 0분 전으로 바꾸게 돼 있어요. 알림은 건드리는 게 아니었으면 notify_lead_minutes:\(lo)로 다시 호출하고, 정말 그게 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            } else if let lo = values.min(), let hi = values.max() {
+                asks.append("· 알림을 출발 0분 전으로 바꾸게 돼 있어요. 지금은 회차마다 \(lo)~\(hi)분으로 제각각이라, 확인하면 전부 0분으로 통일돼요. 0 말고 다른 값으로 바꾸고 싶으면 그 숫자를 notify_lead_minutes에 넣어 다시 호출하고, 정말 전부 그게 맞을 때만 confirm_zero:true를 붙여 다시 호출해.")
+            }
         }
         // 되물은 조합을 여기서만 기록한다 — 이 조합 그대로 다시 오는 호출의 confirm_zero만 진짜 확인이다.
         zeroUpdateConfirmAsk = asked

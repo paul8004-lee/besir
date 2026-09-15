@@ -71,6 +71,9 @@ extension AIAssistant {
     func drvList(_ input: [String: Any] = [:]) -> String { executeListSchedules(input) }
     func drvUpdate(_ input: [String: Any]) async -> String { await executeUpdateRecurringSchedule(input) }
     func drvSetLast(_ rid: UUID?) { lastRecurrenceId = rid }
+    func drvRecurIssue(_ input: [String: Any], _ weekdayCount: Int) -> String? {
+        recurringArgumentIssue(input, weekdayCount: weekdayCount)
+    }
 
 }
 
@@ -79,6 +82,10 @@ struct Drv {
     @MainActor
     static func main() async {
         let store = Store(notifications: NotificationManager())
+        // 캘린더 푸시를 끈다 — 개발 기기의 실제 config.json엔 구글 연동이 켜져 있어,
+        // 시험용 이벤트 하나를 pushToCalendar하다 OAuth 대화상자(키체인)에서 무기한 멈춘
+        // 적이 있다. 캘린더 등록 결과를 보는 단언은 없으므로 꺼도 판정이 변하지 않는다.
+        store.config.autoAddToCalendar = false
         func fresh() -> AIAssistant { AIAssistant(store: store, location: LocationManager()) }
 
         // ── A. 현재 값이 0이 아닐 때
@@ -239,6 +246,75 @@ struct Drv {
         let k1 = aiK.drvList()
         aiK.drvCheck("본문에 [반복 이 하나도 없다", !k1.contains("[반복 "), "반복 줄이 살아 있다")
         aiK.drvCheck("[G3] 인용할 번호가 없으니 안내문도 안 붙는다", !k1.contains("[n]은 반복 그룹 번호"), k1)
+
+        // ── M. 반복 인자 가드 — c728996이 8주→7건 결함 뒤 재작성한 가드군. 단언이 하나도
+        //      없어서 이 가드들이 깨져도 드라이버는 초록이었다.
+        print("\nM. recurringArgumentIssue — 주기·기간 인자")
+        let aiM = fresh()
+        let m1 = aiM.drvRecurIssue(["nth_week_of_month": 7, "weeks": 8], 1)
+        aiM.drvCheck("nth 범위 밖(7)은 되돌린다", m1?.contains("nth_week_of_month에 쓸 수 없는 값") == true, m1 ?? "nil")
+        aiM.drvCheck("nth 0은 '없음'으로 읽힌다(불필요한 되묻기 없음)",
+                     aiM.drvRecurIssue(["nth_week_of_month": 0, "every_n_weeks": 1, "weeks": 8], 3) == nil, "되물었다")
+        aiM.drvCheck("nth -1(마지막 주)은 범위 밖으로 거부되지 않는다",
+                     aiM.drvRecurIssue(["nth_week_of_month": -1, "weeks": 8], 1) == nil, "마지막 주가 거부됐다")
+        let m2 = aiM.drvRecurIssue(["nth_week_of_month": 1, "weeks": 8], 3)
+        aiM.drvCheck("요일 3개+매월 주기의 충돌을 되묻는다", m2?.contains("매월 첫째 주에만") == true, m2 ?? "nil")
+        let m3 = aiM.drvRecurIssue(["nth_week_of_month": -1, "weeks": 8], 3)
+        aiM.drvCheck("-1은 '매월 마지막 주'로 읽는다", m3?.contains("매월 마지막 주에만") == true, m3 ?? "nil")
+        let aiM2 = fresh()
+        _ = aiM2.drvRecurIssue(["nth_week_of_month": 1, "weeks": 8], 3)
+        aiM2.drvCheck("되물은 뒤 같은 조합의 confirm_recurrence는 통과한다",
+                      aiM2.drvRecurIssue(["nth_week_of_month": 1, "weeks": 8, "confirm_recurrence": true], 3) == nil, "여전히 막힌다")
+        let aiM3 = fresh()
+        aiM3.drvCheck("묻기 전에 스스로 붙인 confirm_recurrence는 막힌다",
+                      aiM3.drvRecurIssue(["nth_week_of_month": 1, "weeks": 8, "confirm_recurrence": true], 3) != nil, "자가 확인이 통과했다")
+        let m4 = aiM.drvRecurIssue(["every_n_weeks": 1], 3)
+        aiM.drvCheck("기간(weeks) 비었으면 되묻는다", m4?.contains("start_date·weeks") == true, m4 ?? "nil")
+        let m5 = aiM.drvRecurIssue(["weeks": 0, "every_n_weeks": 1], 3)
+        aiM.drvCheck("weeks 0은 '없음'으로 읽힌다(기간 되묻기 발동)",
+                     m5?.contains("언제부터 몇 주간") == true, m5 ?? "nil")
+        let m6 = aiM.drvRecurIssue(["weeks": 52], 1)
+        aiM.drvCheck("weeks 상한(\(Store.maxRecurrenceWeeks)) 초과는 되돌린다",
+                     m6?.contains("최대 \(Store.maxRecurrenceWeeks)주까지만") == true, m6 ?? "nil")
+
+        // ── N. 회차마다 값이 제각각인 시리즈 — C 절이 단일 회차만 만들어 도달 불가능하던 갈래.
+        //      한 회차만 드래그(adjustBuffer)로 바뀐 시리즈에서 첫 회차가 0이라고 "이미 0"이라
+        //      말하던 거짓이 이 가드의 수정 동기다.
+        print("\nN. divergent 시리즈 — 전 회차 확인 + 버퍼 하한")
+        let ridN = UUID()
+        store.events = [AIAssistant.drvEvent(ridN, buffer: 0, notify: 10, hours: 24),
+                        AIAssistant.drvEvent(ridN, buffer: 10, notify: 10, hours: 48)]
+        let aiN = fresh()
+        let n1 = aiN.drvZero(ridN, 0, nil)
+        aiN.drvCheck("첫 회차가 0이어도 '이미 0'이라 말하지 않는다",
+                     n1?.contains("바뀌는 게 없어요") == false, n1 ?? "nil")
+        aiN.drvCheck("실제 편차(0~10분)를 말한다", n1?.contains("0~10분") == true, n1 ?? "nil")
+        aiN.drvCheck("확인하면 전부 0으로 통일된다고 말한다", n1?.contains("전부 0분으로 통일") == true, n1 ?? "nil")
+        aiN.drvCheck("같은 조합의 confirm_zero로 한 번에 통과한다",
+                     aiN.drvZero(ridN, 0, nil, ["confirm_zero": true]) == nil, "또 되물었다 — 루프")
+        let ridN2 = UUID()
+        store.events = [AIAssistant.drvEvent(ridN2, buffer: 5, notify: 0, hours: 24),
+                        AIAssistant.drvEvent(ridN2, buffer: 5, notify: 30, hours: 48)]
+        let aiN2 = fresh()
+        let n2 = aiN2.drvZero(ridN2, nil, 0)
+        aiN2.drvCheck("알림 쪽도 편차를 말한다", n2?.contains("0~30분") == true, n2 ?? "nil")
+        let ridN3 = UUID()
+        store.events = [AIAssistant.drvEvent(ridN3, buffer: 0, notify: 10, hours: 24),
+                        AIAssistant.drvEvent(ridN3, buffer: 0, notify: 10, hours: 48)]
+        let aiN3 = fresh()
+        let n3 = aiN3.drvZero(ridN3, 0, nil)
+        aiN3.drvCheck("전 회차가 0이면 '이미 0' 갈래로 간다(다중 회차)",
+                      n3?.contains("바뀌는 게 없어요") == true, n3 ?? "nil")
+        // 음수 buffer_minutes: 0 가드에 걸리지 않고 Store의 상하한(0~180)으로 묶인다 —
+        // 통과 여부가 아니라 '부호 없이 저장되는지'를 본다.
+        let ridN4 = UUID()
+        store.events = [AIAssistant.drvEvent(ridN4, buffer: 10, notify: 10, hours: 24)]
+        let aiN4 = fresh()
+        aiN4.drvSetLast(ridN4)
+        _ = await aiN4.drvUpdate(["buffer_minutes": -5])
+        let bufN4 = store.events.first { $0.recurrenceId == ridN4 }?.bufferMinutes
+        aiN4.drvCheck("음수 buffer_minutes는 0으로 묶인다(-5 저장 아님)",
+                      bufN4 == 0, "buffer=\(bufN4.map(String.init) ?? "nil")")
 
         print("\n\(drvPass)/\(drvPass + drvFail) 통과")
         exit(drvFail == 0 ? 0 : 1)

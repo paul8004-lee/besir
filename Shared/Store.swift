@@ -629,9 +629,14 @@ final class Store: ObservableObject {
         return (created.count, recurrenceId)
     }
 
+    /// recurrenceId로 반복 그룹의 이동 구간을 도착 순으로 돌려준다 — 멤버십·정렬 판단의 단일 출처(계약 5).
+    func recurringSeries(_ recurrenceId: UUID) -> [ScheduledEvent] {
+        events.filter { $0.recurrenceId == recurrenceId }.sorted { $0.arrivalDate < $1.arrivalDate }
+    }
+
     /// 반복 일정 그룹 전체를 한 번에 삭제한다(이동 구간 + 활동 블록 + 캘린더·알림 포함).
     func deleteRecurringSeries(_ recurrenceId: UUID) {
-        let group = events.filter { $0.recurrenceId == recurrenceId }
+        let group = recurringSeries(recurrenceId)
         for e in group {
             if let nid = e.notificationId { notifications.cancel(id: nid) }
         }
@@ -659,9 +664,7 @@ final class Store: ObservableObject {
                                mode: TransportMode?,
                                bufferMinutes: Int?,
                                notifyLeadMinutes: Int?) async -> Int {
-        let ids = events.filter { $0.recurrenceId == recurrenceId }
-            .sorted { $0.arrivalDate < $1.arrivalDate }
-            .map { $0.id }
+        let ids = recurringSeries(recurrenceId).map(\.id)
         guard !ids.isEmpty else { return 0 }
 
         // API 절약을 위해 첫 회차만 실제로 새 이동시간을 조회하고 나머지는 그 값을 복사한다
@@ -672,8 +675,9 @@ final class Store: ObservableObject {
             guard let idx = events.firstIndex(where: { $0.id == id }) else { continue }
             var event = events[idx]
             if let mode { event.mode = mode }
-            // 출발 기준(귀가 등) 구간은 버퍼 개념이 없다 — 항상 0으로 강제.
-            if let bufferMinutes { event.bufferMinutes = (event.anchor == .departure) ? 0 : bufferMinutes }
+            // 출발 기준(귀가 등) 구간은 버퍼 개념이 없다 — 항상 0으로 강제. 음수 버퍼는 매 회차
+            // 늦게 출발하게 만들므로, 수동 조정(adjustBuffer)과 같은 상하한으로 묶는다.
+            if let bufferMinutes { event.bufferMinutes = (event.anchor == .departure) ? 0 : max(0, min(180, bufferMinutes)) }
             if let notifyLeadMinutes { event.notifyLeadMinutes = notifyLeadMinutes }
             switch event.anchor ?? .arrival {
             case .arrival:
@@ -695,7 +699,9 @@ final class Store: ObservableObject {
                     }
                 }
             }
-            events[idx] = event
+            // await(이동시간 조회) 사이 동기화·삭제로 배열이 바뀔 수 있으니 쓸 때 id로 다시 찾는다.
+            guard let writeIdx = events.firstIndex(where: { $0.id == id }) else { continue }
+            events[writeIdx] = event
         }
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
@@ -705,7 +711,8 @@ final class Store: ObservableObject {
             for id in ids {
                 guard let idx = events.firstIndex(where: { $0.id == id }), let gid = events[idx].googleEventId else { continue }
                 await removeFromCalendar([gid])
-                events[idx].googleEventId = nil
+                // await 뒤 배열이 바뀌었을 수 있으니 다시 찾는다 — 없어진 회차는 건너뛴다.
+                if let i = events.firstIndex(where: { $0.id == id }) { events[i].googleEventId = nil }
             }
             if config.autoAddToCalendar {
                 for id in ids where events.contains(where: { $0.id == id }) {
@@ -714,6 +721,8 @@ final class Store: ObservableObject {
             }
             save()
         }
+        // 수정 뒤에도 iOS 알림 64건 한도는 그대로다 — 생성 경로와 같은 이유로 가까운 것부터 다시 채운다.
+        rescheduleNearestNotifications()
         return ids.count
     }
 
@@ -765,7 +774,9 @@ final class Store: ObservableObject {
         case .arrival: await applyEstimate(to: &event)
         case .departure: await applyDepartureAnchoredEstimate(to: &event, departureDate: arrivalDate)
         }
-        events[idx] = event
+        // await(이동시간 조회) 사이 동기화·삭제로 배열이 바뀔 수 있으니 쓸 때 id로 다시 찾는다.
+        guard let writeIdx = events.firstIndex(where: { $0.id == id }) else { return }
+        events[writeIdx] = event
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
         // 캘린더에 등록돼 있던 일정이면 옛 이벤트 삭제 후 갱신본으로 다시 등록.
