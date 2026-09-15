@@ -621,7 +621,9 @@ final class Store: ObservableObject {
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
         if config.hasGoogleCalendar && config.autoAddToCalendar {
-            for e in created { await pushToCalendar(eventID: e.id) }
+            // 건별 push는 회차 수만큼 save()를 몰고 와 등록이 느렸다(34회차=34번 전체 배열 쓰기).
+            // 묶음 등록으로 구간당 디스크 쓰기를 한 번으로 줄인다 — 원격 등록 자체는 여전히 회차마다 순차 1건.
+            await pushToCalendar(eventIDs: created.map(\.id))
         }
         // 반복 일정은 회차 수가 많아 그냥 두면 iOS의 64건 제한에 걸려 뒤쪽 회차 알림이 조용히
         // 버려진다 — 가까운 것부터 다시 채워 넣는다(자세한 내용은 아래 함수 주석).
@@ -708,16 +710,17 @@ final class Store: ObservableObject {
 
         // 구글 캘린더에 이미 올라간 것들은 지우고 갱신본으로 다시 등록.
         if config.hasGoogleCalendar {
+            // gid를 먼저 한 번에 모아 삭제도 한 번에 건넨다 — 건별이면 회차 수만큼 묘비 파일을
+            // 쓰고 원격 삭제를 하나씩 기다렸다. 로컬 gid는 삭제 요청 *전에* 비운다: nil인 채로
+            // 기다리는 사이 동기화가 돌면 "원격에 없는 gid"를 보고 회차를 통째로 지울 수 있는데,
+            // 묘비는 되살림만 막을 뿐 이 제거(syncWithGoogle 1단계)는 못 막는다.
+            let gids = ids.compactMap { id in events.first(where: { $0.id == id })?.googleEventId }
             for id in ids {
-                guard let idx = events.firstIndex(where: { $0.id == id }), let gid = events[idx].googleEventId else { continue }
-                await removeFromCalendar([gid])
-                // await 뒤 배열이 바뀌었을 수 있으니 다시 찾는다 — 없어진 회차는 건너뛴다.
                 if let i = events.firstIndex(where: { $0.id == id }) { events[i].googleEventId = nil }
             }
+            await removeFromCalendar(gids)
             if config.autoAddToCalendar {
-                for id in ids where events.contains(where: { $0.id == id }) {
-                    await pushToCalendar(eventID: id)
-                }
+                await pushToCalendar(eventIDs: ids)
             }
             save()
         }
@@ -726,25 +729,38 @@ final class Store: ObservableObject {
         return ids.count
     }
 
-    /// 일정을 구글 캘린더에 등록하고 googleEventId를 저장한다(수동 버튼·자동 등록 공용).
-    func pushToCalendar(eventID: UUID) async {
-        guard config.hasGoogleCalendar,
-              let idx = events.firstIndex(where: { $0.id == eventID }),
-              events[idx].wantsCalendarSync else { return }   // "이건 캘린더에 올리지 마" 존중
-        do {
-            let gid = try await gcal.createEvent(for: events[idx])
-            if let i = events.firstIndex(where: { $0.id == eventID }) {
+    /// 일정들을 구글 캘린더에 등록하고 googleEventId를 저장한다(수동 버튼·자동 등록 공용).
+    /// 회차마다 save()하면 회차 수만큼 전체 배열을 디스크에 쓴다(34회차 등록이 눈에 띄게 느렸던
+    /// 실측의 한쪽 축) — 등록 성공분만 메모리에 반영하고 저장은 마지막에 한 번. 도중에 죽으면 그
+    /// 호출의 gid 매핑을 잃어 다음 동기화가 중복을 가져오지만, 반복 등록은 구간(가는 편·오는 편
+    /// 등)마다 따로 호출·저장하므로 손실은 최대 한 구간에 묶인다.
+    func pushToCalendar(eventIDs: [UUID]) async {
+        guard config.hasGoogleCalendar else { return }
+        var changed = false
+        for eventID in eventIDs {
+            guard let idx = events.firstIndex(where: { $0.id == eventID }),
+                  events[idx].wantsCalendarSync else { continue }   // "이건 캘린더에 올리지 마" 존중
+            do {
+                let gid = try await gcal.createEvent(for: events[idx])
+                // await 뒤 배열이 바뀌었을 수 있으니 다시 찾는다 — 없어진 회차는 건너뛴다.
+                guard let i = events.firstIndex(where: { $0.id == eventID }) else { continue }
                 events[i].googleEventId = gid
                 // 동기화가 먼저 같은 gid를 가져와 중복이 생겼다면 그쪽을 제거(알림도 취소).
                 for dup in events where dup.googleEventId == gid && dup.id != eventID {
                     if let nid = dup.notificationId { notifications.cancel(id: nid) }
                 }
                 events.removeAll { $0.googleEventId == gid && $0.id != eventID }
-                save()
+                changed = true
+            } catch {
+                // 등록 실패(미연결·취소 등)는 조용히 무시 — 로컬엔 남아 다음에 재시도 가능.
             }
-        } catch {
-            // 등록 실패(미연결·취소 등)는 조용히 무시 — 로컬엔 남아 다음에 재시도 가능.
         }
+        if changed { save() }
+    }
+
+    /// 일정 하나만 등록하는 진입점(수동 버튼·단발 생성) — 묶음 등록의 회차 1짜리 호출이다.
+    func pushToCalendar(eventID: UUID) async {
+        await pushToCalendar(eventIDs: [eventID])
     }
 
     /// 기존 일정의 모든 필드를 수정하고, 이동시간·출발시각·알림을 다시 계산한다.
