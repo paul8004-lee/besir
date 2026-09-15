@@ -52,8 +52,25 @@ M5 완료(2026-09-15, manager-spec 재위임 → 오케스트레이터 diff 전�
 - 검증: diff 4개 파일 +16/−14(문서만), REQ-061/063 개정 원문 대조, "장기 기억" 잔여 0건.
 
 미해결(다음 세션):
-- M6: 전체 게이트 재확인(iOS·macOS 무경고 빌드, GuardDriver 재초록), 루트 `plan.md` §6 Phase 1.5
-  완료 표시, 실기기 배포(AC-008)
+- (없음 — M1~M6 전부 완료. 남은 것은 사용자 실기기 확인(AC-008)뿐)
+
+M6 완료(2026-09-15, 오케스트레이터 직접 게이트 + 하네스 2인):
+- 게이트(최종 트리 `b1771ae` = F1 수정 포함, 실측): GuardDriver **88/88** · proxy **7/7** ·
+  iOS·macOS **BUILD SUCCEEDED·Swift 경고 0건**(appintentsmetadataprocessor 공지 제외 필터).
+  같은 게이트를 abd1832에서도 관측(한 번은 ux-check 하네스가 독립 실행) — 2회 관측.
+- code-safety 하네스: **카드 확인 경로의 실패 묻힘은 무죄**(확인의 툴 실패는 contents에 남고 폴백
+  seed로 작동, 미응답 카드는 `cancelPendingAsk` 안내 말풍선 전환, 이중 탭 `guard !isThinking` 차단
+  — 드라이버 Q절이 단언). 신규 결함 1건 **F1**(중-하): 카드 "현재 위치" 칩 실패 문구에 내부 토큰
+  `__current_location__` 노출 → ai-tooling이 배포 전 수정(보간 제거·고정 안내, `:1043`.
+  `resolveOrigin` 나머지 호출 2곳 `:1245`·`:1791`은 유출 없음 확인). 사전 존재 부채 3건은 회귀
+  아님으로 기록만: F2 캘린더 제거 fire-and-forget 6곳, F3 bubbles 무상한(기존과 동일),
+  F4 드라이버 백업-복원 창 — **드라이버 동시 실행 금지** 운영 규칙으로 대응.
+- ux-check 하네스: `CHECKLIST.md` 전면 재생성(95행 = ✅86·⚠️6·❌2·의도적 미제공 1). 이전 ⚠️ 중
+  D7(생성 경로 클램프 없음)은 e10b292로 해소, G절(기억)은 제거 설계대로 재작성, 카드 G4~G14·
+  보류 중 강제 종료 L12 신규. 근거 줄번호는 이번 트리에서 전수 재실측.
+- 실기기: iPhone 15(UDID 8D9B…31A1F) 서명 빌드 → **설치·실행 완료**(`devicectl` 관측:
+  "Launched application with com.iseongmin.besir bundle identifier", 2026-09-15 16:47).
+  AC-008의 사용자 확인 목록 12항목 전달
 
 착수 시 확정한 설계 결정 2건(사용자, 2026-09-15 — spec.md 반영은 M5로 미룸):
 1. **출발지도 카드에서 묻는다.** REQ-005의 "부재는 부재로 관측되어 칩 요청으로 흐른다"를 문자 그대로
@@ -69,7 +86,16 @@ REQ-014의 근거가 "칩은 모든 값을 열거할 수 없으므로"인데 `Tr
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+run_status: audit-ready
+run_complete_at: 2026-09-15
+
+- M1~M6 전부 완료. 커밋: 7683700(M1~M3) · b9ef208(M4) · abd1832(M5) · b1771ae(M6 — F1 수정·체크리스트).
+- 게이트(최종 트리 b1771ae 실측): GuardDriver 88/88 · proxy 7/7 · iOS·macOS 무경고 빌드.
+- AC-001~006 관측 근거 확보(드라이버 단언·코드·개정 문서), AC-007 게이트 통과.
+  **AC-008(실기기)만 사용자 확인 대기** — 확인 목록 12항목 전달.
+- 잔여 관찰(코드 수정 대상 아님 — 실기기 대화에서 관찰): 모델이 재호출 시 미선언 인자 복사에
+  실패해 카드가 한 번 더 뜨는지(안전하지만 재질문), stated 값은 카드에서 수정 불가이므로 재발화
+  안내가 충분한지.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
