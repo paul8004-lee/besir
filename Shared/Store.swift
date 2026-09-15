@@ -32,12 +32,16 @@ final class Store: ObservableObject {
     /// 반복 일정을 몇 주까지 만들 수 있는지. 회차 하나가 구글 캘린더 API 호출 한 번이라
     /// (26주 × 평일 × 4구간이면 500번 넘게 순차 호출) 무한정 늘릴 수 없다. 그 이상은 구글의
     /// 반복 이벤트(RRULE)를 써야 하는데, 이 앱은 회차를 개별 일정으로 다루는 구조라 큰 변경이 된다.
-    static let maxRecurrenceWeeks = 26
+    /// nonisolated — maxBufferMinutes와 같은 이유(카드 입력 검증이 메인액터 밖에서 부른다).
+    nonisolated static let maxRecurrenceWeeks = 26
 
     /// 도착 여유의 허용 범위. 음수는 출발을 그만큼 늦추고, 과도한 값은 실수다 — 수동 조정·AI 생성·
     /// AI 수정이 같은 한도를 쓰도록 한곳에 둔다(계약 5. 예전엔 이 식이 세 곳에 복사돼 있었고,
     /// 그래서 AI 생성 경로만 클램프가 빠진 채 남아 있었다).
-    static func clampBuffer(_ minutes: Int) -> Int { max(0, min(180, minutes)) }
+    /// 카드의 직접입력 검증도 같은 상한을 봐야 한다 — 리터럴로 두 곳에 적으면 한쪽만 바뀐다.
+    /// nonisolated인 이유: 카드의 값 검증(AskField.accepts)이 메인액터 격리 밖에서도 불린다.
+    nonisolated static let maxBufferMinutes = 180
+    static func clampBuffer(_ minutes: Int) -> Int { max(0, min(Self.maxBufferMinutes, minutes)) }
 
     /// 알림 리드타임은 음수면 "출발한 뒤에 알린다"가 되어 무의미하다. 상한은 두지 않는다 —
     /// "하루 전에 알려줘" 같은 요청이 실재한다.

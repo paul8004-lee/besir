@@ -21,6 +21,85 @@ final class AIAssistant: ObservableObject {
         let id = UUID()
         let role: Role
         var text: String
+        /// 비어 있는 인자를 묻는 카드. nil이면 보통 말풍선이다.
+        var ask: PendingAsk?
+    }
+
+    /// 앱이 직접 물을 인자 하나 = 카드의 한 줄.
+    ///
+    /// 되묻는 주체가 모델이 아니라 앱인 이유: 이 모델은 선언된 선택 인자를 비워두지 못하고 전부
+    /// 채운다(b303f41 — 저장해둔 여유 10분이 0으로 덮여 35건이 등록되고도 아무도 몰랐다).
+    /// "비워둬라"·"물어봐라"는 이 프로젝트에서 가장 안 지켜지는 지시였고 두 번 실패했다.
+    /// 그래서 이 인자들은 툴 선언에서 아예 뺐다 — 모델이 채울 수 없어야 앱이 "비었다"를 관측한다.
+    struct AskField: Identifiable {
+        /// 고른 문자열을 툴 인자로 되돌릴 때 쓰는 해석 방식.
+        /// 줄마다 받아들이는 범위가 달라서 종류를 나눈다 — 여유와 알림은 상한이 다르다
+        /// (여유는 Store가 180분에서 묶고, 알림은 "하루 전에 알려줘"가 실제 요청이라 안 묶는다).
+        enum Kind { case place, mode, buffer, notify, weeks }
+        struct Option: Identifiable {
+            let id = UUID()
+            let label: String
+            let value: String
+        }
+        let id = UUID()
+        /// 툴 인자 이름. 확인 시 이 키로 값이 실린다.
+        let key: String
+        let kind: Kind
+        let label: String
+        let options: [Option]
+        /// 칩만으로 모든 값을 열거할 수 없는 줄에만 붙인다. 이동수단은 세 칩이 곧 전체 집합이라
+        /// 붙이지 않는다(승인된 카드 형태 그대로 — 직접입력이 없어도 못 고르는 값이 없다).
+        let allowsCustom: Bool
+        /// 사용자가 고른 원시 값. nil이면 아직 안 골랐다 — 확인 버튼이 잠긴다.
+        var chosen: String? = nil
+
+        var chosenLabel: String? {
+            guard let chosen else { return nil }
+            return options.first { $0.value == chosen }?.label ?? Self.customLabel(kind, chosen)
+        }
+        static func customLabel(_ kind: Kind, _ value: String) -> String {
+            switch kind {
+            case .buffer, .notify: return "\(value)분"
+            case .weeks: return "\(value)주"
+            case .place, .mode: return value
+            }
+        }
+
+        /// 직접입력 값을 받아들일지 판정한다. 범위 밖을 카드에서 막아야 실행부까지 흘러가지 않는다.
+        /// 빈 입력은 어떤 줄에서도 제출되지 않는다.
+        func accepts(_ raw: String) -> String? {
+            let t = raw.trimmingCharacters(in: .whitespaces)
+            guard !t.isEmpty else { return nil }
+            switch kind {
+            case .place: return t
+            case .mode: return TransportMode(rawValue: t) != nil ? t : nil
+            case .buffer:
+                guard let v = Int(t), (0...Store.maxBufferMinutes).contains(v) else { return nil }
+                return String(v)
+            case .notify:
+                // 카드 입력의 상한일 뿐 저장값의 상한이 아니다 — clampNotifyLead는 위로 묶지 않는다.
+                // 하루(1440분) 전 알림까지는 실제 요청이고, 그 밖은 오타로 본다.
+                guard let v = Int(t), (0...1440).contains(v) else { return nil }
+                return String(v)
+            case .weeks:
+                guard let v = Int(t), (1...Store.maxRecurrenceWeeks).contains(v) else { return nil }
+                return String(v)
+            }
+        }
+    }
+
+    /// 부재 인자를 전부 모은 카드 한 장. 요청당 정확히 한 장이고, 확인을 누르면 보류해 둔
+    /// 호출이 채워진 인자와 함께 **1회** 실행된다 — 선택과 값 사이에 모델이 끼어들 틈이 없다.
+    struct PendingAsk: Identifiable {
+        let id = UUID()
+        /// 보류해 둔 모델 턴 원본. 확인 시 인자만 채워 히스토리에 넣는다 — 미완성 인자가 담긴
+        /// 턴을 히스토리에 먼저 넣으면 다음 요청에 그 값이 계속 딸려간다.
+        let parts: [[String: Any]]
+        /// 사용자가 말로 이미 정한 값(카드에 줄을 만들지 않은 것들). 무엇이 조용히 정해졌는지
+        /// 카드에 적어 보여준다 — 줄이 사라진 자리를 사용자가 못 보면 그게 곧 조용한 적용이다.
+        let stated: [String]
+        var fields: [AskField]
+        var isReady: Bool { fields.allSatisfy { $0.chosen != nil } }
     }
 
     @Published var bubbles: [Bubble] = []
@@ -74,50 +153,20 @@ final class AIAssistant: ObservableObject {
     }
     private var zeroUpdateConfirmAsk: ZeroUpdateAsk?
 
-    /// 사용자에 대해 오래 기억해둘 사실(주로 쓰는 이동수단 등). 대화 기록(ai_history.json)과 달리
-    /// "새 대화 시작"으로 지워지지 않는다 — 매번 새로 물어보지 않도록 시스템 프롬프트에 항상 포함된다.
-    @Published private(set) var rememberedFacts: [String] = []
+    /// 이번 사용자 발화에서 앱이 직접 읽어낸 인자("자동차로 가자" → mode_this_time). 저장하지
+    /// 않는다 — 다음 요청으로 넘어가면 사라지고, 그때는 다시 묻는다.
+    private var statedArgs: [String: Any] = [:]
 
     init(store: Store, location: LocationManager) {
         self.store = store
         self.location = location
         loadHistory()
-        loadMemory()
         if bubbles.isEmpty {
             bubbles.append(.init(role: .assistant,
                 text: "안녕하세요! 등록할 일정을 말로 알려주세요.\n예: \"내일 오후 3시에 강남역에서 친구 만나기\"\n다른 앱에서 일정표를 공유해주셔도 돼요."))
         }
         // 출발지 계산을 위해 현재 위치를 미리 확보해 둔다.
         if location.currentLocation == nil { location.useCurrentLocation() }
-    }
-
-    // MARK: - 장기 기억(사용자 선호 등, 대화 초기화와 무관하게 유지)
-
-    private var memoryURL: URL {
-        AppConfig.supportDirectory.appendingPathComponent("ai_memory.json")
-    }
-
-    private func saveMemory() {
-        guard let data = try? JSONEncoder().encode(rememberedFacts) else { return }
-        try? FileManager.default.createDirectory(at: AppConfig.supportDirectory, withIntermediateDirectories: true)
-        try? data.write(to: memoryURL)
-    }
-
-    private func loadMemory() {
-        guard let data = try? Data(contentsOf: memoryURL),
-              let decoded = try? JSONDecoder().decode([String].self, from: data) else { return }
-        rememberedFacts = decoded
-    }
-
-    /// 설정 화면 등에서 잘못 기억한 내용을 지울 때 쓴다.
-    func forgetFact(_ fact: String) {
-        rememberedFacts.removeAll { $0 == fact }
-        saveMemory()
-    }
-
-    func forgetAllFacts() {
-        rememberedFacts = []
-        saveMemory()
     }
 
     // MARK: - 대화 기록 저장/복원(재설치·재실행해도 유지)
@@ -127,8 +176,10 @@ final class AIAssistant: ObservableObject {
     }
 
     private func saveHistory() {
-        let bubblesJSON: [[String: Any]] = bubbles.map {
-            ["role": $0.role == .user ? "user" : "assistant", "text": $0.text]
+        // 아직 답하지 않은 카드는 빼고 저장한다 — 보류 상태는 어떤 형태로도 디스크에 남기지
+        // 않는다. 앱을 껐다 켜면 카드가 사라지고, 그 요청은 다시 말해야 한다(매번 물음).
+        let bubblesJSON: [[String: Any]] = bubbles.compactMap {
+            $0.ask == nil ? ["role": $0.role == .user ? "user" : "assistant", "text": $0.text] : nil
         }
         // lastRecurrenceId도 같이 저장한다 — 앱을 껐다 켜면 사라져서 "방금 만든 반복 일정
         // 자동차로 바꿔줘"가 안 되던 문제(체크리스트 D1/D2)를 없앤다.
@@ -242,11 +293,8 @@ final class AIAssistant: ObservableObject {
                 }
             }
         }
-        // 지금 적용 중인 기본값도 같이 — 기본값이 비어 있어 생긴 문제가 여러 번 있었다.
-        let cfg = store.config
-        lines.append("--- 기본값 ---")
-        lines.append("이동수단=\(cfg.preferredMode ?? "없음"), 여유=\(cfg.preferredBuffer.map(String.init) ?? "없음"), 알림=\(cfg.preferredNotify.map(String.init) ?? "없음")")
-        lines.append("기억=\(rememberedFacts.isEmpty ? "없음" : rememberedFacts.joined(separator: " / "))")
+        // 앱이 카드로 물어 채운 값은 위 [도구 호출] 줄의 인자에 그대로 보인다 — 저장된 기본값이
+        // 없어졌으므로 따로 덧붙일 상태가 없다.
         return lines.joined(separator: "\n")
     }
 
@@ -272,11 +320,12 @@ final class AIAssistant: ObservableObject {
     }
 
     private func submit(text: String, imageData: Data?, mimeType: String?, bubbleText: String) async {
+        // 답을 못 받은 카드는 이번 발화로 무효가 된다 — 사용자가 다른 얘기로 넘어갔다는 뜻이다.
+        cancelPendingAsk()
         bubbles.append(.init(role: .user, text: bubbleText))
-        // 선호를 말하면 모델이 remember_fact를 부르든 말든 앱이 직접 반영한다.
-        // (도구를 안 부르고 "기억해둘게요"라고만 답해 설정이 비어 있던 문제.)
-        // 이 턴의 시스템 프롬프트부터 바로 반영되므로 모델도 곧장 새 기본값을 본다.
-        applyStatedPreferences(from: text)
+        // 사용자가 직접 말한 값은 모델을 거치지 않고 앱이 읽는다(결정적). 저장하지 않으므로
+        // 이번 턴이 끝나면 사라지고, 다음 요청에서는 다시 묻는다.
+        statedArgs = Self.statedArguments(from: text)
         repairDanglingToolTurn()   // 방어적 재확인(로드 시점에 이미 고쳐지지만, 만일을 대비).
         var parts: [[String: Any]] = [["text": text]]
         if let imageData, let mimeType {
@@ -313,40 +362,55 @@ final class AIAssistant: ObservableObject {
     }
 
 
-    /// 사용자가 "앞으로 ~", "주로 ~", "기억해줘" 처럼 **선호를 말한 경우에만** 그 문장에서
-    /// 이동수단·도착여유·알림을 읽어 설정에 반영한다.
+    /// 사용자가 발화에서 **직접 말한** 값을 이번 요청의 인자로 읽어낸다. 모델을 거치지 않으므로
+    /// 모델이 무엇을 보내든 상관없이 결정적이고, 어디에도 저장하지 않는다 — 다음 요청에서는
+    /// 말하지 않으면 다시 묻는다.
     ///
-    /// 신호어를 요구하는 이유: "내일 자동차로 강남 가야 해"는 이번 일정 얘기지 기본값 설정이
-    /// 아니다. 그런 문장까지 기본값을 바꾸면 사용자가 모르는 사이에 설정이 흔들린다.
-    private func applyStatedPreferences(from text: String) {
-        let signals = ["기억", "주로", "앞으로", "항상", "보통", "기본", "늘 "]
-        guard signals.contains(where: { text.contains($0) }) else { return }
+    /// 옛 applyStatedPreferences와 달리 "기억해줘"·"주로" 같은 신호어를 요구하지 않는다.
+    /// 그 신호어는 "이번 일정 얘기"와 "기본값 설정"을 가르려고 있었는데, 저장할 기본값 자체가
+    /// 사라졌으므로 가를 것이 없다. 대신 낱말을 좁게 잡는다(statedMode 주석 참고).
+    private static func statedArguments(from text: String) -> [String: Any] {
+        var args: [String: Any] = [:]
+        if let m = statedMode(in: text) { args["mode_this_time"] = m.rawValue }
+        if let b = minutes(in: text, near: ["여유"]) { args["buffer_minutes"] = b }
+        if let n = minutes(in: text, near: ["알림", "분 전"]) { args["notify_lead_minutes"] = n }
+        return args
+    }
 
-        var config = store.config
-        var changed: [String] = []
-        if let m = Self.mode(in: text), config.preferredMode != m.rawValue {
-            config.preferredMode = m.rawValue; changed.append("이동수단 \(m.title)")
+    /// 발화에서 이동수단을 읽어낸다. **이동을 말하는 형태일 때만** 잡는 것이 핵심이다 —
+    /// 낱말만 보던 옛 판정은 "기차역에서 만나"를 대중교통으로 잡았고, 그렇게 들어간 값은
+    /// 카드에서 줄을 지워버려 사용자가 고칠 기회조차 잃는다(이 SPEC이 없애려는 바로 그 모양).
+    /// 대중교통·도보를 먼저 보는 이유는 "기차"처럼 '차'가 들어간 낱말이 자동차로 잡히지 않게.
+    private static func statedMode(in text: String) -> TransportMode? {
+        for w in ["대중교통", "지하철로", "지하철 타", "전철로", "전철 타", "버스로", "버스 타", "기차로", "기차 타"]
+            where text.contains(w) { return .transit }
+        for w in ["도보로", "걸어서", "걸어갈", "걷는"] where text.contains(w) { return .walk }
+        for w in ["자동차로", "자차로", "차로 가", "차 타고", "운전해", "운전하"] where text.contains(w) { return .car }
+        return nil
+    }
+
+    /// 카드에 "말씀하신 대로 이미 정해진 것"을 적는다 — 줄이 사라진 자리를 사용자가 보지
+    /// 못하면 그것 역시 조용한 적용이다.
+    private func statedLabels() -> [String] {
+        var out: [String] = []
+        if let m = (statedArgs["mode_this_time"] as? String).flatMap(TransportMode.init(rawValue:)) {
+            out.append("이동수단 \(m.title)")
         }
-        if let b = Self.minutes(in: text, near: ["여유"]), config.preferredBuffer != b {
-            config.preferredBuffer = b; changed.append("도착 여유 \(b)분")
-        }
-        if let n = Self.minutes(in: text, near: ["알림", "분 전"]), config.preferredNotify != n {
-            config.preferredNotify = n; changed.append("알림 \(n)분 전")
-        }
-        guard !changed.isEmpty else { return }
-        store.updateConfig(config)
-        // 문장은 따로 남기지 않는다 — 값은 설정의 "기본값"에 그대로 보이고, 모델도 대개
-        // remember_fact로 요약 문장을 저장한다. 둘 다 남기면 같은 내용이 두 줄로 쌓인다.
+        if let b = statedArgs["buffer_minutes"] as? Int { out.append("도착 여유 \(b)분") }
+        if let n = statedArgs["notify_lead_minutes"] as? Int { out.append("알림 \(n)분 전") }
+        return out
     }
 
     // MARK: - 대화 + 툴 루프
 
-    private func runLoop() async throws {
+    /// - Parameter seed: 카드 확인 경로처럼 **루프에 들어오기 전에 이미 실행된** 툴 결과.
+    ///   뒤이은 AI 호출만 실패했을 때 사용자에게 보여줄 폴백이 첫 바퀴부터 있어야 한다.
+    private func runLoop(seed: String? = nil) async throws {
         // 툴 호출이 이어질 수 있으니 최대 몇 회까지 반복.
         // lastToolSummary: 툴이 이미 성공 실행된 뒤(등록 자체는 끝난 뒤) 뒤이은 "자연스러운 확인 문구"용
         // AI 호출만 실패하는 경우를 위한 폴백. 등록은 이미 끝났으니 이 경우 에러로 취급하면 안 되고
         // (사용자가 "실패"로 오해해 같은 요청을 또 보내면 중복 등록됨), 툴이 직접 만든 결과 문구를 그대로 보여준다.
-        var lastToolSummary: String?
+        var lastToolSummary: String? = seed
         for _ in 0..<5 {
             let response: [String: Any]
             do {
@@ -380,24 +444,251 @@ final class AIAssistant: ObservableObject {
             // 히스토리에서 빠져 role 순서가 …tool → user로 이어져 버린다 — Workers AI 백엔드가 이
             // 순서를 거부해("Unexpected role 'user' after role 'tool'") 다음 사용자 메시지가 매번
             // 실패했다(할당량 문제가 아니라 이 히스토리 버그였음).
-            contents.append(["role": "model", "parts": parts])
-
-            let functionCalls = parts.compactMap { $0["functionCall"] as? [String: Any] }
-            guard !functionCalls.isEmpty else { return }
-
-            // 툴 실행 → 결과를 하나의 function 턴으로 모아 히스토리에 담는다.
-            var resultParts: [[String: Any]] = []
-            for call in functionCalls {
-                let name = call["name"] as? String ?? ""
-                let args = call["args"] as? [String: Any] ?? [:]
-                let resultText = await executeTool(name: name, input: args)
-                resultParts.append(["functionResponse": ["name": name, "response": ["result": resultText]]])
-                lastToolSummary = resultText
+            guard parts.contains(where: { $0["functionCall"] != nil }) else {
+                contents.append(["role": "model", "parts": parts])
+                return
             }
-            contents.append(["role": "function", "parts": resultParts])
+
+            // 사용자가 말로 정한 값을 먼저 인자에 넣는다 — 모델이 채울 수 없는 인자들이라
+            // 여기서 안 넣으면 분명히 말했는데도 카드가 같은 걸 다시 묻는다.
+            let filled = fillStated(parts)
+
+            // 그래도 비어 있는 인자가 있으면 앱이 직접 묻는다. 모델 턴은 아직 히스토리에 넣지
+            // 않고 카드에 보류한다 — 미완성 인자가 담긴 턴을 남기면 그 값이 이후 요청에 계속
+            // 딸려가고, 확인 뒤 채워 넣은 값과 두 벌이 된다.
+            if let ask = pendingAsk(for: filled) {
+                bubbles.append(.init(role: .assistant, text: "", ask: ask))
+                return
+            }
+
+            contents.append(["role": "model", "parts": filled])
+            lastToolSummary = await runToolCalls(filled) ?? lastToolSummary
         }
         // 5회를 다 돌 때까지 마무리가 안 된 드문 경우에도, 툴 결과가 있으면 보여준다.
         if let lastToolSummary { bubbles.append(.init(role: .assistant, text: lastToolSummary)) }
+    }
+
+    /// 모델 턴의 도구 호출을 차례로 실행하고, 결과를 하나의 function 턴으로 모아 히스토리에
+    /// 담는다. 마지막 결과 문구를 돌려준다(뒤이은 AI 호출이 실패해도 보여줄 폴백).
+    ///
+    /// 루프에서 떼어낸 이유는 카드 확인 경로가 같은 실행을 해야 하기 때문이다 — 두 벌로 적으면
+    /// 한쪽만 고쳐져 "카드로 만든 일정만 다르게 동작"하는 결함이 된다(계약 5).
+    private func runToolCalls(_ parts: [[String: Any]]) async -> String? {
+        var resultParts: [[String: Any]] = []
+        var last: String?
+        for call in parts.compactMap({ $0["functionCall"] as? [String: Any] }) {
+            let name = call["name"] as? String ?? ""
+            let args = call["args"] as? [String: Any] ?? [:]
+            let resultText = await executeTool(name: name, input: args)
+            resultParts.append(["functionResponse": ["name": name, "response": ["result": resultText]]])
+            last = resultText
+        }
+        guard !resultParts.isEmpty else { return nil }
+        contents.append(["role": "function", "parts": resultParts])
+        return last
+    }
+
+    // MARK: - 앱 주도 되묻기(카드)
+
+    /// 이 호출이 **실제로 쓸** 인자 중 아직 비어 있는 것들. "무엇을 물을까"의 단일 출처다 —
+    /// 카드를 그릴 때와 확인 뒤 값을 채울 때가 같은 목록을 봐야 어긋나지 않는다(계약 5).
+    ///
+    /// 쓰지 않을 값은 묻지 않는다: 출발 기준 구간엔 도착 여유를 둘 대상이 없고, 이동을 만들지
+    /// 않는 활동엔 이동수단이 쓰일 자리가 없다. 안 쓰는 걸 물으면 카드만 길어진다.
+    private func askFields(tool: String, args: [String: Any]) -> [AskField] {
+        func filled(_ key: String) -> Bool {
+            if let s = args[key] as? String { return !s.trimmingCharacters(in: .whitespaces).isEmpty }
+            return args[key] != nil
+        }
+        // 알림을 꺼 달라고 한 요청에는 알림 줄을 만들지 않는다(notify_enabled는 모델이 채운다).
+        let notifyOn = (args["notify_enabled"] as? Bool) != false
+        var fields: [AskField] = []
+        switch tool {
+        case "create_schedule":
+            if !filled("origin_query") { fields.append(originField()) }
+            if !filled("mode_this_time") { fields.append(modeField("mode_this_time", label: "이동수단")) }
+            if args["arrival_iso"] != nil, !filled("buffer_minutes") { fields.append(bufferField()) }
+            if notifyOn, !filled("notify_lead_minutes") { fields.append(notifyField()) }
+        case "create_recurring_schedule":
+            if !filled("origin_query") { fields.append(originField()) }
+            if !filled("mode_this_time") { fields.append(modeField("mode_this_time", label: "이동수단")) }
+            if !filled("buffer_minutes") { fields.append(bufferField()) }
+            if notifyOn, !filled("notify_lead_minutes") { fields.append(notifyField()) }
+            if !filled("weeks") { fields.append(weeksField()) }
+        case "create_activity":
+            let outbound = filled("travel_from_query"), back = filled("return_to_query")
+            guard outbound || back else { break }
+            if outbound && back {
+                // 갈 땐 지하철, 올 땐 택시 — 사용자가 Day 7에 따로 고르게 해 달라고 한 자리다.
+                if !filled("travel_mode_this_time") { fields.append(modeField("travel_mode_this_time", label: "가는 편")) }
+                if !filled("return_mode_this_time") { fields.append(modeField("return_mode_this_time", label: "오는 편")) }
+            } else if !filled("mode_this_time") {
+                fields.append(modeField("mode_this_time", label: "이동수단"))
+            }
+            // 복귀 구간은 출발 기준이라 여유가 0으로 고정된다 — 가는 편이 있을 때만 묻는다.
+            if outbound, !filled("buffer_minutes") { fields.append(bufferField()) }
+            if notifyOn, !filled("notify_lead_minutes") { fields.append(notifyField()) }
+        default: break
+        }
+        return fields
+    }
+
+    /// 출발지 줄. 즐겨찾기 + 현재 위치 + 직접입력이고, 고른 값은 resolveOrigin이 그대로 읽는다.
+    private func originField() -> AskField {
+        var options = store.favorites.map { AskField.Option(label: $0.label, value: $0.label) }
+        options.append(.init(label: "현재 위치", value: Self.currentLocationToken))
+        return .init(key: "origin_query", kind: .place, label: "출발지",
+                     options: options, allowsCustom: true)
+    }
+
+    /// 이동수단 줄. 세 칩이 곧 TransportMode 전체 집합이라 직접입력을 붙이지 않는다 —
+    /// 붙여봐야 고를 수 있는 값이 늘지 않고, 오히려 없는 수단을 적을 자리만 생긴다.
+    private func modeField(_ key: String, label: String) -> AskField {
+        .init(key: key, kind: .mode, label: label,
+              options: TransportMode.allCases.map { .init(label: $0.title, value: $0.rawValue) },
+              allowsCustom: false)
+    }
+
+    /// 도착 여유 줄. **진짜 0분 칩이 있다** — 0은 "여유 없이"라는 정당한 요청인데 문장 파서가
+    /// 0보다 큰 값만 돌려줘서 말로는 전달할 길이 없었다. 카드가 그 격차를 닫는다.
+    private func bufferField() -> AskField {
+        .init(key: "buffer_minutes", kind: .buffer, label: "도착 여유",
+              options: [.init(label: "0분", value: "0"), .init(label: "10분", value: "10"),
+                        .init(label: "20분", value: "20"), .init(label: "30분", value: "30")],
+              allowsCustom: true)
+    }
+
+    /// 알림 줄. 0은 "알림 없음"이 아니라 **출발 시각 알림**이라 그렇게 적는다 — 알림 자체를
+    /// 끄는 건 notify_enabled(발화: "알림 필요 없어")이고, 그때는 이 줄이 아예 안 생긴다.
+    private func notifyField() -> AskField {
+        .init(key: "notify_lead_minutes", kind: .notify, label: "알림",
+              options: [.init(label: "출발 시각", value: "0"), .init(label: "10분 전", value: "10"),
+                        .init(label: "30분 전", value: "30"), .init(label: "1시간 전", value: "60")],
+              allowsCustom: true)
+    }
+
+    private func weeksField() -> AskField {
+        .init(key: "weeks", kind: .weeks, label: "반복 기간",
+              options: [.init(label: "4주", value: "4"), .init(label: "8주", value: "8"),
+                        .init(label: "12주", value: "12"),
+                        .init(label: "\(Store.maxRecurrenceWeeks)주", value: "\(Store.maxRecurrenceWeeks)")],
+              allowsCustom: true)
+    }
+
+    /// 이 턴의 모든 호출에서 비어 있는 인자를 모아 카드 **한 장**을 만든다. 한 턴에 호출이
+    /// 여러 개여도(이미지 한 장에서 일정 여러 건) 카드는 한 장이고 같은 답이 전부에 적용된다 —
+    /// 호출마다 끼어들면 사용자가 같은 질문에 다섯 번 답하게 된다.
+    private func pendingAsk(for parts: [[String: Any]]) -> PendingAsk? {
+        var fields: [AskField] = []
+        for call in parts.compactMap({ $0["functionCall"] as? [String: Any] }) {
+            let name = call["name"] as? String ?? ""
+            let args = call["args"] as? [String: Any] ?? [:]
+            for f in askFields(tool: name, args: args) where !fields.contains(where: { $0.key == f.key }) {
+                fields.append(f)
+            }
+        }
+        guard !fields.isEmpty else { return nil }
+        return PendingAsk(parts: parts, stated: statedLabels(), fields: fields)
+    }
+
+    /// 발화에서 읽어낸 값을 호출 인자에 채운다. **그 도구가 물었을 인자에만** 넣는다 —
+    /// 쓰지도 않을 인자를 얹으면 실행부가 엉뚱한 값을 보게 된다.
+    private func fillStated(_ parts: [[String: Any]]) -> [[String: Any]] {
+        guard !statedArgs.isEmpty else { return parts }
+        return parts.map { part in
+            guard var call = part["functionCall"] as? [String: Any] else { return part }
+            let name = call["name"] as? String ?? ""
+            var args = call["args"] as? [String: Any] ?? [:]
+            for f in askFields(tool: name, args: args) {
+                // 이동수단은 도구마다 인자 이름이 다르다(가는 편·오는 편) — 발화의 한 값이
+                // 그 줄들 전부에 적용돼야 "자동차로 가자"가 왕복 모두에 걸린다.
+                let stated = f.kind == .mode ? statedArgs["mode_this_time"] : statedArgs[f.key]
+                if let stated { args[f.key] = stated }
+            }
+            var out = part
+            call["args"] = args
+            out["functionCall"] = call
+            return out
+        }
+    }
+
+    /// 칩을 탭했을 때. 마지막 탭이 그 줄의 값이고, 확인 전까지는 아무것도 실행되지 않는다.
+    func choose(field: UUID, value: String) {
+        guard let b = bubbles.lastIndex(where: { $0.ask != nil }),
+              let f = bubbles[b].ask?.fields.firstIndex(where: { $0.id == field }) else { return }
+        bubbles[b].ask?.fields[f].chosen = value
+    }
+
+    /// 직접입력 제출. 빈 입력과 범위 밖은 받아들이지 않는다 — 값이 안 정해지므로 확인 버튼도
+    /// 계속 잠겨 있다. 여기서 막아야 범위 밖 값이 실행부까지 흘러가지 않는다.
+    @discardableResult
+    func submitCustom(field: UUID, text: String) -> Bool {
+        guard let b = bubbles.lastIndex(where: { $0.ask != nil }),
+              let f = bubbles[b].ask?.fields.firstIndex(where: { $0.id == field }),
+              let value = bubbles[b].ask?.fields[f].accepts(text) else { return false }
+        bubbles[b].ask?.fields[f].chosen = value
+        return true
+    }
+
+    /// 카드의 확인 버튼. 고른 값을 보류해 둔 호출에 실어 **정확히 1회** 실행한다.
+    /// 호출을 앱이 직접 만들므로 선택과 실제 값 사이에 모델이 끼어들 틈이 없다.
+    func confirmAsk() async {
+        guard !isThinking, bubbles.contains(where: { $0.ask != nil }) else { return }
+        isThinking = true
+        defer { isThinking = false; saveHistory() }
+        guard let summary = await resolvePendingAsk() else { return }
+        do {
+            try await runLoop(seed: summary)
+            stripInlineDataFromHistory()
+            trimHistory()
+        } catch {
+            // 툴은 이미 실행됐다 — 여기 오는 건 마무리 문구용 AI 호출만 실패한 경우다.
+            bubbles.append(.init(role: .assistant, text: Self.userMessage(for: error)))
+        }
+    }
+
+    /// 카드를 소비해 보류해 둔 호출을 실행한다. **모델을 부르지 않는 부분만** 여기 있다 —
+    /// 확인 버튼과 GuardDriver가 같은 경로를 지나가야 "카드로 만든 일정만 다르게 동작"하는
+    /// 결함이 안 생기고, 드라이버는 이 지점까지만 돌려 모델·할당량 없이 결정적으로 검증한다.
+    /// 돌려주는 값은 마지막 툴 결과 문구다(카드가 없거나 아직 덜 골랐으면 nil).
+    @discardableResult
+    private func resolvePendingAsk() async -> String? {
+        guard let idx = bubbles.lastIndex(where: { $0.ask != nil }),
+              let ask = bubbles[idx].ask, ask.isReady else { return nil }
+
+        // 카드를 고른 값 요약으로 바꾼다 — 남겨두면 같은 호출을 두 번 보낼 수 있고, 보류 상태가
+        // 히스토리 저장에 닿아서도 안 된다. 요약은 사용자가 무엇을 골랐는지 다시 볼 자리다.
+        let chosenLine = ask.fields.compactMap { f in f.chosenLabel.map { "\(f.label) \($0)" } }
+            .joined(separator: " · ")
+        bubbles[idx] = .init(role: .user, text: chosenLine)
+
+        var parts = ask.parts
+        for i in parts.indices {
+            guard var call = parts[i]["functionCall"] as? [String: Any] else { continue }
+            let name = call["name"] as? String ?? ""
+            var args = call["args"] as? [String: Any] ?? [:]
+            // 카드를 만들 때와 **같은 함수**로 이 호출이 무엇을 물었는지 다시 구한다.
+            for f in askFields(tool: name, args: args) {
+                guard let chosen = ask.fields.first(where: { $0.key == f.key })?.chosen else { continue }
+                switch f.kind {
+                case .buffer, .notify, .weeks: args[f.key] = Int(chosen) ?? 0
+                case .place, .mode: args[f.key] = chosen
+                }
+            }
+            call["args"] = args
+            parts[i]["functionCall"] = call
+        }
+
+        contents.append(["role": "model", "parts": parts])
+        return await runToolCalls(parts)
+    }
+
+    /// 답을 못 받은 카드를 접는다. 보류한 모델 턴은 히스토리에 넣은 적이 없으므로 버려도
+    /// 남는 흔적이 없다 — 등록되지 않았다는 사실만 사용자에게 남긴다.
+    private func cancelPendingAsk() {
+        for i in bubbles.indices where bubbles[i].ask != nil {
+            bubbles[i] = .init(role: .assistant, text: "물어본 값을 받지 못해서 그 등록은 진행하지 않았어요.")
+        }
     }
 
     // MARK: - AI 호출(프록시 경유, Workers AI — 백엔드는 프록시가 결정)
@@ -472,53 +763,39 @@ final class AIAssistant: ObservableObject {
         let loc = location.currentPlaceName ?? "확인 중"
         let favoritesLine = store.favorites.isEmpty ? "" :
             "\n- 사용자의 즐겨찾기 장소: \(store.favorites.map { $0.label }.joined(separator: ", ")). 출발지·목적지·점심장소가 이 이름과 일치하면 그 이름을 그대로 써(origin_query/destination_query/lunch_place_query)."
-        // 값으로 저장된 선호는 문장과 따로, 도구 인자에 그대로 넣으라고 못 박아 전달한다
-        // (문장만 주면 모델이 해석을 건너뛰고 기본값을 쓰는 일이 있었다).
-        //
-        // 이동수단은 이 목록에서 빼고 따로 적는다. buffer/notify는 "채워라", mode_this_time은
-        // "비워둬라"로 방향이 정반대인데 한 줄에 "도구 인자에 그대로 채워라"로 묶어 놓는 바람에
-        // 절대 규칙 2와 정면으로 부딪쳤고, 실기기에서 모델이 규칙 2 쪽을 따르면서 INTEGER에는
-        // 없는 '비움'을 0으로 대신 써 저장된 여유·알림 10분이 0으로 덮였다.
-        var prefs: [String] = []
-        if let b = store.config.preferredBuffer { prefs.append("buffer_minutes=\(b)") }
-        if let n = store.config.preferredNotify { prefs.append("notify_lead_minutes=\(n)") }
-        let prefsBlock = prefs.isEmpty ? "" :
-            "\n- **저장된 기본값 — 묻지 말고 생성 도구 인자에 이 숫자를 그대로 채워라**: " + prefs.joined(separator: ", ")
-        let modeBlock = store.config.preferredMode.flatMap { TransportMode(rawValue: $0) }
-            .map { "\n- 저장된 기본 이동수단: \($0.title) — 앱이 알아서 쓴다. mode_this_time은 **비워둬라**." } ?? ""
-        let factsBlock = rememberedFacts.isEmpty ? "" :
-            "\n\n## 기억하고 있는 것(새로 묻지 말고 활용해)\n" + rememberedFacts.map { "- \($0)" }.joined(separator: "\n")
+        // 저장된 선호를 프롬프트에 주입하던 세 블록(prefsBlock·modeBlock·factsBlock)은 없앴다.
+        // "이 숫자를 그대로 채워라"와 "mode_this_time은 비워둬라"가 한 프롬프트 안에서 방향이
+        // 정반대였고, 모델은 INTEGER에 없는 '비움'을 0으로 대신 써서 저장해둔 여유·알림 10분을
+        // 0으로 덮었다(35건이 그렇게 등록되고도 아무도 몰랐다). 지금은 이 값들이 툴 선언에
+        // 아예 없다 — 모델이 채울 수 없으니 앱이 "비었다"를 관측해 사용자에게 직접 묻는다.
         return """
         besir 일정 도우미. 사용자 말(또는 공유받은 텍스트·이미지)에서 일정을 파악해 도구로 등록한다.
         이미지면 표·텍스트를 읽어 여러 일정이면 각각 도구를 호출한다.
-        지금: \(nowStr) (KST) / 현재 위치(참고용, 출발지 기본값 아님): \(loc)\(favoritesLine)\(prefsBlock)\(modeBlock)\(factsBlock)
+        지금: \(nowStr) (KST) / 현재 위치(참고용, 출발지 기본값 아님): \(loc)\(favoritesLine)
 
         # 절대 규칙
         1. 실제 데이터가 필요한 질문(뭐가 등록됐나·몇 건·삭제/수정 대상)은 반드시 list_schedules를 먼저 호출하고 그 결과만 말한다. 제목·시각·건수·가게이름을 지어내면 안 된다.
-        2. 일정을 만들 때 도착여유(buffer_minutes)·알림(notify_lead_minutes)은 위 "저장된 기본값" 줄의 숫자를 **그대로 채운다** — 비우거나 0으로 대신하지 마라(0은 "여유 없이"라는 진짜 요청이다). 이동수단은 반대로 mode_this_time을 **비워야** 저장된 수단이 쓰인다. 사용자가 이번 요청에서 다르게 말했으면 그 값을 넣고, 저장된 값도 없고 사용자도 말하지 않았으면 **임의로 정하지 말고 물어본다**.
-        3. 출발지: **사용자가 말했으면 반드시 origin_query에 넣어라**(말로만 "회사에서"라고 쓰고 인자를 비우면 엉뚱한 곳에서 출발하는 일정이 만들어진다). 말하지 않았으면 즐겨찾기 "집"을 쓰되, 그것도 없으면 물어본다.
-           단 **check_travel_time은 예외**: 등록이 아니라 조회라 되물을 필요가 없다. 바로 호출한다.
-        4. 물어서 답을 들으면 그 자리에서 remember_fact로 저장하되, **값은 mode/buffer_minutes/notify_lead_minutes 인자에 넣어라**(문장만 저장하면 다음에 안 쓰인다).
-           이미 아는 내용처럼 보여도 저장 요청이 오면 **반드시 도구를 호출해** 값을 최신화한다 — "이미 기억하고 있어요"로 끝내지 마라.
-        5. 상대 표현("내일", "다음 주 금요일")은 위 현재 시각 기준으로 정확한 ISO 시각으로 바꾼다.
+        2. 이동수단·도착여유·알림·반복 기간은 **도구 인자에 없다** — 앱이 사용자에게 직접 묻는다. 너는 이 값들을 묻지도, 지어내지도 말고 나머지 인자만 채워 호출해라. 호출만 하면 그 뒤는 앱이 처리한다.
+        3. 출발지: **사용자가 말했으면 반드시 origin_query에 넣어라**(말로만 "회사에서"라고 쓰고 인자를 비우면 엉뚱한 곳에서 출발하는 일정이 만들어진다). 말하지 않았으면 **비워둬라** — 앱이 묻는다. 네가 임의로 정하지 마라.
+           단 **check_travel_time은 예외**: 등록이 아니라 조회라 되물을 필요가 없다. origin_query를 비운 채 바로 호출한다.
+        4. 상대 표현("내일", "다음 주 금요일")은 위 현재 시각 기준으로 정확한 ISO 시각으로 바꾼다.
            "이번 주"는 **오늘이 들어가는 주**다(오늘 날짜를 반드시 포함하게 from_date/to_date를 잡아라).
            조회 결과가 비었는데 도구가 "전체로는 N건 있다"고 알려주면, 날짜를 잘못 잡은 것이니
            범위를 비우고 다시 조회해라 — "일정이 없다"고 잘라 말하면 안 된다.
-        6. 답변은 짧고 친근하게. 일정·식사와 무관한 요청은 정중히 거절.
-        7. **제목은 되묻지 마라** — 없으면 목적지나 활동 이름으로 알아서 짓는다("강남역 약속"). 되물을 가치가 있는 건 목적지·출발지·시각이다.
+        5. 답변은 짧고 친근하게. 일정·식사와 무관한 요청은 정중히 거절.
+        6. **제목은 되묻지 마라** — 없으면 목적지나 활동 이름으로 알아서 짓는다("강남역 약속"). 되물을 가치가 있는 건 목적지·출발지·시각이다.
 
         # 어떤 도구를 쓰나
         - 이동만 필요: create_schedule. "3시까지 가야 해"→arrival_iso / "6시에 출발할래"→departure_iso (둘 중 하나만).
         - 그 장소에 머무는 시간이 있으면: create_activity. **오가는 이동도 필요하면 travel_from_query/return_to_query를 같이 넣어 한 번에** 만든다(그래야 활동과 이동이 묶여 같이 움직이고 같이 지워진다. create_schedule로 따로 만들면 안 묶임).
           예) "8~10시 강남에서 친구 만나고 집에 올래" → create_activity(place_query:강남역, start/end, travel_from_query:집, return_to_query:집) 한 번.
-        - 반복: create_recurring_schedule. "평일"=월~금. 주기는 사용자 말대로(최대 26주). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1, 매월 아니면 0), "공휴일 빼고"=skip_holidays:true.
-          "9시부터 18시까지"면 9시=arrival_time, 18시=return_time(왕복 원하는지 확인). 점심은 보통 같은 건물이라 lunch_place_query를 **비워둔다** — "밖에서" 같이 명시할 때만 채운다.
+        - 반복: create_recurring_schedule. "평일"=월~금. 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1, 매월 아니면 0), "공휴일 빼고"=skip_holidays:true.
+          "9시부터 18시까지"면 9시=arrival_time, 18시=return_time(왕복 원하는지 확인). 반복 기간은 앱이 묻는다. 점심은 보통 같은 건물이라 lunch_place_query를 **비워둔다** — "밖에서" 같이 명시할 때만 채운다.
         - 이미 있는 일정 고치기: update_schedule (지우고 새로 만들지 말 것).
         - 반복 그룹의 수단/버퍼/알림 수정: update_recurring_schedule. 목록(list_schedules)의 [n] 그룹 번호를 series_number로 주고, 이번 대화에서 만든 그룹이면 번호 없이. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
         - 먹을 곳: recommend_meal. 메뉴를 좁혀 말하면(일식→초밥) keyword에 그대로 넣어 재검색. 시각만 말하면 at_iso.
           추천 중 하나로 일정을 잡아 달라 하면 create_activity를 부르되 **log_as_meal:true**를 꼭 넣는다(안 넣으면 '최근 먹은 것' 목록에 안 남는다).
         - 등록 없이 소요시간만: check_travel_time.
-        - 기억/잊기: remember_fact / forget_fact.
 
         # 되돌아오는 응답 처리(중요)
         - **겹침**: create_schedule이 "겹친다"며 선택지를 돌려주면 등록된 게 아니다. 사용자에게 물어보고 답을 들으면 **같은 인자에 on_conflict만 추가해** 다시 호출(ignore=그대로 / late_arrival=끝나고 출발). 되묻기만 반복하면 안 된다.
@@ -540,29 +817,13 @@ final class AIAssistant: ObservableObject {
         // 설명은 최대한 짧게 유지한다 — 이 배열 전체가 **매 요청마다** 모델에 실려 가므로
         // 길어질수록 하루 사용량(Workers AI neurons)을 그대로 깎아먹는다. 다만 실제 버그를
         // 막으려고 넣은 규칙(재호출 방법·지어내기 금지 등)은 줄이지 않는다.
-        // 이름을 그냥 "mode"로 두면 작은 모델이 저장된 기본값이 있어도 습관처럼 채워 넣어
-        // 기본값을 덮어버린다(기억시킨 자동차가 대중교통으로 바뀌던 원인). 이름 자체를
-        // "이번만 다르게"로 바꿔 기본 동작이 '비워두기'라는 게 드러나게 했다.
-        let mode: [String: Any] = ["type": "STRING", "enum": ["car", "transit", "walk"],
-                                   "description": "**이번 요청에서만 다른 수단을 쓸 때만** 채운다(예: \"오늘은 걸어갈래\"). 그 외에는 반드시 비워둔다 — 비우면 저장된 기본 이동수단이 쓰인다. 기본값도 없고 사용자도 말 안 했으면 물어본다."]
+        // 이동수단·도착 여유·알림·반복 기간의 인자 선언은 여기 없다(있었다가 지웠다).
+        // 이 모델은 선언된 선택 인자를 비워두지 못하고 전부 채운다 — 이름을 "이번만 다르게"로
+        // 바꿔도, 설명에 "비워둬라"·"0을 비움 대신 쓰지 마라"를 세 겹으로 적어도 소용없었다
+        // (두 번 실패했다). 앱이 "비었다"를 관측하려면 모델이 그 값을 보낼 수 없어야 한다.
+        // 지금은 앱이 카드로 직접 묻는다(askFields). 부수 효과로 요청당 고정 토큰비도 내려갔다.
         let notifyFlag: [String: Any] = ["type": "BOOLEAN", "description": "false=알림 끔. 기본 true."]
         let calFlag: [String: Any] = ["type": "BOOLEAN", "description": "false=구글 캘린더에 안 올림. 기본 true."]
-        // 두 생성 도구가 같은 뜻으로 쓴다 — mode·notifyFlag와 같은 이유로 한 곳에서 만들어 돌려쓴다.
-        // mode와 달리 여기서는 "채워라"가 맞다. "기본값이 있으면 비워둬"로 적었더니, INTEGER에는
-        // 비움을 적을 자리가 없어 모델이 0을 대신 보냈고 저장해 둔 10분이 0으로 덮였다.
-        //
-        // 설명에 **세 가지가 다 있어야** 한다. ① 저장값이 있으면 그 숫자 ② 없으면 물어보기
-        // ③ 0을 비움 대신 쓰지 말기. 하나씩 빠질 때마다 모델에게 열린 길이 줄고, 마지막에 남는 건
-        // "아무 값이나 채우기"다 — 한 번 압축하면서 ②를 날렸더니(원래 create_schedule 쪽의
-        // "모르면 물어볼 것") 저장값이 없는 사용자는 ①이 안 걸리고 ③이 막혀 갈 데가 없었다.
-        // ③은 **명령**으로 적는다("쓰지 마라"). 괄호 안은 이유일 뿐이고, 고쳐야 할 대상이 값의
-        // 뜻이 아니라 "선언된 선택 인자는 다 채운다"는 절차라서 서술형으로는 절차를 못 막는다.
-        //
-        // 줄일 땐 한 인자에 한 글자가 요청당 두 글자인 걸 감안한다 — 호이스팅해도 와이어 비용은
-        // 안 줄고 쓰는 도구마다 복제되기 때문. 다만 인자마다 **두 번**이지 네 번이 아니다
-        // (호출 지점 네 곳은 두 인자를 합친 수). 직렬화해서 세어 확인했다.
-        let bufferArg: [String: Any] = ["type": "INTEGER", "description": "도착 여유(분). 저장된 기본값 있으면 그 숫자를 채우고, 없으면 물어봐라. 0을 비움 대신 쓰지 마라(0=여유 없이)."]
-        let notifyArg: [String: Any] = ["type": "INTEGER", "description": "출발 몇 분 전 알림. 저장된 기본값 있으면 그 숫자를 채우고, 없으면 물어봐라. 0을 비움 대신 쓰지 마라(0=출발 시각 알림)."]
         return [[
             "name": "create_schedule",
             "description": "이동 일정 1건 등록(머무는 시간 없이 이동만).",
@@ -574,9 +835,6 @@ final class AIAssistant: ObservableObject {
                     "destination_query": ["type": "STRING", "description": "목적지 검색어"],
                     "arrival_iso": ["type": "STRING", "description": "도착 시각 ISO(예: 2026-07-06T15:00:00). 도착 기준."],
                     "departure_iso": ["type": "STRING", "description": "출발 시각 ISO. 출발 기준(버퍼 0). arrival_iso와 둘 중 하나만."],
-                    "mode_this_time": mode,
-                    "buffer_minutes": bufferArg,
-                    "notify_lead_minutes": notifyArg,
                     "notify_enabled": notifyFlag,
                     "add_to_calendar": calFlag,
                     "on_conflict": ["type": "STRING", "enum": ["ignore", "late_arrival"],
@@ -596,9 +854,6 @@ final class AIAssistant: ObservableObject {
                     "end_iso": ["type": "STRING", "description": "종료 ISO"],
                     "travel_from_query": ["type": "STRING", "description": "가는 이동의 출발지(선택)"],
                     "return_to_query": ["type": "STRING", "description": "오는 이동의 도착지(선택). travel_from_query를 채웠고 왕복이면 이것도 같이 채운다(보통 travel_from_query와 같은 값)."],
-                    "mode_this_time": mode,
-                    "travel_mode_this_time": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "가는 편만 다른 수단일 때만"],
-                    "return_mode_this_time": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "오는 편만 다른 수단일 때만(예: 갈 땐 지하철, 올 땐 택시)"],
                     "notify_enabled": notifyFlag,
                     "add_to_calendar": calFlag,
                     "log_as_meal": ["type": "BOOLEAN", "description": "식사 활동이면 true — '최근 먹은 것' 목록에도 남는다. 기본 false."]
@@ -623,14 +878,10 @@ final class AIAssistant: ObservableObject {
                     "lunch_start": ["type": "STRING", "description": "점심 시작 'HH:mm'"],
                     "lunch_end": ["type": "STRING", "description": "점심 종료 'HH:mm'"],
                     "start_date": ["type": "STRING", "description": "시작일 'yyyy-MM-dd'(기본 오늘)"],
-                    "weeks": ["type": "INTEGER", "description": "반복 주수. 기본 8, 최대 26."],
                     "every_n_weeks": ["type": "INTEGER", "description": "2=격주"],
                     "nth_week_of_month": ["type": "INTEGER", "description": "**\"매월\"이라고 말했을 때만**: 그 달 n번째 요일(1~4, -1=마지막). 매월이 아니면 0"],
                     "confirm_recurrence": ["type": "BOOLEAN", "description": "주기를 되묻는 응답을 받고 사용자가 확인했을 때 true"],
-                    "skip_holidays": ["type": "BOOLEAN", "description": "true=한국 공휴일 제외"],
-                    "mode_this_time": mode,
-                    "buffer_minutes": bufferArg,
-                    "notify_lead_minutes": notifyArg
+                    "skip_holidays": ["type": "BOOLEAN", "description": "true=한국 공휴일 제외"]
                 ],
                 "required": ["title", "destination_query", "weekdays", "arrival_time"]
             ]
@@ -709,30 +960,6 @@ final class AIAssistant: ObservableObject {
                 "required": ["destination_query"]
             ]
         ], [
-            "name": "remember_fact",
-            "description": "앞으로도 참고할 사실을 저장한다. **이동수단·도착여유·알림을 물어서 답을 들었으면 반드시 mode/buffer_minutes/notify_lead_minutes에 그 값을 넣어 저장해** — 그래야 다음부터 앱이 자동으로 그 값을 쓴다(문장만 저장하면 놓친다).",
-            "parameters": [
-                "type": "OBJECT",
-                "properties": [
-                    "fact": ["type": "STRING", "description": "짧은 한 문장(예: '주로 자동차로 다님')"],
-                    "mode": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "주로 쓰는 이동수단"],
-                    "buffer_minutes": ["type": "INTEGER", "description": "기본 도착 여유(분)"],
-                    "notify_lead_minutes": ["type": "INTEGER", "description": "기본 알림(출발 몇 분 전)"]
-                ],
-                "required": []
-            ]
-        ], [
-            "name": "forget_fact",
-            "description": "저장된 기억 삭제.",
-            "parameters": [
-                "type": "OBJECT",
-                "properties": [
-                    "fact_query": ["type": "STRING", "description": "지울 기억의 일부 문구"],
-                    "all": ["type": "BOOLEAN", "description": "true=전부 삭제"]
-                ],
-                "required": []
-            ]
-        ], [
             "name": "delete_schedule",
             "description": "제목/날짜로 일정 삭제. **텍스트로 확인받은 뒤 한 번만** 호출(도구가 되묻지 않고 바로 실행).",
             "parameters": [
@@ -749,18 +976,26 @@ final class AIAssistant: ObservableObject {
     }
 
 
-    // MARK: - 사용자 선호 기본값
+    // MARK: - 인자 읽기
     //
-    // 모델이 인자를 빠뜨려도 지켜지도록, 저장된 선호값을 실행부에서 직접 기본값으로 쓴다.
-    // (기억시켜 둔 뒤에도 모델이 mode를 안 넘겨 대중교통으로 계산되던 문제를 막는다.)
+    // 저장된 선호로 부재를 메우던 자리다. 그 대체가 b303f41의 사고였다 — 조용히 들어간 값은
+    // 아무도 보지 못한다. 지금은 부재를 부재로 두고, 카드가 사용자에게 직접 묻는다.
 
-    private func resolvedMode(_ raw: Any?) -> TransportMode {
-        if let s = raw as? String, let m = TransportMode(rawValue: s) { return m }
-        if let s = store.config.preferredMode, let m = TransportMode(rawValue: s) { return m }
-        return .transit
+    private static func transportMode(_ raw: Any?) -> TransportMode? {
+        (raw as? String).flatMap(TransportMode.init(rawValue:))
     }
-    private var defaultBuffer: Int { store.config.preferredBuffer ?? 10 }
-    private var defaultNotify: Int { store.config.preferredNotify ?? 30 }
+
+    /// 카드가 채웠어야 할 인자가 아직 비어 있으면 그 이름들을 돌려준다.
+    /// 판정은 카드를 그릴 때와 **같은 askFields**로 한다 — 두 벌로 적으면 한쪽만 고쳐져
+    /// "카드는 물었는데 실행부는 딴 값을 쓰는" 어긋남이 생긴다(계약 5).
+    ///
+    /// 도달할 일이 없는 경로다(카드를 통과하지 않은 호출이 여기 올 수 없다). 그래도 조용한
+    /// 기본값 대신 멈추는 쪽으로 두는 이유: 도달했다면 askFields에 구멍이 뚫렸다는 뜻이고,
+    /// 그 구멍은 0분짜리 일정으로 조용히 새어 나가는 대신 여기서 보여야 한다.
+    private func missingAskedArguments(tool: String, input: [String: Any]) -> String? {
+        let missing = askFields(tool: tool, args: input).map(\.label)
+        return missing.isEmpty ? nil : missing.joined(separator: ", ")
+    }
 
     // MARK: - 툴 실행
 
@@ -770,11 +1005,9 @@ final class AIAssistant: ObservableObject {
         case "create_activity": return await executeCreateActivity(input)
         case "create_recurring_schedule": return await executeCreateRecurringSchedule(input)
         case "update_recurring_schedule": return await executeUpdateRecurringSchedule(input)
-        case "remember_fact": return executeRememberFact(input)
         case "list_schedules": return executeListSchedules(input)
         case "check_travel_time": return await executeCheckTravelTime(input)
         case "recommend_meal": return await executeRecommendMeal(input)
-        case "forget_fact": return executeForgetFact(input)
         case "update_schedule": return await executeUpdateSchedule(input)
         case "delete_schedule": return executeDeleteSchedule(input)
         default: return "알 수 없는 도구입니다."
@@ -785,6 +1018,9 @@ final class AIAssistant: ObservableObject {
         guard let title = (input["title"] as? String)?.trimmingCharacters(in: .whitespaces), !title.isEmpty,
               let destQuery = (input["destination_query"] as? String)?.trimmingCharacters(in: .whitespaces), !destQuery.isEmpty else {
             return "일정 정보가 부족합니다. 제목과 목적지를 다시 확인해 주세요."
+        }
+        if let missing = missingAskedArguments(tool: "create_schedule", input: input) {
+            return "아직 만들지 않았어요 — \(missing)이(가) 비어 있어요. 이 값들은 앱이 사용자에게 직접 묻는 것이니 네가 채우지 말고, 다시 말해달라고 안내해."
         }
         // 도착 기준 / 출발 기준은 사용자가 어느 쪽 시각을 말했는지로 정해진다("3시까지 가야 해" vs
         // "6시에 출발할래"). 둘 다 오면 도착을 우선한다 — 도착이 보통 지켜야 하는 약속이다.
@@ -798,13 +1034,14 @@ final class AIAssistant: ObservableObject {
             return "시각을 이해하지 못했어요. 도착 시각(arrival_iso) 또는 출발 시각(departure_iso) 중 하나를 정확한 날짜·시각으로 넣어주세요."
         }
 
-        let mode = resolvedMode(input["mode_this_time"])
+        // 위 가드를 지났으므로 이 값들은 카드(또는 사용자 발화)가 이미 채워 놓은 것이다.
+        let mode = Self.transportMode(input["mode_this_time"]) ?? .transit
         // 출발 기준 구간은 버퍼 개념이 없다(도착 여유를 둘 대상이 없음).
-        let buffer = anchor == .departure ? 0 : Store.clampBuffer(intValue(input["buffer_minutes"]) ?? defaultBuffer)
-        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? defaultNotify)
+        let buffer = anchor == .departure ? 0 : Store.clampBuffer(intValue(input["buffer_minutes"]) ?? 0)
+        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? 0)
 
         guard let origin = await resolveOrigin(input["origin_query"] as? String) else {
-            return "현재 위치를 아직 확인하지 못했어요. 위치 권한을 켠 뒤 다시 시도해 주세요."
+            return placeNotFound((input["origin_query"] as? String) ?? "출발지")
         }
         guard let dest = await resolveDestination(destQuery) else { return placeNotFound(destQuery) }
 
@@ -904,6 +1141,9 @@ final class AIAssistant: ObservableObject {
             return "활동 정보가 부족합니다. 제목과 시작·종료 시각을 다시 확인해 주세요."
         }
         guard end > start else { return "종료 시각이 시작 시각보다 빨라요. 다시 확인해 주세요." }
+        if let missing = missingAskedArguments(tool: "create_activity", input: input) {
+            return "아직 만들지 않았어요 — \(missing)이(가) 비어 있어요. 이 값들은 앱이 사용자에게 직접 묻는 것이니 네가 채우지 말고, 다시 말해달라고 안내해."
+        }
 
         var place: Place?
         if let q = (input["place_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty {
@@ -915,10 +1155,10 @@ final class AIAssistant: ObservableObject {
         }
         let from = await resolve("travel_from_query")
         let to = await resolve("return_to_query")
-        // 가는 편·오는 편 수단을 따로 받을 수 있게 한다(안 주면 mode를 양쪽에 쓴다).
-        let mode = resolvedMode(input["mode_this_time"])
-        let outboundMode = (input["travel_mode_this_time"] as? String).flatMap { TransportMode(rawValue: $0) } ?? mode
-        let returnMode = (input["return_mode_this_time"] as? String).flatMap { TransportMode(rawValue: $0) } ?? mode
+        // 가는 편·오는 편 수단을 따로 받는다(왕복이 아니면 카드가 한 줄로만 묻고 그 값을 쓴다).
+        let stated = Self.transportMode(input["mode_this_time"])
+        let outboundMode = Self.transportMode(input["travel_mode_this_time"]) ?? stated ?? .transit
+        let returnMode = Self.transportMode(input["return_mode_this_time"]) ?? stated ?? .transit
 
         if (from != nil || to != nil) && place == nil {
             return "이동까지 만들려면 활동 장소(place_query)가 필요해요. 어디서 하는 일정인지 물어봐 주세요."
@@ -926,7 +1166,9 @@ final class AIAssistant: ObservableObject {
         let result = await store.addActivityWithTravel(
             title: title, location: place, startDate: start, endDate: end,
             travelFrom: from, returnTo: to, outboundMode: outboundMode, returnMode: returnMode,
-            bufferMinutes: defaultBuffer, notifyLeadMinutes: defaultNotify,
+            // 이동 구간에만 쓰인다 — 이동이 없으면 카드가 묻지 않았고 여기서도 쓰이지 않는다.
+            bufferMinutes: Store.clampBuffer(intValue(input["buffer_minutes"]) ?? 0),
+            notifyLeadMinutes: Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? 0),
             notifyEnabled: (input["notify_enabled"] as? Bool) ?? true,
             syncToCalendar: (input["add_to_calendar"] as? Bool) ?? true)
         let madeLegs = result.travelLegs
@@ -984,15 +1226,18 @@ final class AIAssistant: ObservableObject {
             return "반복 요일을 이해하지 못했어요. 요일을 다시 말씀해 주세요."
         }
         // 장소 검색(네트워크)보다 먼저 본다 — 어차피 되돌려 보낼 호출이면 길찾기·검색을 낭비할 이유가 없다.
+        if let missing = missingAskedArguments(tool: "create_recurring_schedule", input: input) {
+            return "아직 만들지 않았어요 — \(missing)이(가) 비어 있어요. 이 값들은 앱이 사용자에게 직접 묻는 것이니 네가 채우지 말고, 다시 말해달라고 안내해."
+        }
         if let ask = recurringArgumentIssue(input, weekdayCount: weekdays.count) { return ask }
         // 매주(기본) / 격주 / 매월 n번째 요일 / 공휴일 제외를 하나의 규칙으로 묶는다.
         let rule = RecurrenceRule(weekdays: weekdays,
                                   everyNWeeks: everyNWeeksArgument(input),
                                   nthWeekOfMonth: nthWeekArgument(input),
                                   skipHolidays: (input["skip_holidays"] as? Bool) ?? false)
-        let mode = resolvedMode(input["mode_this_time"])
-        let buffer = Store.clampBuffer(intValue(input["buffer_minutes"]) ?? defaultBuffer)
-        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? defaultNotify)
+        let mode = Self.transportMode(input["mode_this_time"]) ?? .transit
+        let buffer = Store.clampBuffer(intValue(input["buffer_minutes"]) ?? 0)
+        let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? 0)
         let weeks = weeksArgument(input) ?? 8
         let startDate = (input["start_date"] as? String).flatMap(parseDay) ?? Date()
         let originQuery = input["origin_query"] as? String
@@ -1137,8 +1382,9 @@ final class AIAssistant: ObservableObject {
     ///    "평일 9시부터 6시까지" 한 문장에 모델이 `nth_week_of_month:1`을 얹어 매달 1~7일에만
     ///    일정이 생긴 적이 있다(9/1~9/7, 10/1~10/7 …). 요일이 3개 이상이면 "매월 첫째 주 평일
     ///    전체" 같은 아주 드문 요청이 아닌 한 잘못 채운 것이다.
-    /// ② 기간(`weeks`)을 비우면 조용히 8주가 적용된다. 요일이 많은 = 오래 다니는 일정은 사용자가
-    ///    직접 정하길 기대하므로 되묻는다(요일 1~2개짜리는 그대로 8주로 둔다 — 매번 물으면 귀찮다).
+    /// ② 기간(`weeks`)을 모델에게 되묻던 갈래는 없앴다 — 선언에서 뺐으므로 모델이 보낼 수
+    ///    없고, 상한(26주)과 빈 값은 카드가 입력 단계에서 막는다(AskField.accepts). 남은 건
+    ///    모델이 여전히 채울 수 있는 주기 인자(①)뿐이다.
     ///
     /// ①의 확인(`confirm_recurrence`)은 **앱이 그 조합을 실제로 되물은 뒤**에만 인정한다(`recurrenceConfirmAsk`).
     ///
@@ -1150,14 +1396,6 @@ final class AIAssistant: ObservableObject {
         // 1~4·-1 밖의 값은 사용자가 뭐라 했든 규칙으로 표현할 수 없다 — 확인으로 통과시키지 않는다.
         if let nth, nth != -1, !(1...4).contains(nth) {
             return "아직 만들지 않았어요. nth_week_of_month에 쓸 수 없는 값(\(nth))이 들어왔어요. **nth_week_of_month:0**으로 두고 나머지 인자는 그대로 둔 채 다시 호출해 — 매주 반복이 됩니다. 사용자가 '매월 몇째 주'라고 말한 게 확실할 때만, 몇째 주인지 사용자에게 먼저 물어보고 답을 들은 뒤에 다시 호출해."
-        }
-
-        // weeks 상한도 앱이 말해준다 — Store가 maxRecurrenceWeeks에서 조용히 깎는 것을 요약의
-        // "총 N건"이 대신 알려줄 거라고 기대할 수 없다(2년치를 청한 사용자가 26주를 보고 스스로
-        // 눈치챌 리 없다). c728996이 막은 0/음수의 대칭 절반이다. 숫자는 상수에서 읽는다 — 리터럴로
-        // 적으면 상수가 바뀔 때 안내문만 옛값을 말한다.
-        if let w = intValue(input["weeks"]), w > Store.maxRecurrenceWeeks {
-            return "아직 만들지 않았어요. 최대 \(Store.maxRecurrenceWeeks)주까지만 만들 수 있어요. weeks:\(Store.maxRecurrenceWeeks)로 맞춰 다시 호출하거나, 사용자가 더 원하면 \(Store.maxRecurrenceWeeks)주까지만 만든다고 안내해."
         }
 
         // 요일 3개 이상 = "평일 전체" 같은 통근형. 주기 인자와 같이 오면 십중팔구 잘못 채운 것이다.
@@ -1180,12 +1418,8 @@ final class AIAssistant: ObservableObject {
                 asks.append("· \(cycle) 반복하게 돼 있는데 요일은 \(weekdayCount)개예요. 매주 반복이 맞으면 nth_week_of_month:0·every_n_weeks:1로 두고, 그 주기가 정말 맞으면 confirm_recurrence:true를 붙여 다시 호출해.")
             }
         }
-        if many, weeksArgument(input) == nil {
-            asks.append("· 언제부터 몇 주간 다니는지 아직 안 정해졌어요. 사용자에게 물어보고 start_date·weeks를 채워 다시 호출해(최대 26주. 사용자가 안 정하면 weeks:8).")
-        }
         guard !asks.isEmpty else { return nil }
-        // 두 가지가 같이 걸리면 한 번에 묻는다 — 나눠 물으면 사용자가 두 번 답해야 한다.
-        return "아직 만들지 않았어요. 아래를 **한 번에** 사용자에게 확인하고, 답을 들으면 같은 인자에 고쳐서 다시 호출해.\n" + asks.joined(separator: "\n")
+        return "아직 만들지 않았어요. 아래를 사용자에게 확인하고, 답을 들으면 같은 인자에 고쳐서 다시 호출해.\n" + asks.joined(separator: "\n")
     }
 
     private static let nthWeekLabels = ["첫째", "둘째", "셋째", "넷째"]
@@ -1317,55 +1551,10 @@ final class AIAssistant: ObservableObject {
     }
 
     /// 사용자에 대한 사실을 장기 기억에 저장한다(대화 초기화와 무관하게 유지, 다음 시스템 프롬프트부터 반영).
-    private func executeRememberFact(_ input: [String: Any]) -> String {
-        var saved: [String] = []
-
-        // 값으로 저장할 수 있는 건 설정에 직접 넣는다 — 문장만 남기면 다음 요청 때 모델이
-        // 그 문장을 다시 해석해야 하고, 실제로 놓쳐서 기본값(대중교통)으로 계산한 적이 있다.
-        let fact = (input["fact"] as? String)?.trimmingCharacters(in: .whitespaces) ?? ""
-        var config = store.config
-
-        // 모델이 선택적 인자를 자주 빠뜨린다 — 인자가 없으면 저장하려는 문장에서 직접 읽어낸다.
-        // ("주로 자동차로 다녀"라고 기억시켜도 preferredMode가 비어 있던 문제.)
-        let mode = (input["mode"] as? String).flatMap { TransportMode(rawValue: $0) } ?? Self.mode(in: fact)
-        if let mode { config.preferredMode = mode.rawValue; saved.append("이동수단 \(mode.title)") }
-        // 여기서만 0을 버린다(weeksArgument와 같은 모양). 생성 도구의 0은 이번 한 건짜리
-        // 진짜 요청이라 그대로 두지만, 여기서 저장된 0은 **영구적이고 전역**이라 이후 모든
-        // 일정이 여유·알림 0으로 만들어진다 — 되돌리려면 사용자가 설정을 직접 고쳐야 한다.
-        // 같은 실수여도 값이 사는 수명이 달라서 판단을 달리한다.
-        // (문장에서 읽는 Self.minutes는 이미 v > 0만 돌려주므로 걸러낼 게 없다.)
-        if let b = intValue(input["buffer_minutes"]).flatMap({ $0 > 0 ? $0 : nil })
-            ?? Self.minutes(in: fact, near: ["여유"]) {
-            config.preferredBuffer = b; saved.append("도착 여유 \(b)분")
-        }
-        if let n = intValue(input["notify_lead_minutes"]).flatMap({ $0 > 0 ? $0 : nil })
-            ?? Self.minutes(in: fact, near: ["알림", "분 전"]) {
-            config.preferredNotify = n; saved.append("알림 \(n)분 전")
-        }
-        if !saved.isEmpty { store.updateConfig(config) }
-
-        if !fact.isEmpty {
-            if !rememberedFacts.contains(fact) {
-                rememberedFacts.append(fact)
-                saveMemory()
-            }
-            saved.append(fact)
-        }
-        guard !saved.isEmpty else { return "기억할 내용이 비어 있어요." }
-        return "기억했어요: \(saved.joined(separator: ", "))."
-    }
-
-
-    /// 기억할 문장에서 이동수단을 읽어낸다. 대중교통·도보를 먼저 보는 이유는
-    /// "기차"처럼 '차'가 들어간 낱말이 자동차로 잘못 잡히지 않게 하기 위함.
-    private static func mode(in text: String) -> TransportMode? {
-        for w in ["대중교통", "지하철", "전철", "버스", "기차"] where text.contains(w) { return .transit }
-        for w in ["도보", "걸어", "걷는"] where text.contains(w) { return .walk }
-        for w in ["자동차", "자차", "차로", "차를", "차 타", "운전"] where text.contains(w) { return .car }
-        return nil
-    }
-
     /// "…여유 10분", "알림 30분 전"처럼 특정 낱말 근처의 분 단위 숫자를 읽어낸다.
+    /// 이제 저장이 아니라 **이번 요청의 인자**를 채운다(statedArguments) — 값이 잡히면 카드에
+    /// 그 줄이 생기지 않는다. 0보다 큰 값만 돌려주므로 진짜 0은 말로 전달되지 않고, 그 격차는
+    /// 카드의 `0분` 칩이 닫는다.
     ///
     /// **낱말 뒤를 먼저** 본다("알림 30분"). 앞뒤를 한 덩어리로 보면 "도착 여유 10분, 알림 30분 전"에서
     /// 알림 값으로 앞의 10분을 집어버린다. 뒤에 없을 때만 앞을 보되 낱말에 가장 가까운 숫자를 쓴다
@@ -1599,47 +1788,25 @@ final class AIAssistant: ObservableObject {
     private func executeCheckTravelTime(_ input: [String: Any]) async -> String {
         guard let destQuery = (input["destination_query"] as? String)?.trimmingCharacters(in: .whitespaces),
               !destQuery.isEmpty else { return "어디까지 가는지 알려주세요." }
-        guard let origin = await resolveOrigin(input["origin_query"] as? String) else {
+        guard let origin = await resolveOrigin(input["origin_query"] as? String, orDefault: true) else {
             return "출발지를 확인하지 못했어요. 어디서 출발하는지 알려주세요."
         }
         guard let dest = await resolveDestination(destQuery) else { return placeNotFound(destQuery) }
         let estimates = await store.travelEstimates(from: origin, to: dest)
         let depart = (input["depart_iso"] as? String).flatMap(parseDate) ?? Date()
-        let preferred = store.config.preferredMode.flatMap { TransportMode(rawValue: $0) }
-
         let lines = TransportMode.allCases.compactMap { m -> String? in
             guard let seconds = estimates[m]?.duration else { return nil }
             let minutes = Int((seconds / 60).rounded())
             let duration = minutes < 60 ? "\(minutes)분" : "\(minutes / 60)시간 \(minutes % 60)분"
             let arrive = Self.when(depart.addingTimeInterval(seconds))
-            let star = (m == preferred) ? " ← 평소 쓰는 수단" : ""
-            return "- \(m.title) \(duration) (도착 \(arrive))\(star)"
+            return "- \(m.title) \(duration) (도착 \(arrive))"
         }
         guard !lines.isEmpty else {
             return "'\(origin.name)' → '\(dest.name)' 이동시간을 계산하지 못했어요(경로를 못 찾았거나 조회 실패)."
         }
         return "'\(origin.name)' → '\(dest.name)', \(Self.when(depart)) 출발 기준:\n"
             + lines.joined(separator: "\n")
-            + "\n(등록하지는 않았어요) 평소 쓰는 수단이 표시돼 있으면 그걸 먼저 말해줘."
-    }
-
-    /// 장기 기억에서 항목을 지운다(G3).
-    private func executeForgetFact(_ input: [String: Any]) -> String {
-        if (input["all"] as? Bool) == true {
-            let count = rememberedFacts.count
-            guard count > 0 else { return "기억하고 있는 게 없어요." }
-            forgetAllFacts()
-            return "기억하고 있던 \(count)건을 모두 지웠어요."
-        }
-        guard let q = (input["fact_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty else {
-            return "무엇을 잊을지 알려주세요(또는 전부 지우려면 all:true)."
-        }
-        let matches = rememberedFacts.filter { $0.localizedCaseInsensitiveContains(q) }
-        guard !matches.isEmpty else {
-            return "'\(q)'와 관련해 기억하고 있는 게 없어요. 현재 기억: \(rememberedFacts.isEmpty ? "없음" : rememberedFacts.joined(separator: " / "))"
-        }
-        for m in matches { forgetFact(m) }
-        return "잊었어요: \(matches.joined(separator: ", "))."
+            + "\n(등록하지는 않았어요)"
     }
 
     /// 이미 등록된 일정 하나(이동 구간 또는 활동)를 찾아 제목·시각·장소·이동수단을 고친다.
@@ -1803,23 +1970,34 @@ final class AIAssistant: ObservableObject {
         return "'\(query)' 위치를 찾지 못했어요. 더 정확한 장소명을 알려주세요.\(hint)"
     }
 
-    /// 출발지 해석 우선순위: ① query가 즐겨찾기 이름과 일치 ② query로 검색 ③ 즐겨찾기 "집" ④ 현재 위치(최후 폴백).
-    /// 반복 일정(출퇴근 등)은 등록 시점의 "현재 위치"가 출발지로 굳어버리면 안 맞을 수 있어(예: 등록할 때
-    /// 마침 회사에 있었다면 회사→회사가 됨) 시스템 프롬프트가 출발지를 반드시 확인하도록 지시한다 — 이 폴백은
-    /// 그래도 origin_query가 끝내 없을 때의 안전망일 뿐이다.
-    private func resolveOrigin(_ query: String? = nil) async -> Place? {
+    /// 출발지 해석: ① 카드에서 고른 "현재 위치" ② 즐겨찾기 이름과 일치 ③ 검색.
+    ///
+    /// **등록 경로에서는 여기까지 와서 빈 값일 수 없다** — 카드가 먼저 묻기 때문이다. 예전엔
+    /// origin_query가 비면 조용히 즐겨찾기 "집"이나 등록 시점 현재 위치로 떨어졌고, 그래서
+    /// "회사에서 출발"이라고 말했는데 집→집인 0분짜리 일정이 만들어진 적이 있다. 그 폴백은
+    /// `orDefault`로 가뒀다 — 지금 켜는 곳은 check_travel_time 하나뿐이고, 그건 등록이 아니라
+    /// 조회라 되묻을 이유가 없다(시스템 프롬프트 규칙 3의 예외와 같은 자리).
+    private func resolveOrigin(_ query: String? = nil, orDefault: Bool = false) async -> Place? {
         let trimmed = query?.trimmingCharacters(in: .whitespaces)
+        if trimmed == Self.currentLocationToken { return await currentPlace() }
         if let q = trimmed, !q.isEmpty {
             if let fav = store.favorites.first(where: { $0.label.caseInsensitiveCompare(q) == .orderedSame }) {
                 return fav.place
             }
-            if let found = await store.placeSearch.search(q, near: location.currentLocation).first {
-                return found
-            }
+            // 검색이 빈손이면 실패다. 여기서 기본 출발지로 떨어지면 사용자가 말한 곳과 다른
+            // 데서 출발하는 일정이 "성공"으로 등록된다 — 못 찾았다고 말하는 쪽이 낫다.
+            return await store.placeSearch.search(q, near: location.currentLocation).first
         }
+        guard orDefault else { return nil }
         if let home = store.favorites.first(where: { $0.label == "집" }) {
             return home.place
         }
+        return await currentPlace()
+    }
+
+    /// 카드에서 고르는 "현재 위치". 권한이 아직이면 잠깐 기다렸다가, 끝내 못 받으면 nil이다.
+    private static let currentLocationToken = "__current_location__"
+    private func currentPlace() async -> Place? {
         if location.currentLocation == nil {
             location.useCurrentLocation()
             for _ in 0..<15 {
@@ -1831,6 +2009,7 @@ final class AIAssistant: ObservableObject {
         return Place(name: location.currentPlaceName ?? "현재 위치",
                      address: "", latitude: c.latitude, longitude: c.longitude)
     }
+
 
     /// 목적지 해석: 즐겨찾기 이름과 일치하면 그 좌표를 우선 사용, 아니면 검색(카카오 → MapKit 폴백).
     private func resolveDestination(_ query: String) async -> Place? {

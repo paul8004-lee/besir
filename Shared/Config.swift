@@ -19,20 +19,10 @@ struct AppConfig: Codable {
     /// 일정 생성 시 구글 캘린더에 자동 등록할지(기본 ON).
     var autoAddToCalendar: Bool = true
 
-    // MARK: 사용자 선호(AI가 remember_fact로 저장)
-    //
-    // 자유 문장("주로 자동차로 다님")만으로는 모델이 매번 해석해야 해서 놓치는 일이 생긴다
-    // — 실제로 기억시켜 둔 뒤에도 이동시간을 대중교통으로 계산한 적이 있다. 그래서 값 자체를
-    // 따로 저장해 두고, 도구 실행부가 기본값으로 **직접** 쓴다(모델이 인자를 빠뜨려도 지켜짐).
-
-    /// 주로 쓰는 이동수단.
-    var preferredMode: String?
-    /// 기본 도착 여유(분).
-    var preferredBuffer: Int?
-    /// 기본 알림 리드타임(분).
-    var preferredNotify: Int?
-
     // 구버전 config.json의 kakaoRestKey/odsayKey 키는 JSONDecoder가 무시한다.
+    // preferredMode/preferredBuffer/preferredNotify도 같은 취급이다 — 저장된 선호가 조용히
+    // 적용되다 여유 0분짜리 35건이 등록되고도 아무도 모른 사고(b303f41) 뒤, 값이 없으면
+    // 추측하지 않고 앱이 그 자리에서 묻는 쪽으로 바꿨다. 기기에 남은 옛 키는 읽지 않는다.
 
     var hasKakaoJs: Bool { !kakaoJsKey.trimmingCharacters(in: .whitespaces).isEmpty }
     var hasGoogleCalendar: Bool { !googleClientID.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -109,7 +99,6 @@ struct AppConfig: Codable {
 extension AppConfig {
     private enum CodingKeys: String, CodingKey {
         case kakaoJsKey, proxyBaseURL, appToken, googleClientID, autoAddToCalendar
-        case preferredMode, preferredBuffer, preferredNotify
     }
     // 누락된 키는 기본값으로(새 필드 추가 시 옛 config.json이 깨지지 않게).
     init(from decoder: Decoder) throws {
@@ -121,8 +110,5 @@ extension AppConfig {
             googleClientID: (try? c.decode(String.self, forKey: .googleClientID)) ?? "",
             autoAddToCalendar: (try? c.decode(Bool.self, forKey: .autoAddToCalendar)) ?? true
         )
-        self.preferredMode = try? c.decode(String.self, forKey: .preferredMode)
-        self.preferredBuffer = try? c.decode(Int.self, forKey: .preferredBuffer)
-        self.preferredNotify = try? c.decode(Int.self, forKey: .preferredNotify)
     }
 }
