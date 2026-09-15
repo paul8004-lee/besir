@@ -12,8 +12,8 @@ plan_complete_at: 2026-09-15
 
 ## §E.2 Run-phase Evidence
 
-run_status: in-progress (M1~M4 완료, M5~M6 미착수)
-commit: 7683700 `feat(SPEC-ASK-001): 얕은 메모리 제거 + 앱 주도 되묻기 카드 (M1~M3, 중간 저장)` / M4는 이번 커밋
+run_status: in-progress (M1~M5 완료, M6만 남음)
+commit: 7683700(M1~M3) · b9ef208(M4) · M5는 이번 커밋
 
 착수 전 기준선(2026-09-15, HEAD 7b623c3에서 오케스트레이터가 직접 실행해 관측):
 GuardDriver **67/67**, proxy `npm test` **7/7**, iOS·macOS **BUILD SUCCEEDED, Swift 소스 경고 0건**.
@@ -39,11 +39,21 @@ M4 완료(2026-09-15, HEAD 82c9df9 위 작업 트리):
   diff는 `Tools/GuardDriver.swift` 하나(+182/−13), `Shared/` 소스 무변경 확인.
 - 구현 위임: ai-tooling 하네스 전문가. 드라이버가 잡은 신규 결함 없음(실패 11건 전부 낡은 단언).
 
+M5 완료(2026-09-15, manager-spec 재위임 → 오케스트레이터 diff 전문 검증):
+- `SPEC-ONTIME-001` v0.2.3 → **0.2.4**(as-built, status draft 그대로): REQ-061 "정확히 11개 툴" →
+  **9개**(remember_fact·forget_fact 제거, GuardDriver "(e) 툴은 9개다" 단언 근거), REQ-063에서
+  `ai_memory.json`·remember/forget 경로 삭제(`ai_history.json` 지속·실패 턴 롤백은 유지),
+  acceptance.md AC-007 동조(✅ 마커 무변경 — 개정 후에도 코드가 만족) + 밀린 근거 줄번호 재실측,
+  plan.md M5 행 갱신. 제목의 "장기 기억" 표현도 정리(§2.7·AC-007) — 디렉터리 전체 잔여 grep 0건 확인.
+- `SPEC-ASK-001` spec.md 0.2.1 → **0.2.2**(지시가 인용한 0.2.0은 낡은 기준선이었음 — 전문가가 밝히고
+  한 단계 위로 bump): 착수 확정 읽기 3건 본문 반영 — REQ-005(출발지 부재도 카드, `orDefault:`로
+  폴백 격리·`check_travel_time`만 활성), REQ-011(create_activity는 오가는 이동이 있을 때만 카드 행,
+  왕복은 가는 편·오는 편 따로), REQ-014(이동수단 행 `[직접입력]` 미부침 예외 — 세 칩 = 전체 집합).
+- 검증: diff 4개 파일 +16/−14(문서만), REQ-061/063 개정 원문 대조, "장기 기억" 잔여 0건.
+
 미해결(다음 세션):
-- M5: `SPEC-ONTIME-001` REQ-061·REQ-063 개정(본문 수정은 manager-spec 소관 — 재위임 필요).
-  더불어 SPEC-ASK-001 spec.md에 확정 설계 결정 2건(출발지도 카드에서 묻기, create_activity 카드 대상)
-  과 이동수단 줄 `[직접입력]` 미부침(세 칩 = 전체 집합) 읽기를 반영
-- M6: 전체 게이트 재확인, 루트 `plan.md` §6 Phase 1.5 완료 표시, 실기기 배포(AC-008)
+- M6: 전체 게이트 재확인(iOS·macOS 무경고 빌드, GuardDriver 재초록), 루트 `plan.md` §6 Phase 1.5
+  완료 표시, 실기기 배포(AC-008)
 
 착수 시 확정한 설계 결정 2건(사용자, 2026-09-15 — spec.md 반영은 M5로 미룸):
 1. **출발지도 카드에서 묻는다.** REQ-005의 "부재는 부재로 관측되어 칩 요청으로 흐른다"를 문자 그대로

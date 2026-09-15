@@ -60,12 +60,12 @@
 - **Then** 별도 탭 전환 없이 `SwipePager`로 인접 날짜/주/월로 이동하고, `RescheduleOverlay`가 5분 단위로 블록을 재조정하며(반복 일정이면 AC-003의 확인 다이얼로그가 뜸), 활동-이동 블록이 연동 이동하고, 자정을 넘는 블록도 렌더/히트테스트가 어긋나지 않는다.
 - 근거: `Shared/ContentView.swift` — `SwipePager`(`:770`), `span(for:)`(`:522`/`:530`), `private struct RescheduleOverlay: UIViewRepresentable`(`:856`, 별도 파일이 아니라 `ContentView.swift` 안에 있다), 5분 단위 스냅(`:453`)
 
-## AC-007 — AI 채팅 CRUD + 장기 기억 ✅
+## AC-007 — AI 채팅 CRUD + 대화 이력 ✅
 
-- **Given** 사용자가 AI 채팅으로 일정 CRUD·식사 추천·이동시간 확인·기억 저장/삭제를 요청하고
-- **When** `AIAssistant`가 Gemini `generateContent` 와이어 포맷으로 11개 툴 중 하나를 호출하면
-- **Then** 충돌 시 `on_conflict` 재질의, 5건 초과 삭제 시 `confirm_many` 재확인, 반복 그룹 수정에서 여유·알림에 0이 오면 `confirm_zero` 되묻기(이미 0인 값은 복원 탈출구 없이 확인만), `series_number` 불일치 시 `list_schedules` 재호출 안내를 반복 질문 없이 처리하고, 대화 이력·장기 기억이 재설치 후에도 남으며, 툴 호출 실패 시 이력이 실패 이전 상태로 롤백된다.
-- 근거: `Shared/AIAssistant.swift`(11개 툴 선언 `:558`~`:727`, `zeroUpdateIssue` `:1249-1282`, `series_number` 해석 `:1183-1198`, `ai_history.json`, `ai_memory.json`), `proxy/src/index.js`(와이어 포맷 변환)
+- **Given** 사용자가 AI 채팅으로 일정 CRUD·식사 추천·이동시간 확인을 요청하고
+- **When** `AIAssistant`가 Gemini `generateContent` 와이어 포맷으로 9개 툴 중 하나를 호출하면
+- **Then** 충돌 시 `on_conflict` 재질의, 5건 초과 삭제 시 `confirm_many` 재확인, 반복 그룹 수정에서 여유·알림에 0이 오면 `confirm_zero` 되묻기(이미 0인 값은 복원 탈출구 없이 확인만), `series_number` 불일치 시 `list_schedules` 재호출 안내를 반복 질문 없이 처리하고, 대화 이력이 재설치 후에도 남으며, 툴 호출 실패 시 이력이 실패 이전 상태로 롤백된다.
+- 근거: `Shared/AIAssistant.swift`(9개 툴 선언 — `toolsJSON()` `:816` 안 `:828`~`:963`, 2026-09-15 SPEC-ASK-001 REQ-030으로 `remember_fact`·`forget_fact` 제거, `zeroUpdateIssue` `:1500`, `series_number` 해석 `:1436`·`:1443`, `ai_history.json` `:175`), `proxy/src/index.js`(와이어 포맷 변환)
 
 ## AC-008 — Share Extension ✅
 
