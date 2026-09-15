@@ -30,14 +30,14 @@
 - **Given** 사용자가 `FavoritesView`에 장소를 저장해 두었고
 - **When** `AddEventView`에서 출발지/목적지를 고르거나 AI 채팅에서 장소명을 애매하게 말하면
 - **Then** 즐겨찾기 칩이 원탭 선택으로 뜨고, "집"으로 라벨된 즐겨찾기가 AI의 기본 홈 참조로 쓰인다.
-- 근거: `Shared/AddEventView.swift:389`(`private func favoriteChips(onSelect:)`), `Shared/Store.swift:12`(`@Published var favorites: [FavoritePlace]`), `Shared/Models.swift:118`(`struct FavoritePlace`), `Shared/AIAssistant.swift:1477`(즐겨찾기 "집" 폴백), `Shared/FavoritesView.swift`(즐겨찾기 편집 화면)
+- 근거: `Shared/AddEventView.swift:389`(`private func favoriteChips(onSelect:)`), `Shared/Store.swift:12`(`@Published var favorites: [FavoritePlace]`), `Shared/Models.swift:118`(`struct FavoritePlace`), `Shared/AIAssistant.swift:1786`(즐겨찾기 "집" 폴백), `Shared/FavoritesView.swift`(즐겨찾기 편집 화면)
 
 ## AC-003 — 복합 반복 출퇴근 일정 ✅
 
 - **Given** 사용자가 매주 평일 출퇴근 반복 일정을 요청하고(수동 또는 AI 채팅)
 - **When** `Store.addRecurringEvents`(이동 구간)/`Store.addRecurringActivities`(활동 블록)가 실행되면 — AI 채팅 경로라면 툴 `create_recurring_schedule` → 핸들러 `AIAssistant.executeCreateRecurringSchedule`을 거쳐 같은 `Store` 함수로 내려온다
 - **Then** 출근+퇴근 왕복 이동이 하나의 `recurrenceId`로 `Store.maxRecurrenceWeeks` 한도(현재 **26주**)까지 생성되고, `lunch_place_query`가 지정되고 장소 검색이 성공하면 점심 왕복 이동이 추가되며(미지정이거나 검색 실패면 이동 구간 없이 점심 활동 블록만 생성 — **장소가 같은지는 비교하지 않는다**), 반복 중 하나를 수정/삭제하면 "전체" vs "이 일정만"을 명시적으로 묻는다.
-- 근거: `Shared/Store.swift:35`(`static let maxRecurrenceWeeks = 26`), `:565`(`addRecurringEvents`, 한도 적용 `:577`), `:185`(`addRecurringActivities`, 한도 적용 `:194`), `Shared/AIAssistant.swift:535`(툴 선언 `create_recurring_schedule`)·`:892`(`executeCreateRecurringSchedule`)·`:956-976`(점심 **이동 구간** 분기)·`:977`(점심 활동 블록은 분기 밖이라 항상 생성), `Shared/ContentView.swift`/`Shared/ActivityDetailView.swift`/`Shared/EventDetailView.swift`(`confirmationDialog`)
+- 근거: `Shared/Store.swift:35`(`static let maxRecurrenceWeeks = 26`), `:565`(`addRecurringEvents`, 한도 적용 `:577`), `:185`(`addRecurringActivities`, 한도 적용 `:194`), `Shared/AIAssistant.swift:600`(툴 선언 `create_recurring_schedule`)·`:963`(`executeCreateRecurringSchedule`)·`:1037-1054`(점심 **이동 구간** 분기)·`:1056`(점심 활동 블록은 분기 밖이라 항상 생성), `Shared/ContentView.swift`/`Shared/ActivityDetailView.swift`/`Shared/EventDetailView.swift`(`confirmationDialog`)
 
 ## AC-004 — 카카오맵 경로선 렌더링 ✅
 
@@ -64,15 +64,15 @@
 
 - **Given** 사용자가 AI 채팅으로 일정 CRUD·식사 추천·이동시간 확인·기억 저장/삭제를 요청하고
 - **When** `AIAssistant`가 Gemini `generateContent` 와이어 포맷으로 11개 툴 중 하나를 호출하면
-- **Then** 충돌 시 `on_conflict` 재질의, 5건 초과 삭제 시 `confirm_many` 재확인을 반복 질문 없이 처리하고, 대화 이력·장기 기억이 재설치 후에도 남으며, 툴 호출 실패 시 이력이 실패 이전 상태로 롤백된다.
-- 근거: `Shared/AIAssistant.swift`(11개 툴 선언, `ai_history.json`, `ai_memory.json`), `proxy/src/index.js`(와이어 포맷 변환)
+- **Then** 충돌 시 `on_conflict` 재질의, 5건 초과 삭제 시 `confirm_many` 재확인, 반복 그룹 수정에서 여유·알림에 0이 오면 `confirm_zero` 되묻기(이미 0인 값은 복원 탈출구 없이 확인만), `series_number` 불일치 시 `list_schedules` 재호출 안내를 반복 질문 없이 처리하고, 대화 이력·장기 기억이 재설치 후에도 남으며, 툴 호출 실패 시 이력이 실패 이전 상태로 롤백된다.
+- 근거: `Shared/AIAssistant.swift`(11개 툴 선언 `:558`~`:727`, `zeroUpdateIssue` `:1249-1282`, `series_number` 해석 `:1183-1198`, `ai_history.json`, `ai_memory.json`), `proxy/src/index.js`(와이어 포맷 변환)
 
 ## AC-008 — Share Extension ✅
 
 - **Given** 사용자가 카카오톡 등 다른 앱에서 텍스트/이미지를 besir로 공유하고
 - **When** 앱이 다음 포그라운드 진입 시 `SharedInbox.drain()`을 실행하면
 - **Then** 공유 내용이 AI 채팅으로 전달되어 채팅 화면이 자동으로 열리고, 등록 자체는 성공했는데 확인 메시지 API만 실패한 경우에는 실패로 오표시되지 않는다.
-- 근거: `ShareExtension/ShareViewController.swift:51`(`SharedInbox.enqueue(text:imageData:mimeType:)` 호출), `Shared/SharedInbox.swift:20`(`enqueue`)·`:28`(`drain`)·`:17`(`pendingShares.json`), `Shared/App.swift`(포그라운드 진입 시 drain), `Shared/AIAssistant.swift:223`(`isPresented = true` — 채팅 화면 자동 오픈)
+- 근거: `ShareExtension/ShareViewController.swift:51`(`SharedInbox.enqueue(text:imageData:mimeType:)` 호출), `Shared/SharedInbox.swift:20`(`enqueue`)·`:28`(`drain`)·`:17`(`pendingShares.json`), `Shared/App.swift`(포그라운드 진입 시 drain), `Shared/AIAssistant.swift:268`(`isPresented = true` — 채팅 화면 자동 오픈)
 
 ## AC-009 — 백그라운드 동기화·알림 한도 ✅
 

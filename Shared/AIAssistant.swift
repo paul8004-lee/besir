@@ -37,6 +37,15 @@ final class AIAssistant: ObservableObject {
     /// 이번 대화에서 가장 최근에 만든 반복 일정 그룹 — "방금 만든 거 자동차로 바꿔줘" 같은 수정
     /// 요청이 새로 만들지 않고 이 그룹을 그대로 갱신하도록(update_recurring_schedule) 참조한다.
     private var lastRecurrenceId: UUID?
+    /// list_schedules가 반복 그룹에 붙인 번호(UUID→번호). **한 번 붙은 번호는 대화가 끝날 때까지
+    /// 그 그룹 전용**이다 — 목록을 다시 그릴 때마다 1부터 다시 매기면 중간에 그룹이 지워졌을 때
+    /// 같은 번호가 다른 그룹을 가리키게 되고, 모델이 옛 목록에서 본 번호를 그대로 말했다가
+    /// 엉뚱한 그룹을 **조용히** 고치게 된다. 지워진 그룹의 번호는 비워 두지 않고 남겨 둬도
+    /// 실행부의 0건 가드가 잡는다. 히스토리와 함께 저장하지 않는다: lastRecurrenceId와 달리
+    /// 번호는 렌더링에서 만들어진 약속이라 앱을 다시 켜면 전부 무효인데, 저장해 두면 무효 번호가
+    /// 옛 그룹을 향해 살아 있다 — 못 찾는 쪽(되묻기 → 다시 목록)이 조용한 오작동보다 싸다.
+    private var seriesNumbers: [UUID: Int] = [:]
+    private var nextSeriesNumber = 1
     /// 반복 주기를 되물을 때 **무엇을 물었는지**. 모델이 되묻기도 전에 스스로
     /// `confirm_recurrence:true`를 붙여 보내는 바람에 "요일 3개 이상 + 주기 인자" 가드가 통째로
     /// 사라진 적이 있다(평일 5일짜리 출근 일정이 7건만 생겼다) — 묻지도 않았는데 온 확인은 확인이 아니다.
@@ -192,6 +201,10 @@ final class AIAssistant: ObservableObject {
     func resetConversation() {
         contents = []
         lastRecurrenceId = nil
+        // 목록 번호도 같이 지운다 — 번호는 "이 대화에서 목록이 보여줬다"는 약속이라 새 대화에서
+        // 옛 번호가 살아 있으면 아무 그룹이나 가리키게 된다.
+        seriesNumbers = [:]
+        nextSeriesNumber = 1
         recurrenceConfirmAsk = nil
         zeroUpdateConfirmAsk = nil
         bubbles = [.init(role: .assistant,
@@ -492,7 +505,7 @@ final class AIAssistant: ObservableObject {
         - 반복: create_recurring_schedule. "평일"=월~금. 주기는 사용자 말대로(최대 26주). 격주=every_n_weeks:2, "매월 첫째 주 월"=weekdays:[mon]+nth_week_of_month:1(마지막=-1, 매월 아니면 0), "공휴일 빼고"=skip_holidays:true.
           "9시부터 18시까지"면 9시=arrival_time, 18시=return_time(왕복 원하는지 확인). 점심은 보통 같은 건물이라 lunch_place_query를 **비워둔다** — "밖에서" 같이 명시할 때만 채운다.
         - 이미 있는 일정 고치기: update_schedule (지우고 새로 만들지 말 것).
-        - 방금 만든 반복 그룹의 수단/버퍼/알림만: update_recurring_schedule. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
+        - 반복 그룹의 수단/버퍼/알림 수정: update_recurring_schedule. 목록(list_schedules)의 [n] 그룹 번호를 series_number로 주고, 이번 대화에서 만든 그룹이면 번호 없이. **create_recurring_schedule을 다시 부르면 중복 등록된다.** 요일·시각·목적지 변경은 전체 삭제 후 재등록하라고 안내.
         - 먹을 곳: recommend_meal. 메뉴를 좁혀 말하면(일식→초밥) keyword에 그대로 넣어 재검색. 시각만 말하면 at_iso.
           추천 중 하나로 일정을 잡아 달라 하면 create_activity를 부르되 **log_as_meal:true**를 꼭 넣는다(안 넣으면 '최근 먹은 것' 목록에 안 남는다).
         - 등록 없이 소요시간만: check_travel_time.
@@ -614,10 +627,14 @@ final class AIAssistant: ObservableObject {
             ]
         ], [
             "name": "update_recurring_schedule",
-            "description": "이 대화에서 만든 반복 그룹의 수단·버퍼·알림만 수정(재생성 금지).",
+            "description": "반복 그룹의 수단·버퍼·알림 수정(재생성 금지). 대상은 series_number, 없으면 이번 대화에서 만든 그룹.",
             "parameters": [
                 "type": "OBJECT",
                 "properties": [
+                    // 이 모델은 선언된 선택 인자를 비우지 못해 INTEGER에 0을 채운다 — 그래서 0을
+                    // "안 골랐다"로 읽게 적고 번호는 1부터 센다. 유효한 값을 나열하지 않는다
+                    // (nth_week_of_month에서 -1을 골라 35건을 7건으로 만든 적이 있다).
+                    "series_number": ["type": "INTEGER", "description": "list_schedules 각 줄의 [n] 반복 그룹 번호. 그 그룹 전체(등원·복귀·점심 함께)를 고른다. 이번 대화에서 만든 그룹이면 0."],
                     // 여긴 "바꿔줘"라는 명시적 수정이라 값을 채우는 게 정상이다(생성 도구의 override와 다름).
                     "mode": ["type": "STRING", "enum": ["car", "transit", "walk"], "description": "바꿀 이동수단(안 바꾸면 비움)"],
                     "buffer_minutes": ["type": "INTEGER", "description": "바꿀 도착 여유(분)"],
@@ -1157,9 +1174,27 @@ final class AIAssistant: ObservableObject {
         (1...4).contains(nth) ? nthWeekLabels[nth - 1] : "마지막"
     }
 
-    /// 이 대화에서 방금 만든 반복 일정 그룹을 새로 만들지 않고 그대로 수정한다(이동수단·버퍼·알림).
+    /// 반복 일정 그룹을 새로 만들지 않고 그대로 수정한다(이동수단·버퍼·알림). 대상은 series_number로
+    /// 고르고, 없으면 이 대화에서 방금 만든 그룹(lastRecurrenceId).
     private func executeUpdateRecurringSchedule(_ input: [String: Any]) async -> String {
-        guard let recurrenceId = lastRecurrenceId else {
+        // 대상 결정이 인자 점검보다 앞선다 — 대상 없이는 고칠 것 자체가 없다. 번호는 1부터이고
+        // 0은 "안 골랐다"(선언에 적은 대로). 음수도 여기서 잡는다: 조용히 lastRecurrenceId로
+        // 흘리면 nth_week_of_month의 -1과 같은 모양(잘못 채운 값이 조용히 적용)이 된다.
+        let seriesNumber = intValue(input["series_number"]) ?? 0
+        var resolvedByNumber = false
+        let resolved: UUID?
+        if seriesNumber != 0 {
+            guard let rid = seriesNumbers.first(where: { $0.value == seriesNumber })?.key else {
+                // 탈출구를 list_schedules 재호출로 준다 — 모델이 할 수 있는 행동이고, 번호를
+                // 다시 보면 스스로 바로잡는다(recurrenceConfirmAsk 계열과 같은 방식).
+                return "그 번호의 반복 그룹을 찾지 못했어요. 번호는 이번 대화에서 목록을 보여줄 때 붙은 것이라 앱을 다시 켰거나 새 대화를 시작했으면 달라져요. list_schedules를 다시 호출해 각 줄의 [n] 번호를 확인한 뒤, 그 번호를 series_number에 넣어 다시 호출해."
+            }
+            resolved = rid
+            resolvedByNumber = true
+        } else {
+            resolved = lastRecurrenceId
+        }
+        guard let recurrenceId = resolved else {
             return "이 대화에서 만든 반복 일정을 찾지 못했어요. 어떤 일정을 수정할지 다시 말씀해 주시거나, 새로 등록해 주세요."
         }
         let mode = (input["mode"] as? String).flatMap { TransportMode(rawValue: $0) }
@@ -1170,7 +1205,12 @@ final class AIAssistant: ObservableObject {
         guard mode != nil || buffer != nil || notify != nil else {
             return "무엇을 바꿀지 알려주세요(이동수단, 도착 여유, 알림 시각 중)."
         }
-        if let ask = zeroUpdateIssue(recurrenceId, buffer: buffer, notify: notify, input: input) { return ask }
+        if let ask = zeroUpdateIssue(recurrenceId, buffer: buffer, notify: notify, input: input) {
+            // 번호로 온 호출의 되묻기에는 번호를 그대로 다시 붙이라고 덧붙인다 — 모델이 되묻기
+            // 답을 보낼 때 series_number를 빼면 "안 골랐다" 경로(lastRecurrenceId)로 흘러
+            // 엉뚱한 그룹에 현행값을 덮어쓴다. 사용자에게 보이는 확인 문구 자체는 그대로 둔다.
+            return resolvedByNumber ? ask + "\n· 다시 호출할 때 series_number:\(seriesNumber)도 그대로 둬라." : ask
+        }
         let count = await store.updateRecurringSeries(recurrenceId, mode: mode, bufferMinutes: buffer, notifyLeadMinutes: notify)
         guard count > 0 else {
             return "그 반복 일정을 더 이상 찾을 수 없어요(이미 삭제됐을 수 있어요)."
@@ -1182,7 +1222,14 @@ final class AIAssistant: ObservableObject {
         if let mode { changes.append("이동수단 \(mode.title)") }
         if let buffer { changes.append("도착 여유 \(buffer)분") }
         if let notify { changes.append("출발 \(notify)분 전 알림") }
-        return "반복 일정 \(count)건을 수정했어요: \(changes.joined(separator: ", "))."
+        // 어느 그룹을 고쳤는지 이름으로 말한다. 번호를 빼먹은 재호출은 조용히 lastRecurrenceId로
+        // 흘러 엉뚱한 그룹을 고칠 수 있는데, 예전 문구("반복 일정 35건을 수정했어요")에는 대상이
+        // 없어서 그 오조준이 사후에도 보이지 않았다 — b303f41의 등록 요약과 같은 이유로, 모델이
+        // 아니라 출력이 스스로 대조 근거를 들고 있게 한다.
+        let subject = store.events.filter { $0.recurrenceId == recurrenceId }
+            .min(by: { $0.arrivalDate < $1.arrivalDate })
+            .map { "'\($0.title)' " } ?? ""
+        return "\(subject)반복 일정 \(count)건을 수정했어요: \(changes.joined(separator: ", "))."
     }
 
     /// 반복 그룹 수정에서 여유·알림에 온 0을 곧이곧대로 적용하지 않고 되묻는다.
@@ -1384,6 +1431,23 @@ final class AIAssistant: ObservableObject {
             guard let dep = e.departureDate else { return "\(f.string(from: e.arrivalDate)) 도착" }
             return "\(f.string(from: dep)) 출발 → \(f.string(from: e.arrivalDate)) 도착"
         }
+        // 반복 그룹 번호: 같은 그룹의 등원/복귀/점심 줄이 **모두 같은 번호**를 달게 한다. 줄마다
+        // 다른 번호를 주면 "복귀만 고른다"는 착각을 만드는데, update_recurring_schedule과
+        // updateRecurringSeries는 recurrenceId 단위로만 움직여 구간만 고르는 길이 없다 — 번호가
+        // 그룹 전체를 가리킨다는 걸 줄 표기와 맨 아래 안내 문장 양쪽에서 말해준다.
+        func seriesTag(_ rid: UUID) -> String {
+            if let n = seriesNumbers[rid] { return "\(n)" }
+            let n = nextSeriesNumber
+            nextSeriesNumber += 1
+            seriesNumbers[rid] = n
+            return "\(n)"
+        }
+        // 번호는 **수정할 수 있는 그룹에만** 붙인다. updateRecurringSeries는 events만 보고
+        // 움직이는데(Store.swift:662), deleteEvent는 짝 활동 블록을 지우지 않아 이동 구간만
+        // 사라진 그룹이 실제로 생긴다 — 거기에 번호를 붙이면 목록은 "고칠 수 있다"고 보여주고
+        // 실행부는 "없다"고 답해, 모델이 방금 본 목록과 모순된 답을 받고 재조회를 반복한다.
+        let updatableRids = Set(store.events.compactMap { $0.recurrenceId })
+        var showedRecurring = false
         var seenGroups: Set<String> = []
         for e in events.sorted(by: { $0.arrivalDate < $1.arrivalDate }) {
             let failedTag = e.departureDate == nil ? " ⚠️이동시간 계산 실패" : ""
@@ -1392,7 +1456,8 @@ final class AIAssistant: ObservableObject {
                 guard !seenGroups.contains(key) else { continue }
                 seenGroups.insert(key)
                 let count = groupCounts[key] ?? 1
-                lines.append("- [반복] '\(e.title)' 등 \(count)건, 다음 회차 \(leg(e))\(failedTag)")
+                showedRecurring = true
+                lines.append("- [반복 \(seriesTag(rid))] '\(e.title)' 등 \(count)건, 다음 회차 \(leg(e))\(failedTag)")
             } else {
                 lines.append("- '\(e.title)' \(leg(e))\(failedTag)")
             }
@@ -1403,14 +1468,26 @@ final class AIAssistant: ObservableObject {
                 guard !seenGroups.contains(key) else { continue }
                 seenGroups.insert(key)
                 let count = groupCounts[key] ?? 1
-                lines.append("- (활동/반복) '\(a.title)' 등 \(count)건, 다음 회차 \(f.string(from: a.startDate)) ~ \(f.string(from: a.endDate))")
+                guard updatableRids.contains(rid) else {
+                    lines.append("- (활동/반복) '\(a.title)' 등 \(count)건, 다음 회차 \(f.string(from: a.startDate)) ~ \(f.string(from: a.endDate)) — 이동 일정이 모두 지워져 시간표 블록만 남았어요(수단·여유·알림을 고칠 게 없어요)")
+                    continue
+                }
+                showedRecurring = true
+                lines.append("- (활동/반복 \(seriesTag(rid))) '\(a.title)' 등 \(count)건, 다음 회차 \(f.string(from: a.startDate)) ~ \(f.string(from: a.endDate))")
             } else {
                 lines.append("- (활동) '\(a.title)' \(f.string(from: a.startDate)) ~ \(f.string(from: a.endDate))")
             }
         }
         let capped = Array(lines.prefix(20))
         let more = lines.count > capped.count ? "\n(그 외 \(lines.count - capped.count)건 더 있음 — 제목으로 좁혀서 다시 조회해)" : ""
-        return "실제 등록된 일정\(rangeLabel):\n" + capped.joined(separator: "\n") + more
+        // 안내문은 **캡을 통과한 줄** 기준이다. 단발 일정이 앞을 채워 반복 줄이 전부 잘리면
+        // 모델에게는 인용할 [n]이 하나도 없는데 "목록의 [n]을 series_number에"라고 말하게 된다.
+        showedRecurring = capped.contains { $0.contains("[반복 ") || $0.contains("(활동/반복 ") }
+        // 이 안내가 다리다 — 모델은 목록은 볼 수 있었지만 "어느 그룹"을 말할 인자가 없어서
+        // update_recurring_schedule이 늘 lastRecurrenceId에만 걸렸다(옛 대화에서 만든 그룹 수정 불가).
+        // 반복 줄이 보였을 때만 붙인다: 번호 없는 목록에 이 문장은 소음이다.
+        let numberNote = showedRecurring ? "\n[n]은 반복 그룹 번호 — 등원·복귀·점심을 묶은 그룹 전체를 가리킨다(일부 구간만 고칠 수는 없다). 그 그룹의 수단·여유·알림 수정은 update_recurring_schedule의 series_number에 그 번호." : ""
+        return "실제 등록된 일정\(rangeLabel):\n" + capped.joined(separator: "\n") + more + numberNote
     }
 
 
