@@ -48,6 +48,26 @@ struct SettingsView: View {
                 }
             }
 
+            // 업로드가 등록의 임계 경로에서 빠진 뒤로, 실패는 여기서만 한눈에 보인다 —
+            // 58건이 한꺼번에 실패하면 일정을 하나씩 열어 보는 방식으로는 아무도 알아채지 못한다.
+            if store.calendarUploadFailedCount > 0 || store.calendarUploadPendingCount > 0 {
+                VStack(alignment: .leading, spacing: 6) {
+                    if store.calendarUploadPendingCount > 0 {
+                        Label("캘린더에 올리는 중 \(store.calendarUploadPendingCount)건",
+                              systemImage: CalendarUploadState.pending.systemImage)
+                            .font(.callout).foregroundStyle(Theme.muted)
+                    }
+                    if store.calendarUploadFailedCount > 0 {
+                        Label("캘린더에 못 올린 항목 \(store.calendarUploadFailedCount)건",
+                              systemImage: CalendarUploadState.failed.systemImage)
+                            .font(.callout).foregroundStyle(Theme.warn)
+                        Button("다시 시도") { store.retryFailedCalendarUploads() }
+                        Text("일정은 기기에 정상으로 저장돼 있어요. 구글 캘린더에만 못 올라간 상태입니다.")
+                            .font(.caption).foregroundStyle(Theme.faint)
+                    }
+                }
+            }
+
             // ⚠️ 테스트용 임시 버튼 — 출시 전에 이 블록과 Store.deleteEverythingForTesting을 같이 뺀다.
             VStack(alignment: .leading, spacing: 6) {
                 Text("테스트").font(.headline)

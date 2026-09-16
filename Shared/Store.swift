@@ -29,11 +29,29 @@ final class Store: ObservableObject {
         return (c.year ?? 0) * 10000 + (c.month ?? 0) * 100 + (c.day ?? 0)
     }
 
+    /// [start, end) 반열린 구간이 그 날과 겹치는지. 일간 나열(ContentView.events/activities(on:))과
+    /// 월간·주간 점(daysWithSchedule)이 같은 날에 대해 다른 말을 하지 않도록 판정을 이 한 곳에
+    /// 둔다(계약 5 — 자정 넘김 결함을 일간만 고쳤을 때 점과 나열이 어긋나며 드러났다).
+    /// 반열린 이유: 정확히 0시에 끝나는 구간은 다음 날과 겹친다고 보지 않는다(그릴 분이 0분).
+    /// end ≤ start인 깨진 구간은 어느 날과도 겹치지 않는다고 본다 — 호출자의 폴백(앵커 날 하루)과
+    /// 함께 쓴다.
+    static func overlapsDay(start: Date, end: Date, day: Date, calendar: Calendar = .current) -> Bool {
+        guard end > start, let d = calendar.dateInterval(of: .day, for: day) else { return false }
+        return start < d.end && end > d.start
+    }
+
     /// 반복 일정을 몇 주까지 만들 수 있는지. 회차 하나가 구글 캘린더 API 호출 한 번이라
     /// (26주 × 평일 × 4구간이면 500번 넘게 순차 호출) 무한정 늘릴 수 없다. 그 이상은 구글의
     /// 반복 이벤트(RRULE)를 써야 하는데, 이 앱은 회차를 개별 일정으로 다루는 구조라 큰 변경이 된다.
     /// nonisolated — maxBufferMinutes와 같은 이유(카드 입력 검증이 메인액터 밖에서 부른다).
     nonisolated static let maxRecurrenceWeeks = 26
+
+    /// 한 구간(활동·이동)이 달력 점 계산에서 하루씩 걷히는 최대 날 수이자, 생성 시점에 활동
+    /// 길이로 받아들이는 상한. 두 곳이 **같은 값**이어야 한다 — 걷기 상한만 있으면 상한 넘는
+    /// 활동이 "점이 잘린 채" 저장되고, 생성 가드만 있으면 깨진 저장 데이터가 걷기를 비한정으로
+    /// 돌린다(AIAssistant.executeCreateActivity가 이 상한으로 거른다).
+    /// nonisolated — 실행부(executeCreateActivity)가 static 문맥에서도 읽을 수 있게.
+    nonisolated static let maxIntervalDays = 366
 
     /// 도착 여유의 허용 범위. 음수는 출발을 그만큼 늦추고, 과도한 값은 실수다 — 수동 조정·AI 생성·
     /// AI 수정이 같은 한도를 쓰도록 한곳에 둔다(계약 5. 예전엔 이 식이 세 곳에 복사돼 있었고,
@@ -107,12 +125,50 @@ final class Store: ObservableObject {
         // 시작 시 동기화는 App의 scenePhase(.active)에서 호출한다(여기서 또 호출하면 중복 위험).
     }
 
+    /// 점(달력 날짜 키)은 일간 나열과 같은 겹침 판정으로 채운다 — 자정을 넘는 블록은 구간이
+    /// 걸치는 모든 날에 점이 켜진다. 출발시각이 없는(계산 실패) 일정과 끝≤시작으로 깨진 레코드는
+    /// 구간이 없으므로 도착일/시작일 하나만(일간 나열의 폴백과 같은 규칙). 저장·네트워크 호출은
+    /// 없고 집합만 다시 만든다 — 반복 그룹이 118건이어도 이 함수 자체는 레코드당 한 번 돈다.
     private func recomputeDaysWithSchedule() {
         let cal = Calendar.current
         var set = Set<Int>(minimumCapacity: events.count + activities.count)
-        for e in events { set.insert(Self.dayKey(e.arrivalDate, calendar: cal)) }
-        for a in activities { set.insert(Self.dayKey(a.startDate, calendar: cal)) }
+        for e in events {
+            if let dep = e.departureDate, e.arrivalDate > dep {
+                set.formUnion(Self.dayKeys(start: dep, end: e.arrivalDate, calendar: cal))
+            } else {
+                set.insert(Self.dayKey(e.arrivalDate, calendar: cal))
+            }
+        }
+        for a in activities {
+            if a.endDate > a.startDate {
+                set.formUnion(Self.dayKeys(start: a.startDate, end: a.endDate, calendar: cal))
+            } else {
+                set.insert(Self.dayKey(a.startDate, calendar: cal))
+            }
+        }
         daysWithSchedule = set
+    }
+
+    /// [start, end) 반열린 구간이 걸치는 날들의 키. 후보를 시작일 자정부터 end 직전까지 하루씩
+    /// 세되, 넣을지의 최종 판정은 overlapsDay(start:end:day:)가 내린다 — 루프 범위는 후보
+    /// 생성일 뿐이라 판정 규칙이 바뀌어도 이 열거가 저절로 따라가고, 두 번째 판정이 생기지
+    /// 않는다(계약 5). private가 아닌 이유: 드라이버(W·X절)가 이 열거와 overlapsDay 판정이
+    /// 같은 날을 내는지 직접 재는데, private면 타입 선언 범위 밖에서 못 부른다.
+    static func dayKeys(start: Date, end: Date, calendar cal: Calendar) -> [Int] {
+        var keys: [Int] = []
+        var cur = cal.startOfDay(for: start)
+        // end의 상한을 검사하는 곳은 없다(AI의 end_iso는 9999년도 parseDate를 통과한다). 이 걷기는
+        // activities 배열의 didSet 안에서 돌므로 비한정이면 화면이 얼고, 그 레코드를 지우려 해도
+        // 앱이 켜질 때마다 다시 얼어 지울 수도 없다. 정상적인 장기 체류(여행 몇 주)보다 넉넉한
+        // 366일에서 끊는다 — 그 너머의 긴 반복은 반복 활동이 담당하는 영역이다.
+        while cur < end, keys.count < maxIntervalDays {
+            if overlapsDay(start: start, end: end, day: cur, calendar: cal) {
+                keys.append(dayKey(cur, calendar: cal))
+            }
+            guard let next = cal.date(byAdding: .day, value: 1, to: cur) else { break }
+            cur = next
+        }
+        return keys
     }
 
     // MARK: - 활동(체류형) 블록
@@ -126,11 +182,8 @@ final class Store: ObservableObject {
         activities.append(activity)
         activities.sort { $0.startDate < $1.startDate }
         saveActivities()
-        if config.hasGoogleCalendar && config.autoAddToCalendar && syncToCalendar,
-           let gid = try? await gcal.createEvent(for: activity),
-           let idx = activities.firstIndex(where: { $0.id == activity.id }) {
-            activities[idx].googleEventId = gid
-            saveActivities()
+        if config.autoAddToCalendar && syncToCalendar {
+            enqueueCalendarUpload(activityIDs: [activity.id])
         }
     }
 
@@ -164,11 +217,8 @@ final class Store: ObservableObject {
         activities.append(activity)
         activities.sort { $0.startDate < $1.startDate }
         saveActivities()
-        if config.hasGoogleCalendar && config.autoAddToCalendar && syncToCalendar,
-           let gid = try? await gcal.createEvent(for: activity),
-           let idx = activities.firstIndex(where: { $0.id == activity.id }) {
-            activities[idx].googleEventId = gid
-            saveActivities()
+        if config.autoAddToCalendar && syncToCalendar {
+            enqueueCalendarUpload(activityIDs: [activity.id])
         }
 
         // 이동 구간은 활동 장소를 알아야 만들 수 있다(목적지/출발지가 곧 활동 장소).
@@ -217,15 +267,8 @@ final class Store: ObservableObject {
         activities.append(contentsOf: created)
         activities.sort { $0.startDate < $1.startDate }
         saveActivities()
-        if config.hasGoogleCalendar && config.autoAddToCalendar {
-            for i in created.indices {
-                if let gid = try? await gcal.createEvent(for: created[i]) {
-                    if let idx = activities.firstIndex(where: { $0.id == created[i].id }) {
-                        activities[idx].googleEventId = gid
-                    }
-                }
-            }
-            saveActivities()
+        if config.autoAddToCalendar {
+            enqueueCalendarUpload(activityIDs: created.map(\.id))
         }
         return created.count
     }
@@ -520,6 +563,11 @@ final class Store: ObservableObject {
     /// `anchor`가 `.arrival`이면 `anchorDate`는 "도착 시각"(출발을 역산), `.departure`면
     /// "출발 시각"(도착을 순산, 예: 퇴근/귀가) — 퇴근길처럼 출발 시각이 우선인 경우 버퍼가
     /// 의미 없어(도착 여유를 둘 필요가 없음) `.departure`에서는 bufferMinutes를 항상 0으로 둔다.
+    /// 방금 만든 일정을 그대로 돌려준다 — 호출자가 제목·목적지로 되찾으면 같은 이름의 더 늦은
+    /// 회차(도착일순 정렬이라 `.last`가 집는 쪽)를 집는다(2026-09-16 결함 J). @discardableResult인
+    /// 이유: 다리 생성·수동 추가처럼 되찾을 일 없는 호출자가 대부분이라 반환 강제가 소음이 되고,
+    /// 반환을 써야 하는 호출자(executeCreateSchedule)가 쓰는지는 드라이버 J절이 지킨다.
+    @discardableResult
     func addEvent(title: String,
                   origin: Place,
                   destination: Place,
@@ -531,7 +579,7 @@ final class Store: ObservableObject {
                   travelSecondsHint: TimeInterval? = nil,
                   linkedActivityId: UUID? = nil,
                   notifyEnabled: Bool = true,
-                  syncToCalendar: Bool = true) async {
+                  syncToCalendar: Bool = true) async -> ScheduledEvent {
         var event = ScheduledEvent(title: title,
                                    origin: origin,
                                    destination: destination,
@@ -554,9 +602,10 @@ final class Store: ObservableObject {
         events.append(event)
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
-        if config.hasGoogleCalendar && config.autoAddToCalendar {
-            await pushToCalendar(eventID: event.id)
+        if config.autoAddToCalendar {
+            enqueueCalendarUpload(eventIDs: [event.id])
         }
+        return event
     }
 
 
@@ -633,10 +682,10 @@ final class Store: ObservableObject {
         events.append(contentsOf: created)
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
-        if config.hasGoogleCalendar && config.autoAddToCalendar {
-            // 건별 push는 회차 수만큼 save()를 몰고 와 등록이 느렸다(34회차=34번 전체 배열 쓰기).
-            // 묶음 등록으로 구간당 디스크 쓰기를 한 번으로 줄인다 — 원격 등록 자체는 여전히 회차마다 순차 1건.
-            await pushToCalendar(eventIDs: created.map(\.id))
+        if config.autoAddToCalendar {
+            // 예전엔 여기서 원격 등록이 끝날 때까지 기다렸다 — 회차마다 순차 1건이라 58회차면
+            // 사용자가 그걸 다 기다렸다. 이제 pending만 찍고 돌아가고 업로드는 뒤에서 돈다.
+            enqueueCalendarUpload(eventIDs: created.map(\.id))
         }
         // 반복 일정은 회차 수가 많아 그냥 두면 iOS의 64건 제한에 걸려 뒤쪽 회차 알림이 조용히
         // 버려진다 — 가까운 것부터 다시 채워 넣는다(자세한 내용은 아래 함수 주석).
@@ -722,7 +771,9 @@ final class Store: ObservableObject {
         save()
 
         // 구글 캘린더에 이미 올라간 것들은 지우고 갱신본으로 다시 등록.
-        if config.hasGoogleCalendar {
+        // 계정이 연결돼 있을 때만 건드린다 — 미연결이면 원격 삭제가 어차피 실패하는데,
+        // 로컬 gid만 비워버리면 나중에 다시 연결했을 때 매핑을 잃어 동기화가 중복을 만든다.
+        if googleConnected {
             // gid를 먼저 한 번에 모아 삭제도 한 번에 건넨다 — 건별이면 회차 수만큼 묘비 파일을
             // 쓰고 원격 삭제를 하나씩 기다렸다. 로컬 gid는 삭제 요청 *전에* 비운다: nil인 채로
             // 기다리는 사이 동기화가 돌면 "원격에 없는 gid"를 보고 회차를 통째로 지울 수 있는데,
@@ -733,7 +784,7 @@ final class Store: ObservableObject {
             }
             await removeFromCalendar(gids)
             if config.autoAddToCalendar {
-                await pushToCalendar(eventIDs: ids)
+                enqueueCalendarUpload(eventIDs: ids)
             }
             save()
         }
@@ -742,22 +793,102 @@ final class Store: ObservableObject {
         return ids.count
     }
 
-    /// 일정들을 구글 캘린더에 등록하고 googleEventId를 저장한다(수동 버튼·자동 등록 공용).
+    // MARK: - 캘린더 업로드(등록의 임계 경로 밖)
+
+    /// 캘린더 업로드 전용 직렬 작업. 앞 작업을 기다려 두 업로드가 서로 끼어들지 않게 한다.
+    private var calendarUploadTask: Task<Void, Never>?
+
+    /// 캘린더 업로드를 등록 **뒤로** 미룬다. 이 함수가 돌아온 시점에 로컬 등록은 이미 끝나 있다.
+    ///
+    /// **왜 미루나.** 업로드는 건마다 원격 1건이라, 58건짜리 반복을 만들면 사용자가 그걸 다
+    /// 기다렸다. 게다가 계정이 연결돼 있지 않으면 `createEvent`가 건마다 로그인 화면을 띄우려
+    /// 들었고(`accessToken(allowInteractive: true)`), 전부 실패하는데 그 실패가 조용히 버려졌다.
+    ///
+    /// **왜 `Task { try? await ... }`가 아닌가.** 실패를 그냥 버리면 빠른 "등록 완료"만 남고
+    /// 캘린더가 빈 것을 아무도 모른다 — 지금 결함이 더 나빠질 뿐이다. 그래서 결과를 레코드에
+    /// `pending`/`failed`로 남기고(디스크에도), 상세 화면과 설정 화면이 그걸 읽는다.
+    ///
+    /// **왜 순차인가.** ① 구글은 사용자당 쓰기 할당량이 있어 병렬로 밀면 429/403이 돌아오는데,
+    /// 지금 구조에서 그건 재시도가 아니라 `failed` 기록이 된다 — 느린 성공을 보이는 실패로
+    /// 바꾸는 셈이다. ② `Store`는 `@MainActor`라 배열 쓰기는 어차피 메인에서만 일어나고,
+    /// TaskGroup은 `await` 사이 끼어드는 지점만 늘린다(이 파일이 반복해서 고쳐온 H1 위험).
+    /// ③ 임계 경로에서 빠진 지금, 순차 업로드의 대기 시간은 아무도 기다리지 않는다.
+    func enqueueCalendarUpload(eventIDs: [UUID] = [], activityIDs: [UUID] = []) {
+        guard googleConnected else { return }
+        // 요소 단위로 여러 번 고치면 didSet(daysWithSchedule 재계산)이 매번 돈다 —
+        // 복사본에서 다 고치고 한 번만 대입한다(rescheduleNearestNotifications와 같은 이유).
+        var evs = events
+        var evChanged = false
+        for id in eventIDs {
+            guard let i = evs.firstIndex(where: { $0.id == id }),
+                  evs[i].wantsCalendarSync, evs[i].googleEventId == nil else { continue }
+            evs[i].calendarUpload = .pending
+            evChanged = true
+        }
+        if evChanged { events = evs; save() }   // pending을 먼저 디스크에 — 여기서 죽어도 "안 올라감"이 남는다
+
+        var acts = activities
+        var acChanged = false
+        for id in activityIDs {
+            guard let i = acts.firstIndex(where: { $0.id == id }),
+                  acts[i].wantsCalendarSync, acts[i].googleEventId == nil else { continue }
+            acts[i].calendarUpload = .pending
+            acChanged = true
+        }
+        if acChanged { activities = acts; saveActivities() }
+
+        guard evChanged || acChanged else { return }
+        // 클로저가 잡아갈 값은 불변으로 고정한다(escaping 클로저의 var 캡처를 피한다).
+        let queuedEvents = evChanged ? eventIDs : []
+        let queuedActivities = acChanged ? activityIDs : []
+        let previous = calendarUploadTask
+        calendarUploadTask = Task { [weak self] in
+            await previous?.value
+            guard let self else { return }
+            await self.pushToCalendar(eventIDs: queuedEvents)
+            await self.pushActivitiesToCalendar(queuedActivities)
+        }
+    }
+
+    /// 아직 캘린더에 못 올린 항목 수(대기 중, 실패). 설정 화면 한 줄의 단일 출처 —
+    /// 58건이 한꺼번에 실패하면 상세를 하나씩 열어 보는 방식으로는 아무도 못 본다.
+    var calendarUploadPendingCount: Int {
+        events.filter { $0.calendarUpload == .pending }.count
+            + activities.filter { $0.calendarUpload == .pending }.count
+    }
+    var calendarUploadFailedCount: Int {
+        events.filter { $0.calendarUpload == .failed }.count
+            + activities.filter { $0.calendarUpload == .failed }.count
+    }
+
+    /// 실패로 기록된 항목만 다시 큐에 넣는다(설정 화면의 "다시 시도").
+    func retryFailedCalendarUploads() {
+        enqueueCalendarUpload(eventIDs: events.filter { $0.calendarUpload == .failed }.map(\.id),
+                              activityIDs: activities.filter { $0.calendarUpload == .failed }.map(\.id))
+    }
+
+    /// 일정들을 구글 캘린더에 등록하고 googleEventId를 저장한다(수동 버튼·큐 공용).
     /// 회차마다 save()하면 회차 수만큼 전체 배열을 디스크에 쓴다(34회차 등록이 눈에 띄게 느렸던
     /// 실측의 한쪽 축) — 등록 성공분만 메모리에 반영하고 저장은 마지막에 한 번. 도중에 죽으면 그
     /// 호출의 gid 매핑을 잃어 다음 동기화가 중복을 가져오지만, 반복 등록은 구간(가는 편·오는 편
     /// 등)마다 따로 호출·저장하므로 손실은 최대 한 구간에 묶인다.
     func pushToCalendar(eventIDs: [UUID]) async {
-        guard config.hasGoogleCalendar else { return }
+        // 예전엔 `config.hasGoogleCalendar`(= 클라이언트 ID가 설정돼 있나)만 봤다. 그 값은 항상
+        // 참이라, 계정이 연결되지 않은 기기에서도 건마다 로그인 시도 + 네트워크 호출이 나갔고
+        // 전부 실패했다. 물어야 할 것은 "계정이 실제로 연결돼 있나"다.
+        guard googleConnected else { return }
         var changed = false
         for eventID in eventIDs {
             guard let idx = events.firstIndex(where: { $0.id == eventID }),
                   events[idx].wantsCalendarSync else { continue }   // "이건 캘린더에 올리지 마" 존중
+            // 이미 gid가 있으면 다시 올리지 않는다 — 큐에 두 번 들어간 건을 또 만들면 중복이 된다.
+            guard events[idx].googleEventId == nil else { continue }
             do {
                 let gid = try await gcal.createEvent(for: events[idx])
                 // await 뒤 배열이 바뀌었을 수 있으니 다시 찾는다 — 없어진 회차는 건너뛴다.
                 guard let i = events.firstIndex(where: { $0.id == eventID }) else { continue }
                 events[i].googleEventId = gid
+                events[i].calendarUpload = nil      // 성공의 단일 출처는 gid다(계약 5)
                 // 동기화가 먼저 같은 gid를 가져와 중복이 생겼다면 그쪽을 제거(알림도 취소).
                 for dup in events where dup.googleEventId == gid && dup.id != eventID {
                     if let nid = dup.notificationId { notifications.cancel(id: nid) }
@@ -765,10 +896,41 @@ final class Store: ObservableObject {
                 events.removeAll { $0.googleEventId == gid && $0.id != eventID }
                 changed = true
             } catch {
-                // 등록 실패(미연결·취소 등)는 조용히 무시 — 로컬엔 남아 다음에 재시도 가능.
+                // 실패를 레코드에 남긴다. 예전엔 여기서 조용히 버려서, 캘린더엔 아무것도 없는데
+                // 사용자는 "등록 완료"만 보고 이유를 알 길이 없었다.
+                if let i = events.firstIndex(where: { $0.id == eventID }) {
+                    events[i].calendarUpload = .failed
+                    changed = true
+                }
             }
         }
         if changed { save() }
+    }
+
+    /// 활동 블록을 구글 캘린더에 등록한다.
+    /// 생성 경로 세 곳(단발·이동 묶음·반복)이 거의 같은 인라인 블록을 따로 갖고 있어, 실패 기록
+    /// 같은 규칙이 한쪽에만 생기기 쉬웠다 — 하나로 합친다(계약 5).
+    func pushActivitiesToCalendar(_ activityIDs: [UUID]) async {
+        guard googleConnected else { return }
+        var changed = false
+        for activityID in activityIDs {
+            guard let idx = activities.firstIndex(where: { $0.id == activityID }),
+                  activities[idx].wantsCalendarSync,
+                  activities[idx].googleEventId == nil else { continue }
+            do {
+                let gid = try await gcal.createEvent(for: activities[idx])
+                guard let i = activities.firstIndex(where: { $0.id == activityID }) else { continue }
+                activities[i].googleEventId = gid
+                activities[i].calendarUpload = nil
+                changed = true
+            } catch {
+                if let i = activities.firstIndex(where: { $0.id == activityID }) {
+                    activities[i].calendarUpload = .failed
+                    changed = true
+                }
+            }
+        }
+        if changed { saveActivities() }
     }
 
     /// 일정 하나만 등록하는 진입점(수동 버튼·단발 생성) — 묶음 등록의 회차 1짜리 호출이다.
@@ -809,12 +971,13 @@ final class Store: ObservableObject {
         events.sort { $0.arrivalDate < $1.arrivalDate }
         save()
         // 캘린더에 등록돼 있던 일정이면 옛 이벤트 삭제 후 갱신본으로 다시 등록.
-        if config.hasGoogleCalendar {
+        // updateRecurringSeries와 같은 이유로 연결돼 있을 때만 gid를 건드린다.
+        if googleConnected {
             if let oldGID = event.googleEventId {
                 await removeFromCalendar([oldGID])
                 if let i = events.firstIndex(where: { $0.id == id }) { events[i].googleEventId = nil }
             }
-            if config.autoAddToCalendar { await pushToCalendar(eventID: id) }
+            if config.autoAddToCalendar { enqueueCalendarUpload(eventIDs: [id]) }
         }
     }
 

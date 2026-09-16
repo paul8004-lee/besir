@@ -35,7 +35,6 @@ struct EventDetailView: View {
     @State private var showingEdit = false
     @State private var showingDeleteMenu = false
     @State private var showingDeleteConfirm = false
-    @State private var calendarStatus = ""
     @State private var addingToCalendar = false
 
     private var destCoord: CLLocationCoordinate2D {
@@ -106,15 +105,27 @@ struct EventDetailView: View {
         }
     }
 
+    /// 등록은 로컬에서 끝나고 캘린더 업로드는 뒤따라 돈다 — 그 중간 상태가 여기 보이지 않으면
+    /// 사용자는 "등록 완료"만 보고 캘린더가 빈 이유를 알 길이 없다(그게 이번 결함이었다).
     @ViewBuilder
     private var calendarButton: some View {
         Group {
-            if store.config.hasGoogleCalendar {
+            if store.googleConnected {
                 if event.googleEventId != nil {
                     Label("구글 캘린더에 등록됨", systemImage: "checkmark.circle.fill")
                         .font(.callout).foregroundStyle(.green)
+                } else if event.calendarUpload == .pending {
+                    Label(CalendarUploadState.pending.title,
+                          systemImage: CalendarUploadState.pending.systemImage)
+                        .font(.callout).foregroundStyle(Theme.muted)
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
+                        // 실패해도 버튼은 남긴다 — 여기가 바로 재시도할 수 있는 유일한 자리다.
+                        if event.calendarUpload == .failed {
+                            Label(CalendarUploadState.failed.title,
+                                  systemImage: CalendarUploadState.failed.systemImage)
+                                .font(.callout).foregroundStyle(Theme.warn)
+                        }
                         Button {
                             Task { await addToGoogleCalendar() }
                         } label: {
@@ -122,23 +133,23 @@ struct EventDetailView: View {
                                   systemImage: "calendar.badge.plus")
                         }
                         .disabled(addingToCalendar)
-                        if !calendarStatus.isEmpty {
-                            Text(calendarStatus).font(.caption).foregroundStyle(.secondary)
-                        }
                     }
                 }
+            } else if store.config.hasGoogleCalendar {
+                // 연동이 설정만 돼 있고 계정이 안 붙은 상태. 예전엔 이 경우에도 등록을 시도했다가
+                // 전부 실패하고 아무 말도 안 했다 — 왜 캘린더가 비었는지 여기서 말해준다.
+                Label("구글 계정이 연결되지 않아 캘린더에는 올리지 않았어요. 설정에서 연결할 수 있어요.",
+                      systemImage: "person.crop.circle.badge.xmark")
+                    .font(.caption).foregroundStyle(Theme.muted)
             }
         }
     }
 
     private func addToGoogleCalendar() async {
         addingToCalendar = true
-        calendarStatus = ""
         defer { addingToCalendar = false }
+        // 실패 문구는 레코드의 calendarUpload가 단일 출처다 — 화면에 같은 문장을 또 두지 않는다(계약 5).
         await store.pushToCalendar(eventID: event.id)
-        if event.googleEventId == nil {
-            calendarStatus = "추가 실패 — 구글 로그인을 확인하세요."
-        }
     }
 
     private func loadTransitPath() async {
