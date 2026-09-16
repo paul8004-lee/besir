@@ -80,14 +80,32 @@ struct ContentView: View {
 
     // MARK: - 날짜별 데이터
 
+    /// 자정을 넘는 이동은 출발일과 도착일 양쪽에 나열한다(결함 G) — 도착일에만 두면 출발일
+    /// 저녁 구간이 통째로 그려지지 않는다. 겹침 판정은 Store.overlapsDay(start:end:day:) 한
+    /// 곳에 있고 월간·주간 점(daysWithSchedule)도 같은 판정으로 켜진다 — 같은 앱이 같은 날에
+    /// 대해 다른 말을 하지 않게(계약 5). 출발시각이 없는(계산 실패) 일정은 구간이 없으므로
+    /// 도착일에만 세우는 기존 동작을 유지한다.
     private func events(on date: Date) -> [ScheduledEvent] {
-        store.events.filter { calendar.isDate($0.arrivalDate, inSameDayAs: date) }
-            .sorted { $0.arrivalDate < $1.arrivalDate }
+        store.events.filter { e in
+            guard let dep = e.departureDate, e.arrivalDate > dep else {
+                return calendar.isDate(e.arrivalDate, inSameDayAs: date)
+            }
+            return Store.overlapsDay(start: dep, end: e.arrivalDate, day: date, calendar: calendar)
+        }
+        .sorted { $0.arrivalDate < $1.arrivalDate }
     }
 
+    /// 활동도 이동과 같은 기준으로 [시작, 끝) 구간이 그 날과 겹치면 나열한다 — 자정을 넘는
+    /// 활동의 끝날 반쪽이 통째로 안 그려지던 것(결함 G)이 이것으로 닫힌다. 시작·끝이 같거나
+    /// 어긋난 깨진 레코드는 구간이 없으므로 시작일에만 두는 기존 동작을 유지한다.
     private func activities(on date: Date) -> [ActivityBlock] {
-        store.activities.filter { calendar.isDate($0.startDate, inSameDayAs: date) }
-            .sorted { $0.startDate < $1.startDate }
+        store.activities.filter { a in
+            guard a.endDate > a.startDate else {
+                return calendar.isDate(a.startDate, inSameDayAs: date)
+            }
+            return Store.overlapsDay(start: a.startDate, end: a.endDate, day: date, calendar: calendar)
+        }
+        .sorted { $0.startDate < $1.startDate }
     }
 
     /// 월간 그리드가 좌우 스와이프 중에도 매 프레임 부르는 함수라 O(1) 캐시(Store.daysWithSchedule)만
@@ -401,7 +419,7 @@ struct ContentView: View {
     private func dayTimetableContent(for date: Date) -> some View {
         let dayEvents = events(on: date)
         let dayActivities = activities(on: date)
-        let placed = positionedBlocks(events: dayEvents, activities: dayActivities)
+        let placed = positionedBlocks(events: dayEvents, activities: dayActivities, on: date)
         return ScrollView {
             HStack(alignment: .top, spacing: 4) {
                 VStack(spacing: 0) {
@@ -420,7 +438,7 @@ struct ContentView: View {
                         }
                         ForEach(placed) { p in
                             let f = columnFrame(p, total: geo.size.width)
-                            blockView(for: p)
+                            blockView(for: p, on: date)
                                 .frame(width: f.width)
                                 .offset(x: f.x, y: offsetY(for: p))
                         }
@@ -482,15 +500,16 @@ struct ContentView: View {
         .scrollDisabled(activeDrag != nil)
     }
 
-    /// 자리가 정해진 블록 하나를 그린다(종류에 맞는 뷰 선택).
+    /// 자리가 정해진 블록 하나를 그린다(종류에 맞는 뷰 선택). date는 그리는 날 — 자정을
+    /// 넘는 블록의 잘린 범위 계산에 쓰인다.
     @ViewBuilder
-    private func blockView(for p: PositionedBlock) -> some View {
+    private func blockView(for p: PositionedBlock, on date: Date) -> some View {
         switch p.kind {
         case .activity(let a):
-            activityBlockView(a)
+            activityBlockView(a, on: date)
         case .event(let e):
             // 이동시간 계산 실패(API 할당량 소진 등)는 조용히 숨기지 않고 따로 표시한다.
-            if e.departureDate != nil { travelBlockView(e) } else { failedEstimateBlockView(e) }
+            if e.departureDate != nil { travelBlockView(e, on: date) } else { failedEstimateBlockView(e) }
         }
     }
 
@@ -518,30 +537,46 @@ struct ContentView: View {
     private static let failedBlockHeight: CGFloat = 20
 
     /// 일간 시간표에서 블록이 차지하는 세로 범위(자정 기준 분). 렌더링 위치·높이와 히트 테스트가
-    /// 반드시 같은 값을 보도록 여기 한 곳에서만 계산한다.
-    private func span(for activity: ActivityBlock) -> (start: CGFloat, minutes: CGFloat) {
-        let start = minutesSinceMidnight(activity.startDate)
-        // 자정을 넘겨 끝나는 블록은 그 날 자정(1440분)까지만 그린다 — 그냥 빼면 음수가 나온다.
-        let end = calendar.isDate(activity.endDate, inSameDayAs: activity.startDate)
+    /// 반드시 같은 값을 보도록 여기 한 곳에서만 계산한다. 자정을 넘는 블록은 이틀에 나뉘어
+    /// 그려지므로 "그리는 날"(on)을 받아 그 날의 0~1440분으로 자른다 — 호출자가 제각각 자르면
+    /// 렌더와 히트 테스트가 어긋나는, 이 함수가 원래 하나로 묶으려 했던 문제가 다시 생긴다.
+    private func span(for activity: ActivityBlock, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
+        // 그리는 날보다 시작이 이르면(전날부터 이어지는 반쪽) 0시부터, 끝이 늦으면 그 날
+        // 자정(1440분)까지만 — 그냥 빼면 음수가 나온다.
+        let start = calendar.isDate(activity.startDate, inSameDayAs: date)
+            ? minutesSinceMidnight(activity.startDate) : 0
+        let end = calendar.isDate(activity.endDate, inSameDayAs: date)
             ? minutesSinceMidnight(activity.endDate) : 1440
+        // 잘린 반쪽이 최소 높이에 못 미쳐도 늘리는 방향은 그대로 아래로 둔다. 늘리지 않으면 그
+        // 조각은 보이지도 탭되지도 않는 블록이 되고(이 값은 렌더와 히트 테스트가 함께 쓴다),
+        // 반대 방향(위로)은 자리가 없다 — 자정 직전에 잘린 반쪽이 위로 늘면 그 날의 이웃을 덮고,
+        // 0시에 붙어 시작하는 반쪽은 0 위에 그릴 수 없다. 밑으로 넘치는 몇 분은 그 날 화면
+        // 밖이라 아무것도 덮지 않는다.
         return (start, max(Self.minActivityMinutes, end - start))
     }
 
-    private func span(for event: ScheduledEvent) -> (start: CGFloat, minutes: CGFloat) {
+    private func span(for event: ScheduledEvent, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
         guard let dep = event.departureDate else {
             // 이동 시간 계산 실패 블록은 도착 시각에서 "아래로" 고정 높이만큼 그려진다.
+            // 실패 블록은 도착일에만 나열되므로 그리는 날이 곧 도착일이다.
             return (minutesSinceMidnight(event.arrivalDate), Self.failedBlockHeight / hourHeight * 60)
         }
-        let arrivalMin = minutesSinceMidnight(event.arrivalDate)
-        // 이동 구간은 도착일 기준으로 목록에 들어간다 — 전날 밤에 출발해 자정을 넘겨 도착하는
-        // 구간은 출발 시각(예: 23:30)을 그대로 쓰면 도착일 화면의 엉뚱한 자리에 그려지므로 0시부터.
-        let depMin = calendar.isDate(dep, inSameDayAs: event.arrivalDate) ? minutesSinceMidnight(dep) : 0
+        // 출발·도착을 그리는 날의 0~1440분 안으로 자른다 — 전날 밤에 출발해 자정을 넘겨 도착하는
+        // 구간은 출발 시각(예: 23:30)을 그대로 쓰면 도착일 화면의 엉뚱한 자리에 그려지므로 도착일
+        // 에서는 0시부터, 출발일에서는 자정(1440분)까지. 자정을 넘는 이동이 이틀에 각각 반쪽씩
+        // 그려지는 것(결함 G)은 이 자르기와 나열(events(on:)의 겹침 판정)이 함께 완성한다.
+        let depMin = calendar.isDate(dep, inSameDayAs: date) ? minutesSinceMidnight(dep) : 0
+        let arrivalMin = calendar.isDate(event.arrivalDate, inSameDayAs: date)
+            ? minutesSinceMidnight(event.arrivalDate) : 1440
         let natural = arrivalMin - depMin
         guard natural < Self.minTravelMinutes else { return (depMin, natural) }
 
         // 너무 짧아 최소 높이로 그려야 할 때, **늘어나는 방향은 고정된 쪽의 반대**여야 한다.
         // 도착 기준 구간을 아래로 늘리면 도착 시각에 바로 시작하는 활동 블록을 덮어버린다
         // (도보 1분 거리 식당을 잡았을 때 이동 블록이 식사 블록과 겹쳐 보이던 원인).
+        // 잘린 반쪽에도 이 규칙을 그대로 적용한다 — 규칙이 지키려는 것(고정된 끝에 붙어 시작하는
+        // 블록을 덮지 않기)은 실제 출발·도착이 붙은 날의 반쪽에서 여전히 옳고, 반쪽끼리만 예외
+        // 방향을 만들면 규칙이 둘로 갈라져 어느 쪽이 맞는지 판단이 흐려진다.
         if (event.anchor ?? .arrival) == .departure {
             return (depMin, Self.minTravelMinutes)                                   // 출발 고정 → 아래로
         }
@@ -559,17 +594,9 @@ struct ContentView: View {
         return CGFloat(drag.deltaMinutes)
     }
 
-    private func offsetY(for activity: ActivityBlock) -> CGFloat {
-        (span(for: activity).start + dragOffsetMinutes(forActivity: activity.id)) / 60 * hourHeight
-    }
-
-    private func offsetY(for event: ScheduledEvent) -> CGFloat {
-        (span(for: event).start + dragOffsetMinutes(forEvent: event.id)) / 60 * hourHeight
-    }
-
-    private func activityBlockView(_ a: ActivityBlock) -> some View {
+    private func activityBlockView(_ a: ActivityBlock, on date: Date) -> some View {
         let isDragging = activeDrag?.blockId == "a-\(a.id)"
-        let minutes = span(for: a).minutes
+        let minutes = span(for: a, on: date).minutes
         let past = a.endDate < Date()
         return VStack(alignment: .leading, spacing: 1) {
             Text(a.title).font(.caption).foregroundStyle(Theme.activityInk).lineLimit(1)
@@ -615,9 +642,9 @@ struct ContentView: View {
         .onTapGesture { selection = event.id }
     }
 
-    private func travelBlockView(_ event: ScheduledEvent) -> some View {
+    private func travelBlockView(_ event: ScheduledEvent, on date: Date) -> some View {
         let isDragging = activeDrag?.blockId == "e-\(event.id)"
-        let height = span(for: event).minutes / 60 * hourHeight
+        let height = span(for: event, on: date).minutes / 60 * hourHeight
         let past = event.arrivalDate < Date()
         // 활동에 묶인 이동 구간(식당 왕복 등)은 제목을 그리지 않는다 — 대개 도보 몇 분이라
         // 블록이 최소 높이로 그려지는데, 글자가 그 안에 안 들어가 옆 블록 위로 삐져나와 겹쳐 보였다.
@@ -668,15 +695,18 @@ struct ContentView: View {
     /// 시간이 겹치는 블록들을 하나의 "무리"로 묶고, 무리 안에서는 먼저 시작한 것부터
     /// **비어 있는 첫 열**에 넣는다. 무리의 열 수만큼 가로를 나눠 쓰므로, 두 개가 겹치면
     /// 반씩, 세 개면 1/3씩 차지한다. 겹치지 않는 블록은 전처럼 가로 전체를 쓴다.
+    /// 범위는 그리는 날(on)로 잘라 계산한다 — 자정을 넘는 블록이 이틀에 나열돼도 각 날의
+    /// 목록·배치는 서로 별개라 같은 블록이 하루 안에서 두 번 세어질 일은 없다.
     private func positionedBlocks(events dayEvents: [ScheduledEvent],
-                                  activities dayActivities: [ActivityBlock]) -> [PositionedBlock] {
+                                  activities dayActivities: [ActivityBlock],
+                                  on date: Date) -> [PositionedBlock] {
         struct Item { let id: String; let kind: ActiveDrag.Kind; let start: CGFloat; let end: CGFloat }
         var items: [Item] = dayActivities.map {
-            let s = span(for: $0)
+            let s = span(for: $0, on: date)
             return Item(id: "a-\($0.id)", kind: .activity($0), start: s.start, end: s.start + s.minutes)
         }
         items += dayEvents.map {
-            let s = span(for: $0)
+            let s = span(for: $0, on: date)
             return Item(id: "e-\($0.id)", kind: .event($0), start: s.start, end: s.start + s.minutes)
         }
         items.sort { $0.start == $1.start ? $0.end < $1.end : $0.start < $1.start }
