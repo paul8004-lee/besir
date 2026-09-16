@@ -49,7 +49,7 @@
 xcodegen generate
 
 # 빌드
-xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17' -derivedDataPath build build
+xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build
 xcodebuild -scheme besir-macOS -derivedDataPath build build
 
 # 프록시
