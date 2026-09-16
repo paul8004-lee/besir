@@ -81,20 +81,68 @@ extension AIAssistant {
     func drvCreate(_ input: [String: Any]) async -> String { await executeCreateSchedule(input) }
     func drvCreateRecurring(_ input: [String: Any]) async -> String { await executeCreateRecurringSchedule(input) }
 
-    // P·Q절(SPEC-ASK-001 카드·무기억)용 — runLoop가 카드를 만드는 실제 경로(fillStated →
-    // pendingAsk)를 그대로 탄다. stated는 submit()이 statedArgs를 발화에서 **통째로 다시 뽑아
-    // 덮어쓰는** 것과 같은 주입이다 — 요청 사이에 값이 남는지(REQ-041)는 이 덮어쓰기로 검증된다.
+    // P·Q·R·T절(카드·무기억·왕복·정화 결함)용 — runLoop가 카드를 만드는 실제 경로(정화 →
+    // fillStated → pendingAsk)를 그대로 탄다. stated 주입은 submit()과 같은 **병합**이다(2026-09-16
+    // 결함 B 이후) — 새 발화에서 말한 키만 갱신하고 안 말한 키는 유지한다. 값이 지워지는 경계(툴
+    // 실행)는 Q절에서, 선언 밖 모델 인자가 버려지는 건 T절에서 검증한다.
     func drvAsk(_ tool: String, _ args: [String: Any], stated: [String: Any] = [:]) -> PendingAsk? {
-        statedArgs = stated
+        for (k, v) in stated { statedArgs[k] = v }
         let parts: [[String: Any]] = [["functionCall": ["name": tool, "args": args]]]
-        return pendingAsk(for: fillStated(parts))
+        return pendingAsk(for: fillStated(sanitizeModelArgs(parts)))
     }
+    /// 카드가 붙잡은 보류 호출의 인자(T절 — 모델 값이 살았는지 죽었는지 보는 창).
+    static func drvCallArgs(_ ask: PendingAsk?) -> [String: Any] {
+        ((ask?.parts.first?["functionCall"] as? [String: Any])?["args"] as? [String: Any]) ?? [:]
+    }
+    /// 정화의 화이트리스트(D4 — 선언과 어긋나지 않는지 직접 본다).
+    func drvModelKeys(_ tool: String) -> Set<String> { modelSuppliableKeys(for: tool) }
+    /// 시스템 프롬프트 원문(U절 — 문자열 존재 확인용).
+    func drvSystemPrompt() -> String { systemPrompt() }
+    /// 화면에 떠 있는 카드의 실제 상태(V절 — choose/submitCustom은 버블 쪽 사본을 고친다).
+    func drvLiveAsk() -> PendingAsk? {
+        bubbles.lastIndex(where: { $0.ask != nil }).flatMap { bubbles[$0].ask }
+    }
+    /// 실행에 실제로 실린 인자(V절 — 마지막 model 턴의 첫 호출에서 직접 읽는다).
+    func drvLastCallArgs() -> [String: Any] {
+        for turn in contents.reversed() {
+            guard (turn["role"] as? String) == "model" else { continue }
+            if let call = (turn["parts"] as? [[String: Any]])?
+                .compactMap({ $0["functionCall"] as? [String: Any] }).first,
+               let args = call["args"] as? [String: Any] { return args }
+        }
+        return [:]
+    }
+    /// statedArgs는 private이라 Drv 구조체(다른 타입)에서는 못 읽는다 — 판정에 필요한 만큼만 노출.
+    func drvStatedArgs() -> [String: Any] { statedArgs }
+    func drvCancelPendingAsk() { cancelPendingAsk() }
+    /// 내부 토큰 둘도 같은 이유로 노출용 접근자를 지난다(값 자체는 그대로).
+    static func drvCurrentLocationToken() -> String { currentLocationToken }
+    static func drvNoOutboundToken() -> String { noOutboundToken }
+    /// P절 — 검색 상태를 글자로 바꿔 비교한다(Lookup은 Equatable이 아니고, 그렇게 만들 이유도 없다).
+    static func drvLookup(_ l: AskField.Lookup) -> String {
+        switch l {
+        case .idle: return "idle"
+        case .searching: return "searching"
+        case .empty: return "empty"
+        case .results(let p): return "results:\(p.count)"
+        }
+    }
+    /// P절 — 캘린더 대기 문구(private이라 Drv 구조체에서 못 부른다).
+    func drvCalendarNote(_ eventIDs: Set<UUID>, _ activityIDs: Set<UUID> = []) -> String {
+        calendarPendingNote(eventIDs: eventIDs, activityIDs: activityIDs)
+    }
+    /// 일반명사 목록 snapshot(Y절 — 게이트 범위 확인용).
+    static func drvGenericPlaceWords() -> Set<String> { genericPlaceWords }
     static func drvStated(_ utterance: String) -> [String: Any] { statedArguments(from: utterance) }
     func drvToolsJSON() -> [[String: Any]] { toolsJSON() }
     func drvExecuteTool(_ name: String, _ input: [String: Any]) async -> String {
         await executeTool(name: name, input: input)
     }
     func drvResolvePendingAsk() async -> String? { await resolvePendingAsk() }
+
+    /// J절용 — 등록 요약의 시각 문구와 같은 포맷터(when)로 찍어 비교한다. when이 private이라
+    /// Drv 구조체에서 못 부르므로 판정에 필요한 만큼만 통과시킨다(값은 그대로).
+    static func drvWhen(_ d: Date) -> String { when(d) }
 
     /// REQ-040 — 보류 카드가 saveHistory가 쓰는 본문에 담기지 않는지 본다. 이 디렉터리는 개발
     /// 기기의 진짜 besir 데이터다(O절이 events.json을 쓰는 것과 같은 자리) — 원본 바이트를
@@ -124,6 +172,20 @@ struct Drv {
         // 적이 있다. 캘린더 등록 결과를 보는 단언은 없으므로 꺼도 판정이 변하지 않는다.
         store.config.autoAddToCalendar = false
         func fresh() -> AIAssistant { AIAssistant(store: store, location: LocationManager()) }
+
+        // 위 한 줄은 **전역 불변식**이다 — 드라이버가 도는 내내 거짓이어야 한다. 한 번 깨지면
+        // 그 뒤 모든 절이 만든 시험용 일정이 사용자의 진짜 구글 캘린더로 올라가고, 그건
+        // 이 파일이 복원해 주는 events.json과 달리 **되돌릴 수가 없다**(2026-09-16 실제 발생:
+        // N절이 `AppConfig.load()`로 설정을 통째로 되돌리면서 디스크의 autoAddToCalendar=true를
+        // 같이 끌고 왔고, 사용자 캘린더에 Z-단발·P-확정이 등록됐다).
+        //
+        // 조용히 깨진 게 문제였으므로, 깨졌는지 **재는** 자리를 만든다. 복구는 하지 않는다 —
+        // 스스로 고치면 breach가 또 안 보이게 된다. 복구는 각 절의 방어선이 맡는다.
+        func drvAssertNoCalendarPush(_ ai: AIAssistant, _ where_: String) {
+            ai.drvCheck("불변식: \(where_) 뒤에도 autoAddToCalendar는 꺼져 있다",
+                        !store.config.autoAddToCalendar,
+                        "켜져 있다 — 이 시점 이후 절들이 실제 캘린더에 쓴다")
+        }
 
         // ── A. 현재 값이 0이 아닐 때
         print("\nA. 현재 여유 10분인 시리즈에 buffer 0이 올 때")
@@ -454,12 +516,18 @@ struct Drv {
 
         // (c) 빈 부재 집합 → 카드 없음 + 툴 직접 실행(REQ-011 후행 절). executeTool까지 태워
         //     missingAskedArguments에 막히지 않고 이벤트가 생기는 것까지 본다.
+        //     카드 이후 세계에선 실행부까지 온 호출이 이미 카드(또는 발화)로 값을 받은 상태다 —
+        //     모델 인자에 실린 되묻기 값은 정화돼 버려지므로(2026-09-16 결함 D) 발화(stated)로 채운다.
         store.events = []
+        let pcBase: [String: Any] = ["title": "P-직접", "destination_query": "회사", "origin_query": "집",
+                                     "arrival_iso": "2027-03-01T09:00:00"]
+        aiP.drvCheck("(c) 빈 부재 집합 → 카드 없음",
+                     aiP.drvAsk("create_schedule", pcBase,
+                                stated: AIAssistant.drvStated("도보로 가고 여유 10분에 알림 10분 전으로")) == nil,
+                     "카드가 나왔다")
         let pcArgs: [String: Any] = ["title": "P-직접", "destination_query": "회사", "origin_query": "집",
                                      "arrival_iso": "2027-03-01T09:00:00",
                                      "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10]
-        aiP.drvCheck("(c) 빈 부재 집합 → 카드 없음",
-                     aiP.drvAsk("create_schedule", pcArgs) == nil, "카드가 나왔다")
         let pcRun = await aiP.drvExecuteTool("create_schedule", pcArgs)
         aiP.drvCheck("(c) 카드 없이 툴이 직접 실행된다", pcRun.hasPrefix("등록 완료"), pcRun)
 
@@ -467,9 +535,10 @@ struct Drv {
         //     실행 절반(resolvePendingAsk — confirmAsk가 부르는 그 함수)을 순서대로 탄다.
         //     앱이 호출을 직접 만들므로 선택과 값 사이에 모델이 낄 틈이 없다는 것이 이 경로의 본체다.
         store.events = []
+        // buffer는 발화로 들어온다 — 모델 인자의 되묻기 값은 정화돼 버려진다(결함 D).
         let pdAsk = aiP.drvAsk("create_schedule", ["title": "P-확인", "destination_query": "회사",
-                                                   "origin_query": "집", "arrival_iso": "2027-03-01T09:00:00",
-                                                   "buffer_minutes": 15])
+                                                   "origin_query": "집", "arrival_iso": "2027-03-01T09:00:00"],
+                               stated: AIAssistant.drvStated("여유 15분으로 가줘"))
         aiP.drvCheck("(d) 이 호출의 부재는 mode·notify 2개",
                      Set(pdAsk?.fields.map(\.key) ?? []) == ["mode_this_time", "notify_lead_minutes"],
                      "keys=\(pdAsk?.fields.map(\.key) ?? [])")
@@ -485,7 +554,7 @@ struct Drv {
                      "mode=\(pdEvent?.mode.rawValue ?? "nil")")
         aiP.drvCheck("(d) 수집한 알림이 실린다", pdEvent?.notifyLeadMinutes == 10,
                      "notify=\(pdEvent.map { String($0.notifyLeadMinutes) } ?? "nil")")
-        aiP.drvCheck("(d) 원래 실려 있던 buffer는 그대로 실린다", pdEvent?.bufferMinutes == 15,
+        aiP.drvCheck("(d) 말해 둔 buffer(15분)는 그대로 실린다", pdEvent?.bufferMinutes == 15,
                      "buffer=\(pdEvent.map { String($0.bufferMinutes) } ?? "nil")")
         // 카드는 소비됐다 — 두 번째 확인은 nil이고 이벤트도 더 늘지 않는다(1회 보장).
         let twice = await aiP.drvResolvePendingAsk()
@@ -521,21 +590,54 @@ struct Drv {
 
         // ── Q. 무기억 회귀(SPEC-ASK-001 REQ-040·REQ-041). 되묻기 상태가 요청 사이·디스크 어디에도
         //      남지 않는다 — 남으면 "저장된 값이 조용히 적용된다"는 b303f41의 사고 형태가 되살아난다.
-        print("\nQ. 매번 물음 — 요청 사이·디스크에 상태 없음 (REQ-040·041)")
+        //      2026-09-16 결함 B 이후 "요청의 끝"은 발화가 아니라 **툴 실행**이다 — 그 경계를 여기서 잰다.
+        print("\nQ. 매번 물음 — 툴 실행 뒤엔 다시 묻는다 (REQ-040·041, 결함 B)")
         let aiQ = fresh()
         let qArgs: [String: Any] = ["title": "Q-매번", "destination_query": "회사",
                                     "arrival_iso": "2027-03-01T09:00:00"]
-        // REQ-041: submit()은 statedArgs를 매 발화에서 통째로 다시 뽑는다. drvAsk의 stated 주입이
-        // 같은 시맨틱이라, 같은 인스턴스의 둘째 요청이 첫째 요청의 값을 물고 있으면 빨개진다.
         let q1 = aiQ.drvAsk("create_schedule", qArgs, stated: AIAssistant.drvStated("자동차로 가고 여유 20분"))
         aiQ.drvCheck("말한 값이 채워진 요청은 mode·buffer를 안 묻는다",
                      Set(q1?.fields.map(\.key) ?? []).isDisjoint(with: ["mode_this_time", "buffer_minutes"]),
                      "keys=\(q1?.fields.map(\.key) ?? [])")
-        let q2 = aiQ.drvAsk("create_schedule", qArgs,
-                            stated: AIAssistant.drvStated("내일 오후 3시에 강남역에서 친구 만나기"))
-        aiQ.drvCheck("다음 요청은 값을 말하지 않으면 다시 묻는다(요청 사이 기억 없음)",
+        // 결함 B의 정확한 사고 모양: 모델이 시각을 되묻고 사용자가 "2시, 4시"처럼 아무 값 없이 다시
+        // 답한다 — 옛 코드는 statedArgs를 통째로 덮어 써 말해 둔 여유를 증발시켰다. 병합이면 유지된다.
+        let q15 = aiQ.drvAsk("create_schedule", qArgs, stated: [:])
+        aiQ.drvCheck("값 없는 발화이 끼어도 말해 둔 값은 유지된다(병합)",
+                     Set(q15?.fields.map(\.key) ?? []).isDisjoint(with: ["mode_this_time", "buffer_minutes"]),
+                     "keys=\(q15?.fields.map(\.key) ?? [])")
+        // 같은 키를 다시 말하면 덮어쓰고, 안 말한 키(buffer)는 그대로 — 유지와 갱신이 어긋나면
+        // 옛 값이 새 요청을 이긴다.
+        _ = aiQ.drvAsk("create_schedule", qArgs, stated: AIAssistant.drvStated("대중교통으로 가줘"))
+        aiQ.drvCheck("다시 말한 값은 같은 키만 덮어쓴다(자동차→대중교통, 여유 20 유지)",
+                     (aiQ.drvStatedArgs()["mode_this_time"] as? String) == "transit"
+                        && (aiQ.drvStatedArgs()["buffer_minutes"] as? Int) == 20,
+                     "stated=\(aiQ.drvStatedArgs())")
+        // 답을 못 받은 카드가 접히는 것(다른 발화로 무효)은 요청의 끝이 아니다 — 값은 그대로다.
+        let qCard0 = aiQ.drvAsk("create_schedule", qArgs)
+        aiQ.bubbles.append(.init(role: .assistant, text: "", ask: qCard0))
+        aiQ.drvCancelPendingAsk()
+        aiQ.drvCheck("카드는 접힌다(다른 발화로 무효)", aiQ.bubbles.last?.ask == nil, "ask가 남아 있다")
+        let q17 = aiQ.drvAsk("create_schedule", qArgs)
+        aiQ.drvCheck("카드를 접혔어도 값은 유지된다(취소는 지우지 않는다)",
+                     Set(q17?.fields.map(\.key) ?? []).isDisjoint(with: ["mode_this_time"]),
+                     "keys=\(q17?.fields.map(\.key) ?? [])")
+        // REQ-041의 새 경계: 툴이 실행됐다 = 요청이 끝났다. 이후의 요청은 다시 묻는다.
+        _ = await aiQ.drvExecuteTool("create_schedule", pcArgs)
+        let q2 = aiQ.drvAsk("create_schedule", qArgs)
+        aiQ.drvCheck("툴이 실행된 뒤의 요청은 다시 묻는다(요청 사이 기억 없음)",
                      Set(q2?.fields.map(\.key) ?? []).isSuperset(of: ["mode_this_time", "buffer_minutes"]),
                      "keys=\(q2?.fields.map(\.key) ?? [])")
+        // 새 대화도 값의 범위 밖이다 — 병합 유지가 옛 대화까지 새어 들어가면 안 된다.
+        // resetConversation이 saveHistory를 불러 진짜 파일을 건드리므로 백업·복원한다(drvPersistedPayload 방식).
+        let qHistURL = AppConfig.supportDirectory.appendingPathComponent("ai_history.json")
+        let qHistBackup = try? Data(contentsOf: qHistURL)
+        aiQ.resetConversation()
+        if let qHistBackup { try? qHistBackup.write(to: qHistURL) }
+        else { try? FileManager.default.removeItem(at: qHistURL) }
+        let q3 = aiQ.drvAsk("create_schedule", qArgs)
+        aiQ.drvCheck("새 대화를 시작하면 다시 묻는다(대화 밖 유출 없음)",
+                     Set(q3?.fields.map(\.key) ?? []).isSuperset(of: ["mode_this_time", "buffer_minutes"]),
+                     "keys=\(q3?.fields.map(\.key) ?? [])")
 
         // REQ-040: Config에 선호 필드가 부활하면 안 된다(REQ-004). Mirror로 **런타임의** 저장
         // 프로퍼티를 본다 — 소스를 grep하는 게 아니라 이 실행계가 실제 들고 있는 모습이다.
@@ -554,6 +656,965 @@ struct Drv {
         aiQ.drvCheck("저장 본문에 묻는 상태 키가 없다",
                      Set(payload.keys).isDisjoint(with: ["statedArgs", "ask", "pendingAsk", "ai_memory"]),
                      "keys=\(Set(payload.keys).sorted())")
+
+        // ── R. 왕복 의도에서 가는 출발지가 비었을 때(2026-09-16 실기기 결함 A). 모델이
+        //      return_to_query만 채우고 travel_from_query를 비워 보내면 옛 코드는 조용히 편도로
+        //      만들었다 — 가는 편도, 여유 줄도 없이. 되묻는 주체는 앱이므로 여기서 결정적으로 검증된다.
+        print("\nR. 왕복 의도 + 가는 출발지 부재 — 묻고, 편도 탈출이 있다 (결함 A)")
+        let rBase: [String: Any] = ["title": "R-왕복", "place_query": "회사",
+                                    "start_iso": "2027-03-03T14:00:00", "end_iso": "2027-03-03T18:00:00",
+                                    "return_to_query": "집", "travel_from_query": ""]
+        let aiR = fresh()
+        let rAsk = aiR.drvAsk("create_activity", rBase)
+        let rOrigin = rAsk?.fields.first { $0.key == "travel_from_query" }
+        aiR.drvCheck("가는 출발지 줄이 나온다", rOrigin != nil,
+                     "keys=\(rAsk?.fields.map(\.key) ?? [])")
+        aiR.drvCheck("출발지 줄에 '가는 편 없음' 탈출 칩이 있다(내부 토큰)",
+                     rOrigin?.options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true,
+                     "options=\(rOrigin?.options.map(\.value) ?? [])")
+        aiR.drvCheck("출발지 줄은 originField와 같은 재료다(즐겨찾기·현재 위치·직접입력)",
+                     rOrigin?.allowsCustom == true
+                        && rOrigin?.options.contains { $0.value == AIAssistant.drvCurrentLocationToken() } == true
+                        && rOrigin?.options.contains { $0.value == "집" } == true,
+                     "options=\(rOrigin?.options.map(\.value) ?? [])")
+        // 출발지를 고르면 왕복이 되므로 카드는 처음부터 왕복 줄(가는 편·오는 편·여유)을 함께
+        // 물어둔다 — 한 장 카드는 답에 따라 줄이 늘어날 수 없다.
+        aiR.drvCheck("가는 편·오는 편·여유 줄도 같은 카드에 있다",
+                     Set(rAsk?.fields.map(\.key) ?? []).isSuperset(
+                        of: ["travel_mode_this_time", "return_mode_this_time", "buffer_minutes"]),
+                     "keys=\(rAsk?.fields.map(\.key) ?? [])")
+
+        // 진짜 출발지를 고르면 왕복이 만들어진다 — 가는 다리의 여유까지.
+        store.events = []
+        store.activities = []
+        aiR.bubbles.append(.init(role: .assistant, text: "", ask: rAsk))
+        for f in rAsk?.fields ?? [] {
+            let v: String
+            switch f.key {
+            case "travel_from_query": v = "집"
+            case "travel_mode_this_time": v = "transit"
+            case "return_mode_this_time": v = "car"
+            case "buffer_minutes": v = "20"
+            default: v = "10"
+            }
+            aiR.choose(field: f.id, value: v)
+        }
+        let rSummary = await aiR.drvResolvePendingAsk()
+        let rActivity = store.activities.first { $0.title == "R-왕복" }
+        let rLegs = store.events.filter { $0.linkedActivityId == rActivity?.id }
+        aiR.drvCheck("왕복으로 만들어진다(다리 2개)", rActivity != nil && rLegs.count == 2,
+                     "legs=\(rLegs.count) summary=\(rSummary ?? "nil")")
+        aiR.drvCheck("가는 다리에 고른 여유(20분)가 실린다",
+                     rLegs.first { !$0.title.contains("(복귀)") }?.bufferMinutes == 20,
+                     "legs=\(rLegs.map { "\($0.title):buf\($0.bufferMinutes)" })")
+        aiR.drvCheck("오는 다리는 출발 기준이라 여유가 0이다(기존 규칙 유지)",
+                     rLegs.first { $0.title.contains("(복귀)") }?.bufferMinutes == 0,
+                     "legs=\(rLegs.map { "\($0.title):buf\($0.bufferMinutes)" })")
+        aiR.drvCheck("가는 편=대중교통·오는 편=자동차가 각각 실린다",
+                     rLegs.first { !$0.title.contains("(복귀)") }?.mode == .transit
+                        && rLegs.first { $0.title.contains("(복귀)") }?.mode == .car,
+                     "legs=\(rLegs.map { "\($0.title):\($0.mode.rawValue)" })")
+
+        // "가는 편 없음"으로 답하면 편도(오는 다리만)가 만들어진다 — 빈 값과 같은 뜻으로 풀린다.
+        store.events = []
+        store.activities = []
+        let aiR2 = fresh()
+        let r2Ask = aiR2.drvAsk("create_activity", rBase)
+        aiR2.bubbles.append(.init(role: .assistant, text: "", ask: r2Ask))
+        for f in r2Ask?.fields ?? [] {
+            let v: String
+            switch f.key {
+            case "travel_from_query": v = AIAssistant.drvNoOutboundToken()
+            case "travel_mode_this_time": v = "car"
+            case "return_mode_this_time": v = "walk"
+            case "buffer_minutes": v = "0"
+            default: v = "10"
+            }
+            aiR2.choose(field: f.id, value: v)
+        }
+        let r2Summary = await aiR2.drvResolvePendingAsk()
+        let r2Activity = store.activities.first { $0.title == "R-왕복" }
+        let r2Legs = store.events.filter { $0.linkedActivityId == r2Activity?.id }
+        aiR2.drvCheck("편도로 만들어진다(오는 다리만 1개)", r2Activity != nil && r2Legs.count == 1,
+                      "legs=\(r2Legs.count) summary=\(r2Summary ?? "nil")")
+        aiR2.drvCheck("그 다리는 오는 편(복귀)이고 고른 수단(도보)이다",
+                      r2Legs.first?.title.contains("(복귀)") == true && r2Legs.first?.mode == .walk,
+                      "legs=\(r2Legs.map { "\($0.title):\($0.mode.rawValue)" })")
+        aiR2.drvCheck("요약에 생기지 않은 가는 편을 말하지 않는다",
+                      r2Summary?.contains("가는 편") == false, r2Summary ?? "nil")
+
+        // 선언 대칭(결함 A 1차 방어): 가는 출발지 설명에도 왕복 의무가 적혀 있다 — 옛 설명은
+        // return_to_query 쪽에만 경고가 있어 모델이 그대로 한쪽만 챙겼다.
+        let rTool = decls.first { $0["name"] as? String == "create_activity" }
+        let rProps = ((rTool?["parameters"] as? [String: Any])?["properties"] as? [String: Any]) ?? [:]
+        let rDescText = (rProps["travel_from_query"] as? [String: Any])?["description"] as? String ?? ""
+        aiR2.drvCheck("travel_from_query 선언이 왕복 의무를 말한다(return_to_query와 대칭)",
+                     rDescText.contains("왕복") && rDescText.contains("안 만들어진다"), rDescText)
+
+        // ── S. 묻지 않은 on_conflict(2026-09-16 실기기 결함 C). 이 모델은 enum이 붙은 선택
+        //      인자를 비우지 못해 첫 호출에도 on_conflict를 실어 보낸다(전사에서 세 건 전부
+        //      "ignore"). 그게 통과하면 겹침 검사가 통째로 건너뛰어진다 — confirm_recurrence·
+        //      confirm_zero와 같은 규칙으로, 앱이 실제로 물은 조합의 재호출만 답으로 인정한다.
+        print("\nS. 묻지 않은 on_conflict — 겹침 검사는 항상 돈다 (결함 C)")
+        let sCal = Calendar.current
+        func sDay(_ y: Int, _ m: Int, _ d: Int, _ h: Int, _ _min: Int) -> Date {
+            sCal.date(from: DateComponents(year: y, month: m, day: d, hour: h, minute: _min))!
+        }
+        // 전제: 이동시간 조회가 되어야 겹침 검사가 돈다(실패하면 실행부가 검사를 건너뛴다). nil이면
+        // S절 전체가 무의미하니 여기서 빨개져 알린다 — 조용히 건너뛰는 건 거짓 초록이다.
+        // 도보로 잰다: 도보 추정은 MapKit 단독이라(프록시·키를 안 탄다) 반복 호출에도 값이 흔들리지
+        // 않는다. 대중교통은 프록시(ODsay) 경유라 앞절들이 쌓아둔 호출 탓에 실패할 수 있어, 그걸 쓰면
+        // S절이 네트워크 상태에 좌우된다.
+        let aiS = fresh()
+        let sSeconds = await store.travelSeconds(
+            from: store.favorites.first { $0.label == "집" }?.place ?? Place(name: "집", address: "", latitude: 37.500, longitude: 127.000),
+            to: store.favorites.first { $0.label == "회사" }?.place ?? Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010),
+            mode: .walk)
+        aiS.drvCheck("S 전제 — 이 환경에서 이동시간 조회가 된다", sSeconds != nil,
+                     "seconds=nil — 겹침 검사가 돌지 않는다(네트워크·좌표 확인)")
+        // C1: 그 날 하루 종일 활동이 있는데, 묻지도 않은 on_conflict:"ignore"를 달고 온 첫 호출.
+        //     (활동 블록으로 겹침을 만든다 — conflicts가 이동시간 없는 이벤트는 건너뛰기 때문이다.)
+        store.events = []
+        store.activities = [ActivityBlock(title: "S-하루종일", location: nil,
+                                          startDate: sDay(2027, 3, 1, 0, 0),
+                                          endDate: sDay(2027, 3, 1, 23, 59), recurrenceId: nil)]
+        let sArgs: [String: Any] = ["title": "S-겹침", "destination_query": "회사", "origin_query": "집",
+                                    "arrival_iso": "2027-03-01T09:00:00", "mode_this_time": "walk",
+                                    "buffer_minutes": 0, "notify_lead_minutes": 10,
+                                    "on_conflict": "ignore"]
+        let s1 = await aiS.drvCreate(sArgs)
+        aiS.drvCheck("C1: 묻지 않은 ignore는 무시되고 겹침 안내가 나온다",
+                     s1.contains("아직 등록하지 않았어요") && s1.contains("겹칩니다"), s1)
+        aiS.drvCheck("C1: 등록은 일어나지 않는다",
+                     !store.events.contains { $0.title == "S-겹침" },
+                     "events=\(store.events.filter { $0.title == "S-겹침" }.count)")
+        // C2: 앱이 물은 뒤 같은 인자로 다시 온 ignore는 답으로 인정돼 정확히 1건 등록된다.
+        let s2 = await aiS.drvCreate(sArgs)
+        let s2Count = store.events.filter { $0.title == "S-겹침" }.count
+        aiS.drvCheck("C2: 물은 뒤의 ignore는 통과해 정확히 1건 등록된다",
+                     s2.hasPrefix("등록 완료") && s2Count == 1, "count=\(s2Count) result=\(s2)")
+        // C3: late_arrival도 같다 — 묻지 않으면 무시(그래서 안내가 나오고), 물은 뒤에는 출발
+        //     기준 전환으로 이어진다. 소비도 본다: C2의 등록이 확인을 소진했으므로 C3의 첫 호출은
+        //     다시 '안 물은' 상태에서 시작된다.
+        store.events = []
+        store.activities = [ActivityBlock(title: "S-오전", location: nil,
+                                          startDate: sDay(2027, 3, 2, 8, 0),
+                                          endDate: sDay(2027, 3, 2, 10, 0), recurrenceId: nil)]
+        let s3Args: [String: Any] = ["title": "S-늦게", "destination_query": "회사", "origin_query": "집",
+                                     "arrival_iso": "2027-03-02T09:00:00", "mode_this_time": "walk",
+                                     "buffer_minutes": 0, "notify_lead_minutes": 10,
+                                     "on_conflict": "late_arrival"]
+        let s3a = await aiS.drvCreate(s3Args)
+        aiS.drvCheck("C3: 묻지 않은 late_arrival도 무시되고 겹침 안내가 나온다",
+                     s3a.contains("아직 등록하지 않았어요"), s3a)
+        let s3b = await aiS.drvCreate(s3Args)
+        let s3Event = store.events.first { $0.title == "S-늦게" }
+        aiS.drvCheck("C3: 물은 뒤의 late_arrival은 출발 기준으로 바꿔 등록된다",
+                     s3b.hasPrefix("등록 완료") && s3Event?.anchor == .departure,
+                     "result=\(s3b) anchor=\(String(describing: s3Event?.anchor))")
+        aiS.drvCheck("C3: 출발 시각은 겹침이 끝난 10:00에 맞춰진다",
+                     s3Event.map { sCal.isDate($0.departureDate ?? .distantPast,
+                                              equalTo: sDay(2027, 3, 2, 10, 0), toGranularity: .minute) } == true,
+                     "dep=\(s3Event?.departureDate.map { "\($0)" } ?? "nil")")
+
+        // ── T. 선언 밖 모델 인자 정화(2026-09-16 실기기 결함 D). 이 모델은 선언에서 뺀 인자도
+        //      얹어 보낸다(전사 — 없는 mode_this_time·buffer_minutes·notify_lead_minutes·weeks가
+        //      카드를 우회해 사용자가 고르지 않은 값으로 118건을 등록했다). 도착한 인자에서 선언
+        //      밖 키를 버린다 — 화이트리스트는 선언 자체에서 구하므로 두 벌이 어긋날 수 없다.
+        print("\nT. 선언 밖 모델 인자 — 버리고 카드가 묻는다 (결함 D)")
+        let aiT = fresh()
+        // D1: 반복 생성 — 모델이 되묻기 인자 넷을 몽땅 실어도 카드는 5줄(출발지·수단·여유·알림·기간).
+        let t1 = aiT.drvAsk("create_recurring_schedule",
+                            ["title": "T-반복", "destination_query": "회사",
+                             "weekdays": ["mon", "tue", "wed", "thu", "fri"],
+                             "arrival_time": "09:00", "return_time": "18:00",
+                             "mode_this_time": "car", "buffer_minutes": 10,
+                             "notify_lead_minutes": 10, "weeks": 8])
+        aiT.drvCheck("D1: 카드가 나온다(출발지·수단·여유·알림·기간 5줄)",
+                     Set(t1?.fields.map(\.key) ?? []) == ["origin_query", "mode_this_time", "buffer_minutes",
+                                                          "notify_lead_minutes", "weeks"],
+                     "keys=\(t1?.fields.map(\.key) ?? [])")
+        aiT.drvCheck("D1: 모델이 실은 값은 카드가 붙잡은 호출에 없다",
+                     Set(AIAssistant.drvCallArgs(t1).keys)
+                        .isDisjoint(with: ["mode_this_time", "buffer_minutes", "notify_lead_minutes", "weeks"]),
+                     "args=\(AIAssistant.drvCallArgs(t1).keys.sorted())")
+        // D2: 단발·활동도 같다.
+        let t2 = aiT.drvAsk("create_schedule",
+                            ["title": "T-단발", "destination_query": "회사",
+                             "arrival_iso": "2027-03-05T09:00:00",
+                             "mode_this_time": "car", "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aiT.drvCheck("D2: create_schedule도 수단·여유·알림을 다시 묻는다",
+                     Set(t2?.fields.map(\.key) ?? []) == ["origin_query", "mode_this_time",
+                                                          "buffer_minutes", "notify_lead_minutes"],
+                     "keys=\(t2?.fields.map(\.key) ?? [])")
+        let t3 = aiT.drvAsk("create_activity",
+                            ["title": "T-활동", "place_query": "회사",
+                             "start_iso": "2027-03-05T14:00:00", "end_iso": "2027-03-05T18:00:00",
+                             "travel_from_query": "집", "return_to_query": "집",
+                             "mode_this_time": "car", "travel_mode_this_time": "car",
+                             "return_mode_this_time": "car", "buffer_minutes": 10,
+                             "notify_lead_minutes": 10])
+        aiT.drvCheck("D2: create_activity도 가는 편·오는 편·여유·알림을 다시 묻는다",
+                     Set(t3?.fields.map(\.key) ?? []) == ["travel_mode_this_time", "return_mode_this_time",
+                                                          "buffer_minutes", "notify_lead_minutes"],
+                     "keys=\(t3?.fields.map(\.key) ?? [])")
+        aiT.drvCheck("D2: 활동 쪽 모델 값 다섯도 정화된다",
+                     Set(AIAssistant.drvCallArgs(t3).keys)
+                        .isDisjoint(with: ["mode_this_time", "travel_mode_this_time",
+                                           "return_mode_this_time", "buffer_minutes", "notify_lead_minutes"]),
+                     "args=\(AIAssistant.drvCallArgs(t3).keys.sorted())")
+        // 순서: 정화 **뒤에** 발화값이 얹힌다 — 같은 키에서 부딪히면 사용자가 말한 값이 이긴다.
+        let t4 = aiT.drvAsk("create_schedule",
+                            ["title": "T-순서", "destination_query": "회사",
+                             "arrival_iso": "2027-03-05T09:00:00",
+                             "mode_this_time": "car", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                            stated: AIAssistant.drvStated("대중교통으로 가고 여유 20분"))
+        aiT.drvCheck("모델값과 말한 값이 부딪히면 말한 값이 살아남는다(정화 → 발화 주입 순서)",
+                     (AIAssistant.drvCallArgs(t4)["mode_this_time"] as? String) == "transit"
+                        && (AIAssistant.drvCallArgs(t4)["buffer_minutes"] as? Int) == 20,
+                     "args=\(AIAssistant.drvCallArgs(t4))")
+        // D3: 갱신 도구는 선언된 mode·buffer·notify를 계속 받는다 — 정화의 화이트리스트가 선언에서
+        //     오므로 깨질 수 없다는 것을 실행계가 든 키로 확인하고, 실제 저장값도 본다.
+        //     confirm_zero 왕복은 B·N절이 계속 지킨다(여기서 중복하지 않는다).
+        aiT.drvCheck("D3: 갱신 도구는 mode·buffer·notify·confirm_zero를 계속 받는다",
+                     aiT.drvModelKeys("update_recurring_schedule")
+                        .isSuperset(of: ["mode", "buffer_minutes", "notify_lead_minutes", "confirm_zero"]),
+                     "keys=\(aiT.drvModelKeys("update_recurring_schedule").sorted())")
+        let ridT = UUID()
+        store.events = [AIAssistant.drvLeg(ridT, title: "T-수정", hours: 48)]
+        store.activities = []
+        let aiT3 = fresh()
+        _ = aiT3.drvList()   // ridT에 [반복 1] 배정
+        let t3u = await aiT3.drvUpdate(["series_number": 1, "buffer_minutes": 20])
+        let bufT = store.events.first { $0.recurrenceId == ridT }?.bufferMinutes
+        aiT3.drvCheck("D3: update_recurring_schedule의 buffer 20은 그대로 저장된다",
+                      bufT == 20, "buffer=\(bufT.map(String.init) ?? "nil") result=\(t3u)")
+        // D4: 드리프트 가드 — (e)절이 선언 파일 모습을 본다면 여기는 실행계의 화이트리스트를 본다.
+        //     되묻기 인자를 다시 선언에 넣는 순간 정화가 조용히 풀리므로 두 쪽 다 잡는다.
+        let cardOwned: [String: Set<String>] = [
+            "create_schedule": ["mode_this_time", "buffer_minutes", "notify_lead_minutes"],
+            "create_recurring_schedule": ["mode_this_time", "buffer_minutes", "notify_lead_minutes", "weeks"],
+            "create_activity": ["mode_this_time", "travel_mode_this_time", "return_mode_this_time",
+                                "buffer_minutes", "notify_lead_minutes"]]
+        for (tool, banned) in cardOwned {
+            aiT3.drvCheck("D4: \(tool) 화이트리스트에 되묻기 인자가 없다(선언=SSOT)",
+                         aiT3.drvModelKeys(tool).isDisjoint(with: banned),
+                         "keys=\(aiT3.drvModelKeys(tool).sorted())")
+        }
+
+        // ── U. E·F 프롬프트 규칙 — **문자열 존재 확인일 뿐, 행동 검증이 아니다.** 드라이버는
+        //      모델 없이 돌므로 "지시를 모델이 지키는가"는 여기서 볼 수 없다(실기기 관찰 항목).
+        //      잡는 것은 한 가지뿐이다: 프롬프트가 다시 압축되며 두 규칙이 조용히 사라지는 것.
+        print("\nU. E·F 프롬프트 규칙 — 문자열 존재만 확인 (행동 검증 아님)")
+        let uPrompt = aiT3.drvSystemPrompt()
+        aiT3.drvCheck("E: 출발지 규칙이 '지어내서 채우면 안 된다'와 결과를 적시한다(문자열 존재)",
+                      uPrompt.contains("지어내서 채우면 안 된다")
+                        && uPrompt.contains("둘 다 사용자가 직접 고를 기회를 없앤다"),
+                      "규칙 3 원문 확인")
+        aiT3.drvCheck("F: 기억 요청에 '미래 약속 금지'와 매번 물음 이유가 있다(문자열 존재)",
+                      uPrompt.contains("미래 약속을 하지 마라")
+                        && uPrompt.contains("매번 다시 물어본다"),
+                      "규칙 7 원문 확인")
+
+        // ── V. 카드 확장 ① — 제목·목적지·시각 줄(2026-09-16). required를 비워야 모델이 비울 수
+        //      있고, 비워야 줄이 뜬다. 시각 값은 "arr:"/"dep:" 접두 + ISO로 직렬화되고, 기준은
+        //      사용자가 반드시 고른다(미리 골라두지 않는다 — 확인 버튼이 그대로 잠긴다).
+        print("\nV. 카드 확장 — 제목·목적지·시각 줄 (①)")
+        let vDate = sCal.date(from: DateComponents(year: 2027, month: 3, day: 8, hour: 15, minute: 0))
+        let aiV = fresh()
+        // ①-1: 세 값이 모두 빈 호출 → 일곱 줄. 기준 미선택(=시각 미확정)이면 확인 불가.
+        let v1 = aiV.drvAsk("create_schedule", [:])
+        aiV.drvCheck("①-1: 제목·목적지·시각이 비면 카드가 7줄로 뜬다",
+                     Set(v1?.fields.map(\.key) ?? []) == ["title", "destination_query", "origin_query",
+                                                          "arrival_iso", "mode_this_time",
+                                                          "buffer_minutes", "notify_lead_minutes"],
+                     "keys=\(v1?.fields.map(\.key) ?? [])")
+        aiV.drvCheck("①-1: 아무것도 고르지 않으면 확인이 불가하다",
+                     v1?.isReady == false, "isReady가 true다")
+        aiV.bubbles.append(.init(role: .assistant, text: "", ask: v1))
+        for f in v1?.fields ?? [] where f.kind != .datetime {
+            switch f.key {
+            case "title": _ = aiV.submitCustom(field: f.id, text: "V-카드")   // 제목도 accepts 경로로
+            case "destination_query": aiV.choose(field: f.id, value: "회사")
+            case "origin_query": aiV.choose(field: f.id, value: "집")
+            case "mode_this_time": aiV.choose(field: f.id, value: "transit")
+            case "buffer_minutes": aiV.choose(field: f.id, value: "10")
+            default: aiV.choose(field: f.id, value: "10")
+            }
+        }
+        aiV.drvCheck("①-1: 시각 외 여섯을 다 골라도 확인은 불가하다(기준·시각 모두 필수)",
+                     aiV.drvLiveAsk()?.isReady == false, "isReady가 true다")
+        // ①-2: 기준+시각 확정 → 확인 가능, 실행 호출에는 arrival·departure 중 정확히 하나.
+        let vTime = v1?.fields.first { $0.kind == .datetime }
+        var vTimeChosen = false
+        if let vTime, let vDate { vTimeChosen = aiV.chooseTime(field: vTime.id, basis: .arrival, date: vDate) }
+        aiV.drvCheck("①-2: 기준+시각 확정으로 확인 가능해진다(chooseTime)",
+                     vTimeChosen && (aiV.drvLiveAsk()?.isReady ?? false),
+                     "chooseTime=\(vTimeChosen)")
+        let vSummary = await aiV.drvResolvePendingAsk()
+        let vArgs = aiV.drvLastCallArgs()
+        let vEvent = store.events.first { $0.title == "V-카드" }
+        aiV.drvCheck("①-2: arrival_iso만 실린다(departure_iso는 없음)",
+                     vArgs["arrival_iso"] != nil && vArgs["departure_iso"] == nil,
+                     "args=\(vArgs.keys.sorted())")
+        aiV.drvCheck("①-2: 확정 시각 그대로 1회 실행된다",
+                     store.events.filter { $0.title == "V-카드" }.count == 1
+                        && vEvent != nil && vDate != nil
+                        && sCal.isDate(vEvent!.arrivalDate, equalTo: vDate!, toGranularity: .minute),
+                     "count=\(store.events.filter { $0.title == "V-카드" }.count) summary=\(vSummary ?? "nil")")
+        // ①-3: 출발 기준 — 여유는 골라도 실리지 않는다(chosen은 남아 교착 없음).
+        store.events = []
+        let aiV2 = fresh()
+        let v2Ask = aiV2.drvAsk("create_schedule", [:])
+        aiV2.bubbles.append(.init(role: .assistant, text: "", ask: v2Ask))
+        for f in v2Ask?.fields ?? [] where f.kind != .datetime {
+            switch f.key {
+            case "title": _ = aiV2.submitCustom(field: f.id, text: "V-출발")
+            case "destination_query": aiV2.choose(field: f.id, value: "회사")
+            case "origin_query": aiV2.choose(field: f.id, value: "집")
+            case "mode_this_time": aiV2.choose(field: f.id, value: "transit")
+            case "buffer_minutes": aiV2.choose(field: f.id, value: "20")   // 출발 기준이라 실리면 안 됨
+            default: aiV2.choose(field: f.id, value: "10")
+            }
+        }
+        let v2Time = v2Ask?.fields.first { $0.kind == .datetime }
+        if let v2Time, let vDate { _ = aiV2.chooseTime(field: v2Time.id, basis: .departure, date: vDate) }
+        aiV2.drvCheck("①-3: 출발 기준+여유를 골라도 확인 가능하다(여유 chosen 유지 — 교착 없음)",
+                      aiV2.drvLiveAsk()?.isReady == true, "isReady가 false다")
+        _ = await aiV2.drvResolvePendingAsk()
+        let v2Args = aiV2.drvLastCallArgs()
+        let v2Event = store.events.first { $0.title == "V-출발" }
+        aiV2.drvCheck("①-3: departure_iso만 실리고 arrival_iso는 없다",
+                      v2Args["departure_iso"] != nil && v2Args["arrival_iso"] == nil,
+                      "args=\(v2Args.keys.sorted())")
+        aiV2.drvCheck("①-3: 출발 기준에는 buffer_minutes가 실리지 않는다",
+                      v2Args["buffer_minutes"] == nil, "args=\(v2Args.keys.sorted())")
+        aiV2.drvCheck("①-3: 출발 기준 이벤트로 등록된다(anchor=departure, buffer 0)",
+                      v2Event?.anchor == .departure && v2Event?.bufferMinutes == 0,
+                      "anchor=\(String(describing: v2Event?.anchor)) buffer=\(v2Event.map { String($0.bufferMinutes) } ?? "nil")")
+        // ①-4: 드리프트 가드 — required에 다시 들어가면 줄이 영영 안 뜬다.
+        let vToolV = decls.first { $0["name"] as? String == "create_schedule" }
+        let vReq = ((vToolV?["parameters"] as? [String: Any])?["required"] as? [String]) ?? []
+        aiV2.drvCheck("①-4: create_schedule required에 title·destination_query가 없다",
+                     !vReq.contains("title") && !vReq.contains("destination_query"),
+                     "required=\(vReq)")
+        // 모델이 채워온 제목·목적지는 출처가 드러나게 카드에 보인다(최소 방어).
+        let v3 = aiV2.drvAsk("create_schedule", ["title": "V-출처", "destination_query": "회사",
+                                                 "arrival_iso": "2027-03-09T09:00:00"])
+        aiV2.drvCheck("모델이 채워온 제목·목적지는 카드에 보인다",
+                      v3?.stated.contains("제목 'V-출처'") == true && v3?.stated.contains("목적지 '회사'") == true,
+                      "stated=\(v3?.stated ?? [])")
+        aiV2.drvCheck("프롬프트가 목적지·제목 지어내기 금지를 적시한다(문자열 존재 — 행동 검증 아님)",
+                      aiV2.drvSystemPrompt().contains("목적지·제목도 같다"), "규칙 3 원문 확인")
+
+        // ── W. 빈 문자열 시각·비상한 종료일(2026-09-16 코드 검사 발견). 이 모델은 "비움"을 빈
+        //      문자열로 실어 보내는 경우가 있다 — 시각 유무를 nil로만 판정하면 시각 줄이 영영 안 뜨고
+        //      확인 뒤에야 실행부가 parseDate에서 걸러 모델에게 되물게 한다(카드가 물어야 한다).
+        //      종료일은 end_iso에 상한이 없어(9999년도 parseDate를 통과한다) activities의 didSet 안
+        //      걷기가 비한정이 되는 것을 366일 상한으로 막는다 — 점 개수로 그 상한을 직접 본다.
+        print("\nW. 빈 문자열 시각·비상한 종료일 상한 (2026-09-16 코드 검사)")
+        let wAsk = aiV2.drvAsk("create_schedule", ["title": "W-빈시각", "destination_query": "회사",
+                                                   "arrival_iso": ""])
+        aiV2.drvCheck("W1: arrival_iso가 빈 문자열이면 시각 줄이 뜬다(nil이 아니어도 '비었다')",
+                      wAsk?.fields.contains { $0.kind == .datetime } == true,
+                      "keys=\(wAsk?.fields.map(\.key) ?? [])")
+        store.events = []
+        store.activities = [ActivityBlock(title: "W-9999년", location: nil,
+                                          startDate: sDay(2027, 3, 10, 9, 0),
+                                          endDate: sDay(9999, 1, 1, 0, 0), recurrenceId: nil)]
+        aiV2.drvCheck("W2: 종료일이 비상하게 길어도 점은 상한(366일) 안에서 끝난다",
+                      store.daysWithSchedule.count <= 366,
+                      "dots=\(store.daysWithSchedule.count)")
+        // W3: 같은 상한이 생성 시점에서도 거른다 — 걷기 상한만으로는 "점이 잘린 채 저장된 활동"이
+        //     남는다. create_activity는 출발지·복귀지를 안 넣으면 카드 줄이 없어 바로 실행에 닿는다.
+        store.activities = []
+        let w3Reject = await aiV2.drvExecuteTool("create_activity",
+                                                 ["title": "W-3년짜리", "start_iso": "2027-03-10T09:00:00",
+                                                  "end_iso": "2030-03-10T09:00:00"])
+        aiV2.drvCheck("W3: 366일을 넘는 활동은 만들어지지 않고 사용자 확인을 요청한다",
+                      w3Reject.contains("아직 만들지 않았어요") && store.activities.isEmpty,
+                      "reply=\(w3Reject) count=\(store.activities.count)")
+        let w3Made = await aiV2.drvExecuteTool("create_activity",
+                                               ["title": "W-하룻밤", "start_iso": "2027-03-10T18:00:00",
+                                                "end_iso": "2027-03-11T04:00:00"])
+        aiV2.drvCheck("W3: 정상 길이(자정 넘김 하룻밤) 활동은 그대로 만들어진다",
+                      w3Made.contains("등록 완료") && store.activities.count == 1,
+                      "reply=\(w3Made) count=\(store.activities.count)")
+        aiV2.drvCheck("W3: 만들어진 자정 넘김 활동의 점은 이틀에 켜진다(생성 경로 종단)",
+                      store.daysWithSchedule == [Store.dayKey(sDay(2027, 3, 10, 0, 0), calendar: sCal),
+                                                 Store.dayKey(sDay(2027, 3, 11, 0, 0), calendar: sCal)],
+                      "dots=\(store.daysWithSchedule.sorted())")
+
+        // ── X. 자정 겹침 판정 자체 — overlapsDay·dayKeys·recomputeDaysWithSchedule이 같은 날을
+        //      내는지 잰다(결함 G·G-2). ⚠️ 여기서 재는 건 "어느 날에 나열되고 점이 켜지는가"까지다.
+        //      블록을 그 날의 0~1440분으로 자르는 산술(span(for:on:))은 ContentView.swift에 있어
+        //      드라이버가 컴파일하지 못한다 — 잘림 높이·최소 높이 늘림 방향은 여전히 실기기 확인
+        //      영역이고, 이 절의 초록이 그 커버리지를 입증하지 않는다.
+        print("\nX. 자정 겹침 판정 — 나열과 점이 같은 날을 본다 (결함 G·G-2)")
+        // X1: 22:00 → 익일 04:00 — 두 날 모두, 그 앞·뒤 날과는 아니다.
+        let x1s = sDay(2027, 3, 10, 22, 0), x1e = sDay(2027, 3, 11, 4, 0)
+        aiV2.drvCheck("X1: 자정 넘김(22:00→익일 04:00)은 두 날 모두와 겹친다",
+                      (10...11).allSatisfy { Store.overlapsDay(start: x1s, end: x1e, day: sDay(2027, 3, $0, 0, 0), calendar: sCal) },
+                      "출발일·도착일 판정이 거짓")
+        aiV2.drvCheck("X1: 그 앞·뒤 날과는 겹치지 않는다(과잉 나열이 이웃 날을 오염한다)",
+                      !Store.overlapsDay(start: x1s, end: x1e, day: sDay(2027, 3, 9, 0, 0), calendar: sCal)
+                      && !Store.overlapsDay(start: x1s, end: x1e, day: sDay(2027, 3, 12, 0, 0), calendar: sCal),
+                      "이웃 날이 켜졌다")
+        // X2: 자정을 두 번 넘으면 세 날 모두.
+        let x2s = sDay(2027, 3, 10, 22, 0), x2e = sDay(2027, 3, 12, 2, 0)
+        aiV2.drvCheck("X2: 자정을 두 번 넘는 구간(10일 22:00→12일 02:00)은 세 날 모두와 겹친다",
+                      (8...9).allSatisfy { !Store.overlapsDay(start: x2s, end: x2e, day: sDay(2027, 3, $0, 0, 0), calendar: sCal) }
+                      && (10...12).allSatisfy { Store.overlapsDay(start: x2s, end: x2e, day: sDay(2027, 3, $0, 0, 0), calendar: sCal) }
+                      && !Store.overlapsDay(start: x2s, end: x2e, day: sDay(2027, 3, 13, 0, 0), calendar: sCal),
+                      "가운데 날이 빠졌거나 이웃 날이 켜졌다")
+        // X3: 경계 소유권 — 반열린 [start, end)라는 규칙 그 자체.
+        aiV2.drvCheck("X3: 정확히 0시에 끝나는 구간은 다음 날과 겹치지 않는다",
+                      Store.overlapsDay(start: x1s, end: sDay(2027, 3, 11, 0, 0), day: sDay(2027, 3, 10, 0, 0), calendar: sCal)
+                      && !Store.overlapsDay(start: x1s, end: sDay(2027, 3, 11, 0, 0), day: sDay(2027, 3, 11, 0, 0), calendar: sCal),
+                      "끝 날이 켜졌다")
+        aiV2.drvCheck("X3: 정확히 0시에 시작하는 구간은 전날과 겹치지 않는다",
+                      Store.overlapsDay(start: sDay(2027, 3, 11, 0, 0), end: x1e, day: sDay(2027, 3, 11, 0, 0), calendar: sCal)
+                      && !Store.overlapsDay(start: sDay(2027, 3, 11, 0, 0), end: x1e, day: sDay(2027, 3, 10, 0, 0), calendar: sCal),
+                      "전날이 켜졌다")
+        // X4: 깨진 구간 — 호출자 폴백(앵커 날 하루)과 짝이 되는 판정.
+        aiV2.drvCheck("X4: end ≤ start인 깨진 구간은 어느 날과도 겹치지 않는다",
+                      !Store.overlapsDay(start: x1e, end: x1s, day: sDay(2027, 3, 10, 0, 0), calendar: sCal)
+                      && !Store.overlapsDay(start: x1s, end: x1s, day: sDay(2027, 3, 10, 0, 0), calendar: sCal),
+                      "깨진 구간이 켜졌다")
+        // X5: dayKeys 열거가 overlapsDay 판정과 같은 집합을 내는지 직접 잰다(계약 5 — 두 경로가
+        //     갈라지면 월간 점과 일간 나열이 다시 어긋난다). 후보 창을 구간보다 넓게(±5일) 잡아
+        //     창 경계에서 어긋나는 것도 잡는다.
+        let x5Days = (5...15).compactMap { sCal.date(from: DateComponents(year: 2027, month: 3, day: $0)) }
+        func x5ByPredicate(_ s: Date, _ e: Date) -> Set<Int> {
+            Set(x5Days.filter { Store.overlapsDay(start: s, end: e, day: $0, calendar: sCal) }
+                      .map { Store.dayKey($0, calendar: sCal) })
+        }
+        aiV2.drvCheck("X5: dayKeys 열거 = overlapsDay 판정(두 번 넘는 구간에서 같은 집합)",
+                      Set(Store.dayKeys(start: x2s, end: x2e, calendar: sCal)) == x5ByPredicate(x2s, x2e),
+                      "keys=\(Store.dayKeys(start: x2s, end: x2e, calendar: sCal).sorted()) predicate=\(x5ByPredicate(x2s, x2e).sorted())")
+        aiV2.drvCheck("X5: 0시 경계 구간도 열거·판정이 같다(키는 하루뿐)",
+                      Set(Store.dayKeys(start: x1s, end: sDay(2027, 3, 11, 0, 0), calendar: sCal)) == x5ByPredicate(x1s, sDay(2027, 3, 11, 0, 0))
+                      && Store.dayKeys(start: x1s, end: sDay(2027, 3, 11, 0, 0), calendar: sCal).count == 1,
+                      "keys=\(Store.dayKeys(start: x1s, end: sDay(2027, 3, 11, 0, 0), calendar: sCal).sorted())")
+        // X6: recomputeDaysWithSchedule이 실제 배열 대입에서 양쪽 날 키를 넣는다(G-2 본체 — 월간
+        //     점과 일간 나열이 같은 말을 한다). 이동은 [출발, 도착), 계산 실패는 도착일 하루.
+        store.events = []; store.activities = []
+        let x6p = Place(name: "곳", address: "주소", latitude: 37.5, longitude: 127.0)
+        var x6Event = ScheduledEvent(title: "X-이동", origin: x6p, destination: x6p,
+                                     arrivalDate: x1e, mode: .transit, bufferMinutes: 10,
+                                     notifyLeadMinutes: 10, recurrenceId: nil, anchor: .arrival)
+        x6Event.departureDate = x1s
+        store.events = [x6Event]
+        aiV2.drvCheck("X6: 자정 넘는 이동(22:00 출발→익일 04:00 도착)도 두 날 모두 점이 켜진다",
+                      store.daysWithSchedule == [Store.dayKey(sDay(2027, 3, 10, 0, 0), calendar: sCal),
+                                                 Store.dayKey(sDay(2027, 3, 11, 0, 0), calendar: sCal)],
+                      "dots=\(store.daysWithSchedule.sorted())")
+        x6Event.departureDate = nil   // 계산 실패 형태 — 구간이 없으니 도착일 하루만
+        store.events = [x6Event]
+        aiV2.drvCheck("X6: 출발시각이 없는(계산 실패) 이동은 도착일에만 점이 켜진다",
+                      store.daysWithSchedule == [Store.dayKey(sDay(2027, 3, 11, 0, 0), calendar: sCal)],
+                      "dots=\(store.daysWithSchedule.sorted())")
+
+        // ── J. 등록 요약은 방금 만든 회차의 시각을 말한다(2026-09-16 결함 J). addEvent가 도착일순
+        //      정렬하므로 제목·목적지로 `.last` 되찾기하면 '매치 중 도착이 가장 늦은 것'— 같은 이름의
+        //      늦은 회차—를 집어 요약이 남의 시각을 알렸다. 같은 제목·같은 목적지가 설계상 자연스러워진
+        //      지금(① 카드가 제목을 직접 받는다) 잠자던 위험이 깨어난 자리다.
+        //      출발지·목적지는 즐겨찾기 정확 매치로 풀리고(S절과 같은 도보 추정) 이동시간은 MapKit
+        //      단독이라 결정적으로 돈다. addEvent의 save는 개발 기기 macOS 앱의 진짜 events.json에
+        //      쓰므로(drvPersistedPayload와 같은 결) J절은 검사 뒤 원본 바이트를 되돌린다.
+        print("\nJ. 등록 요약 — 같은 이름의 늦은 회차가 있어도 방금 만든 것을 말한다 (결함 J)")
+        let jEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
+        let jEventsBackup = try? Data(contentsOf: jEventsURL)
+        let aiJ2 = fresh()
+        store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.47, longitude: 126.95)),
+                           FavoritePlace(label: "J-강남역", place: Place(name: "J-강남역", address: "", latitude: 37.498, longitude: 127.028))]
+        // 전제: 같은 제목·같은 목적지의 '늦은 회차'(금요일 18시 도착, 출발시각·이동시간 있음)가 이미
+        // 있다 — 예전 코드라면 `.last {매치}`가 이쪽을 집어 금요일 시각을 알렸다.
+        var jOld = ScheduledEvent(title: "J-강남역", origin: nil, destination: store.favorites[1].place,
+                                  arrivalDate: sDay(2027, 3, 12, 18, 0), mode: .walk, bufferMinutes: 10,
+                                  notifyLeadMinutes: 20, recurrenceId: nil, anchor: .arrival)
+        jOld.departureDate = sDay(2027, 3, 12, 17, 0)
+        jOld.travelSeconds = 3600
+        store.events = [jOld]
+        let jReply = await aiJ2.drvExecuteTool("create_schedule",
+                                              ["title": "J-강남역", "destination_query": "J-강남역",
+                                               "origin_query": "집", "arrival_iso": "2027-03-10T15:00:00",
+                                               "mode_this_time": "walk", "buffer_minutes": 10,
+                                               "notify_lead_minutes": 20])
+        aiJ2.drvCheck("J: 등록이 성공하고 이동시간도 계산됐다(전제 — 빨개지면 환경 변화 신호)",
+                     jReply.contains("등록 완료") && !jReply.contains("⚠️")
+                     && store.events.contains { $0.arrivalDate == sDay(2027, 3, 10, 15, 0) },
+                     "reply=\(jReply)")
+        aiJ2.drvCheck("J: 요약의 도착 시각은 방금 만든 회차(수요일 15:00)의 것이다",
+                     jReply.contains(AIAssistant.drvWhen(sDay(2027, 3, 10, 15, 0))),
+                     "reply=\(jReply)")
+        aiJ2.drvCheck("J: 늦은 회차(금요일 17시·18시)의 시각은 요약에 없다",
+                     !jReply.contains(AIAssistant.drvWhen(sDay(2027, 3, 12, 17, 0)))
+                     && !jReply.contains(AIAssistant.drvWhen(sDay(2027, 3, 12, 18, 0))),
+                     "reply=\(jReply)")
+        // 되돌리기 — 파일만 원본으로(메모리 배열은 이미 검사에 썼고 프로세스는 여기서 끝난다).
+        if let jEventsBackup { try? jEventsBackup.write(to: jEventsURL) }
+        else { try? FileManager.default.removeItem(at: jEventsURL) }
+        store.favorites = []
+
+        // ── Y. 일반명사 장소·조용한 이동 실패(2026-09-16 결함 K·M). 즐겨찾기에 없는 '회사'가
+        //      검색 첫 결과('농업회사법인 화조원')로 조용히 해석돼 118건이 엉뚱한 곳에 등록됐고,
+        //      왕복 이동 다리가 0개인데 요약은 성공 문구만 남겼다. 이 절의 실행은 진짜 파일을
+        //      쓰므로(events·activities) J절 방식으로 백업·복원한다.
+        print("\nY. 일반명사 장소 해석·이동 실패 가시화 (K·M)")
+        let yEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
+        let yActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
+        let yEventsBackup = try? Data(contentsOf: yEventsURL)
+        let yActsBackup = try? Data(contentsOf: yActsURL)
+        let aiY = fresh()
+        let yHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
+        let yOffice = FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))
+        // K: 즐겨찾기에 '회사'가 없으면 검색으로 때우지 않는다(일반명사 게이트 — 네트워크 없이 결정적).
+        store.favorites = [yHome]
+        store.events = []
+        store.activities = []
+        let y1 = await aiY.drvCreate(["title": "Y-단발", "destination_query": "회사", "origin_query": "집",
+                                      "arrival_iso": "2027-03-10T09:00:00", "mode_this_time": "transit",
+                                      "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aiY.drvCheck("K: 즐겨찾기 없는 일반명사('회사')는 검색으로 해석되지 않고 즐겨찾기 안내로 돌아간다",
+                     y1.contains("즐겨찾기에 없어요") && y1.contains("회사"), y1)
+        aiY.drvCheck("K: 일정은 만들어지지 않는다(118건 사고의 재현이 막힌다)",
+                     store.events.filter { $0.title == "Y-단발" }.isEmpty,
+                     "events=\(store.events.filter { $0.title == "Y-단발" }.count)")
+        let y3 = await aiY.drvCreateRecurring(["title": "Y-반복", "destination_query": "회사", "origin_query": "집",
+                                               "weekdays": ["mon"], "arrival_time": "09:00",
+                                               "mode_this_time": "transit", "buffer_minutes": 10,
+                                               "notify_lead_minutes": 10, "weeks": 1])
+        aiY.drvCheck("K: 반복 생성에서도 같게 막힌다(실측 사고는 이 자리였다)",
+                     y3.contains("즐겨찾기에 없어요") && store.events.isEmpty, y3)
+        // K: 즐겨찾기에 있으면 일반명사도 진짜 장소다 — 게이트는 '없는 경우'에만 작동한다.
+        store.favorites = [yHome, yOffice]
+        let y2 = await aiY.drvCreate(["title": "Y-즐겨", "destination_query": "회사", "origin_query": "집",
+                                      "arrival_iso": "2027-03-10T10:00:00", "mode_this_time": "transit",
+                                      "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aiY.drvCheck("K: 즐겨찾기에 있으면 일반명사도 그 장소로 등록된다",
+                     y2.hasPrefix("등록 완료") && store.events.filter { $0.title == "Y-즐겨" }.count == 1, y2)
+        // K: 진짜 장소명은 게이트에 걸리지 않는다 — 게이트는 낱말 전체 일치만 보고, 이 외의
+        //    질의는 이 diff에서 건드리지 않은 검색 분기를 그대로 지난다(검색 동작 자체는 기기 확인).
+        aiY.drvCheck("K: 진짜 장소명(강남역·홍대입구역 등)은 게이트 목록에 없다",
+                     AIAssistant.drvGenericPlaceWords().isDisjoint(with: ["강남역", "홍대입구역", "선릉역"]),
+                     "목록=\(AIAssistant.drvGenericPlaceWords().sorted())")
+        // M: 비어 있지 않은 이동/장소 질의의 해석 실패가 결과 문구에 드러난다(모두 일반명사 게이트로
+        //    실패시키므로 네트워크 없이 결정적).
+        store.favorites = [yHome]
+        store.events = []
+        store.activities = []
+        // (즐겨찾기가 '집'뿐이므로 다리 질의는 '학교'로 — 셋 다 일반명사 게이트로 실패시킨다.)
+        let y4 = await aiY.drvExecuteTool("create_activity",
+            ["title": "Y-활동", "place_query": "회사",
+             "start_iso": "2027-03-10T14:00:00", "end_iso": "2027-03-10T18:00:00",
+             "travel_from_query": "학교", "return_to_query": "학교",
+             "travel_mode_this_time": "car", "return_mode_this_time": "transit",
+             "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aiY.drvCheck("M: 해석 실패한 이동·장소가 요약에 드러난다(조용히 넘어가지 않는다)",
+                     y4.hasPrefix("활동 블록 등록 완료") && y4.contains("찾지 못해")
+                        && y4.contains("가는 편 출발지 '학교'") && y4.contains("활동 장소 '회사'"), y4)
+        aiY.drvCheck("M: 활동 자체는 등록된다(이동 0건 — 성공인 척하지 않되 등록도 안 막는다)",
+                     store.activities.filter { $0.title == "Y-활동" }.count == 1
+                        && store.events.filter { $0.linkedActivityId != nil }.isEmpty,
+                     "acts=\(store.activities.filter { $0.title == "Y-활동" }.count)")
+        // M: "가는 편 없음" 칩(명시적 안 만들기)은 실패가 아니다 — 서로 다른 사건이 다르게 보인다.
+        let y5 = await aiY.drvExecuteTool("create_activity",
+            ["title": "Y-탈출", "place_query": "집",
+             "start_iso": "2027-03-10T14:00:00", "end_iso": "2027-03-10T18:00:00",
+             "travel_from_query": "회사", "return_to_query": AIAssistant.drvNoOutboundToken(),
+             "travel_mode_this_time": "car", "return_mode_this_time": "transit",
+             "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aiY.drvCheck("M: 명시적 '가는 편 없음'은 실패로 세지 않는다(실패는 가는 편 출발지 '회사'만)",
+                     y5.contains("가는 편 출발지 '회사'")
+                        && !y5.contains("오는 편 도착지") && !y5.contains("활동 장소")
+                        && !y5.contains(AIAssistant.drvNoOutboundToken()), y5)
+        // L: 프롬프트 문자열 존재 — 행동 검증이 아니다(모델 없이 도는 드라이버는 행동을 못 본다).
+        aiY.drvCheck("L: '빈 인자로 호출·말로 되묻지 마라' 지시가 프롬프트에 있다(문자열 존재)",
+                     aiY.drvSystemPrompt().contains("말로 되묻지 말고")
+                        && aiY.drvSystemPrompt().contains("빈 인자"), "규칙 8 원문 확인")
+        if let yEventsBackup { try? yEventsBackup.write(to: yEventsURL) }
+        else { try? FileManager.default.removeItem(at: yEventsURL) }
+        if let yActsBackup { try? yActsBackup.write(to: yActsURL) }
+        else { try? FileManager.default.removeItem(at: yActsURL) }
+        store.favorites = [yHome, yOffice]
+
+        // ── N. 캘린더 업로드 가드 + 업로드 상태의 영속성
+        //
+        // 결함 N: 캘린더 쓰기 경로가 "클라이언트 ID가 설정돼 있나"(`config.hasGoogleCalendar`,
+        // 항상 참)만 보고 "계정이 실제로 연결돼 있나"는 보지 않았다. 계정이 안 붙은 기기에서
+        // 58건짜리 반복을 만들면 건마다 로그인 시도 + 네트워크 호출이 나가고 전부 실패했는데,
+        // 그 실패가 조용히 버려져 사용자는 오래 기다린 뒤 "등록 완료"만 봤다.
+        print("\nN. 캘린더 업로드 가드와 상태 기록")
+        let calEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
+        let calActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
+        let calEventsBackup = try? Data(contentsOf: calEventsURL)
+        let calActsBackup = try? Data(contentsOf: calActsURL)
+        let aiCal = fresh()
+
+        // N-1) 캘린더를 쓸 수 없는 상태에서는 업로드를 **시도조차** 하지 않는다.
+        //      키체인은 건드리지 않는다(사용자의 실제 구글 리프레시 토큰이다) — 연결 불가 상태는
+        //      clientID를 비워 만든다. 그래서 이 단언이 덮는 것은 `googleConnected == false`이며,
+        //      "ID는 있는데 계정만 없다"는 반쪽은 기기에서만 확인된다.
+        // 바꾸는 건 clientID 한 필드뿐이므로 그 필드만 건드리고 그 필드만 되돌린다.
+        // 구조체를 통째로 대입하면(예전 이 자리의 모양) 옆 필드까지 같이 실려 오고,
+        // 머리말이 세운 autoAddToCalendar=false가 그렇게 조용히 지워졌다.
+        let calSavedClientID = store.config.googleClientID
+        store.config.googleClientID = ""
+        aiCal.drvCheck("N: clientID가 비면 googleConnected는 거짓", !store.googleConnected)
+
+        store.events = [AIAssistant.drvSolo("N-미연결", hours: 30)]
+        store.activities = [AIAssistant.drvActivity(UUID(), title: "N-활동", hours: 30)]
+        let nEventID = store.events[0].id
+        let nActID = store.activities[0].id
+        store.enqueueCalendarUpload(eventIDs: [nEventID], activityIDs: [nActID])
+        await store.pushToCalendar(eventIDs: [nEventID])
+        await store.pushActivitiesToCalendar([nActID])
+        aiCal.drvCheck("N: 미연결이면 일정에 업로드 흔적이 없다(pending·failed·gid 전부 없음)",
+                     store.events[0].calendarUpload == nil && store.events[0].googleEventId == nil,
+                     "upload=\(String(describing: store.events[0].calendarUpload)) gid=\(String(describing: store.events[0].googleEventId))")
+        aiCal.drvCheck("N: 미연결이면 활동에도 업로드 흔적이 없다",
+                     store.activities[0].calendarUpload == nil && store.activities[0].googleEventId == nil,
+                     "upload=\(String(describing: store.activities[0].calendarUpload)) gid=\(String(describing: store.activities[0].googleEventId))")
+
+        // N-2) 이미 gid가 있는 건은 다시 큐에 넣지 않는다 — 두 번 올리면 캘린더에 중복이 생긴다.
+        var nSynced = AIAssistant.drvSolo("N-이미등록", hours: 31)
+        nSynced.googleEventId = "gid-already"
+        store.events = [nSynced]
+        store.enqueueCalendarUpload(eventIDs: [nSynced.id])
+        aiCal.drvCheck("N: gid가 이미 있으면 pending으로 표시하지 않는다",
+                     store.events[0].calendarUpload == nil,
+                     "upload=\(String(describing: store.events[0].calendarUpload))")
+
+        // N-3) 상태가 저장/복원을 왕복한다. 값이 디스크를 못 넘기면 앱을 껐다 켠 순간
+        //      "못 올라갔다"는 사실이 사라져 이번 수정의 의미가 없어진다.
+        var nPending = AIAssistant.drvSolo("N-대기", hours: 32)
+        nPending.calendarUpload = .pending
+        var nFailed = AIAssistant.drvActivity(UUID(), title: "N-실패", hours: 32)
+        nFailed.calendarUpload = .failed
+        let nRoundEvent = try? JSONDecoder().decode(ScheduledEvent.self,
+                                                    from: JSONEncoder().encode(nPending))
+        let nRoundAct = try? JSONDecoder().decode(ActivityBlock.self,
+                                                  from: JSONEncoder().encode(nFailed))
+        aiCal.drvCheck("N: 일정의 pending이 JSON 왕복을 견딘다", nRoundEvent?.calendarUpload == .pending,
+                     "\(String(describing: nRoundEvent?.calendarUpload))")
+        aiCal.drvCheck("N: 활동의 failed가 JSON 왕복을 견딘다", nRoundAct?.calendarUpload == .failed,
+                     "\(String(describing: nRoundAct?.calendarUpload))")
+
+        // N-4) **이 필드가 없는 옛 JSON도 그대로 읽힌다.** 아래 두 페이로드는 사용자 시뮬레이터에
+        //      실제로 저장돼 있던 레코드의 키 구성이다(events 39건·activities 19건 모두 이 모양).
+        //      기본값을 가진 비-Optional로 만들었다면 여기서 디코딩이 통째로 실패해 일정이 사라진다.
+        let nLegacyEvent = """
+        {"id":"24896927-039D-431B-9E7D-3772996FED1F","arrivalDate":826178400,\
+        "origin":{"latitude":37.5,"address":"","name":"집","longitude":127},"bufferMinutes":0,\
+        "anchor":"departure","title":"V-출발","destination":{"latitude":37.51,"address":"",\
+        "name":"회사","longitude":127.01},"departureDate":826178400,"notifyLeadMinutes":10,\
+        "mode":"transit","googleEventId":"gid-old","recurrenceId":"1E8B0F54-2C0E-4D0E-9E7E-2A1C6B3D4E5F",\
+        "travelSeconds":600,"notificationId":"n1"}
+        """
+        let nLegacyAct = """
+        {"id":"3F2B1A90-7C4D-4E2A-9B8C-1D0E5F6A7B8C","title":"근무","startDate":826178400,\
+        "endDate":826207200,"location":{"latitude":37.51,"address":"","name":"회사","longitude":127.01},\
+        "googleEventId":"gid-old-act","recurrenceId":"1E8B0F54-2C0E-4D0E-9E7E-2A1C6B3D4E5F"}
+        """
+        let nOldEvent = try? JSONDecoder().decode(ScheduledEvent.self,
+                                                  from: Data(nLegacyEvent.utf8))
+        let nOldAct = try? JSONDecoder().decode(ActivityBlock.self, from: Data(nLegacyAct.utf8))
+        aiCal.drvCheck("N: calendarUpload 키가 없는 옛 일정 JSON이 그대로 디코딩된다(nil)",
+                     nOldEvent != nil && nOldEvent?.calendarUpload == nil
+                        && nOldEvent?.googleEventId == "gid-old",
+                     "decoded=\(nOldEvent != nil)")
+        aiCal.drvCheck("N: calendarUpload 키가 없는 옛 활동 JSON이 그대로 디코딩된다(nil)",
+                     nOldAct != nil && nOldAct?.calendarUpload == nil
+                        && nOldAct?.googleEventId == "gid-old-act",
+                     "decoded=\(nOldAct != nil)")
+
+        store.events = []
+        store.activities = []
+        // 예전엔 여기서 `store.config = AppConfig.load()`를 했다 — 한 필드를 되돌리려고 디스크
+        // 설정을 통째로 다시 읽은 것이고, 그 바람에 autoAddToCalendar=true가 딸려 들어와
+        // 뒤 절들의 시험 일정이 실제 캘린더로 나갔다. 비워둔 필드만 되돌린다.
+        store.config.googleClientID = calSavedClientID
+        if let calEventsBackup { try? calEventsBackup.write(to: calEventsURL) }
+        else { try? FileManager.default.removeItem(at: calEventsURL) }
+        if let calActsBackup { try? calActsBackup.write(to: calActsURL) }
+        else { try? FileManager.default.removeItem(at: calActsURL) }
+        drvAssertNoCalendarPush(aiCal, "N절")
+
+        // ── Z. 못 푸는 장소는 **카드가 묻는다**(결함 O). K가 막은 자리의 다음 걸음이다 — K는
+        //      "검색 첫 결과로 때우지 않는다"까지였고, 그 결과 대화가 "즐겨찾기에 추가해 주세요"에서
+        //      끊겨 사용자가 ⭐ 화면에 다녀와 처음부터 다시 말해야 했다. 이제 그 값을 카드 줄로 묻고,
+        //      실행부 가드는 카드를 지나지 않은 호출용으로 그대로 남는다(카드 먼저, 가드 다음).
+        // ⚠️ 이 줄의 전역 불변식(머리말의 "캘린더 푸시를 끈다")을 여기서 다시 세운다. N절이 끝나며
+        //    `store.config = AppConfig.load()`로 디스크 설정을 되돌리는데, 개발 기기의 실제
+        //    config.json은 autoAddToCalendar=true에 구글이 연결돼 있다 — 그 뒤 절에서 만든
+        //    **시험용 일정이 사용자의 진짜 구글 캘린더로 올라간다**(백업·복원이 불가능한 부작용).
+        //    되돌린 clientID는 그대로 두고 자동 업로드만 다시 끈다.
+        store.config.autoAddToCalendar = false
+        print("\nZ. 앱이 못 푸는 장소는 카드가 묻는다 (결함 O)")
+        let zEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
+        let zActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
+        let zEventsBackup = try? Data(contentsOf: zEventsURL)
+        let zActsBackup = try? Data(contentsOf: zActsURL)
+        let zFavBackup = store.favorites
+        let aiZ = fresh()
+        let zHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
+        let zGasan = FavoritePlace(label: "가산 오피스", place: Place(name: "가산 오피스", address: "", latitude: 37.480, longitude: 126.880))
+        store.favorites = [zHome, zGasan]
+        store.events = []
+        store.activities = []
+        // 수단·여유·알림은 선언에 없어 모델이 실어 와도 정화가 버린다(결함 D) — 그래서 이 카드엔
+        // 언제나 그 세 줄이 있다. 이번 변경이 **더하는** 것은 목적지 줄 하나뿐이라는 것이 판정 기준이다.
+        let zBase = ["mode_this_time", "buffer_minutes", "notify_lead_minutes"]
+        let zFull: [String: Any] = ["title": "Z-단발", "destination_query": "회사", "origin_query": "집",
+                                    "arrival_iso": "2027-03-11T09:00:00"]
+        let z1 = aiZ.drvAsk("create_schedule", zFull)
+        aiZ.drvCheck("O-1: 즐겨찾기 없는 '회사'는 실행 거부가 아니라 목적지 줄로 뜬다",
+                     z1?.fields.map(\.key) == ["destination_query"] + zBase,
+                     "keys=\(z1?.fields.map(\.key) ?? [])")
+        aiZ.drvCheck("O-1: 그 줄은 왜 떴는지 사용자의 낱말로 적는다(빈 값을 묻는 줄과 구분된다)",
+                     (z1?.fields.first?.note).map { $0.contains("회사") && $0.contains("⭐") } == true,
+                     "note=\(z1?.fields.first?.note ?? "nil")")
+        aiZ.drvCheck("O-1: 칩으로 즐겨찾기를 고를 수 있고 직접입력도 열려 있다(대화를 떠날 필요가 없다)",
+                     z1?.fields.first?.options.contains { $0.value == "가산 오피스" } == true
+                        && z1?.fields.first?.allowsCustom == true,
+                     "options=\(z1?.fields.first?.options.map(\.value) ?? [])")
+        aiZ.drvCheck("O-1: 묻고 있는 값을 '말씀하신 대로'에 같이 적지 않는다(한 카드가 두 말 하지 않기)",
+                     z1?.stated.contains(where: { $0.contains("목적지") }) == false,
+                     "stated=\(z1?.stated ?? [])")
+        // O-2: 고른 값으로 **정확히 1회** 등록된다 — 여기까지 와야 "대화 안에서 끝난다"가 참이다.
+        aiZ.bubbles.append(.init(role: .assistant, text: "", ask: z1))
+        for f in z1?.fields ?? [] {
+            switch f.key {
+            case "destination_query": aiZ.choose(field: f.id, value: "가산 오피스")
+            case "mode_this_time": aiZ.choose(field: f.id, value: "transit")
+            default: aiZ.choose(field: f.id, value: "10")
+            }
+        }
+        aiZ.drvCheck("O-2: 줄을 다 고르면 확인이 열린다", aiZ.drvLiveAsk()?.isReady == true, "isReady가 false다")
+        let z2 = await aiZ.drvResolvePendingAsk()
+        let zEvent = store.events.first { $0.title == "Z-단발" }
+        aiZ.drvCheck("O-2: 고른 장소로 정확히 1건 등록된다(검색 첫 결과가 아니다)",
+                     store.events.filter { $0.title == "Z-단발" }.count == 1
+                        && zEvent?.destination.name == "가산 오피스",
+                     "count=\(store.events.filter { $0.title == "Z-단발" }.count) dest=\(zEvent?.destination.name ?? "nil") summary=\(z2 ?? "nil")")
+        // O-3: 게이트는 '즐겨찾기가 없을 때'만 작동한다 — 있으면 줄이 생기지 않는다(카드가 길어지지 않음).
+        store.favorites = [zHome, FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))]
+        aiZ.drvCheck("O-3: 즐겨찾기가 있는 일반명사는 목적지 줄이 생기지 않는다",
+                     aiZ.drvAsk("create_schedule", zFull)?.fields.map(\.key) == zBase,
+                     "keys=\(aiZ.drvAsk("create_schedule", zFull)?.fields.map(\.key) ?? [])")
+        // O-4: 진짜 장소명은 그대로 지나간다 — 모든 목적지를 질문으로 바꾸지 않는다.
+        store.favorites = [zHome]
+        var zReal = zFull; zReal["destination_query"] = "강남역"
+        aiZ.drvCheck("O-4: 진짜 장소명(강남역)은 목적지 줄이 생기지 않는다",
+                     aiZ.drvAsk("create_schedule", zReal)?.fields.map(\.key) == zBase,
+                     "keys=\(aiZ.drvAsk("create_schedule", zReal)?.fields.map(\.key) ?? [])")
+        // O-5: 실행부 가드는 그대로다 — 카드를 지나지 않고 온 호출은 여전히 막히고, 그때의 안내는
+        //      "비어 있어요"가 아니라 즐겨찾기 목록이 붙은 placeNotFound다(문구가 거짓이 되면 안 된다).
+        store.events = []
+        // 실행부는 카드가 채운 값을 다 받은 상태로 들어온다(drvCreate는 정화를 지나지 않는다 —
+        // 카드 통과 경로와 같은 모양). 그 상태에서도 못 푸는 목적지는 그대로 막혀야 한다.
+        var zExec = zFull
+        zExec["mode_this_time"] = "transit"; zExec["buffer_minutes"] = 10; zExec["notify_lead_minutes"] = 10
+        let z5 = await aiZ.drvCreate(zExec)
+        aiZ.drvCheck("O-5: 카드를 지나지 않은 호출은 실행부가 그대로 막는다(가드 유지)",
+                     z5.contains("즐겨찾기에 없어요") && z5.contains("회사")
+                        && !z5.contains("비어 있어요")
+                        && store.events.filter { $0.title == "Z-단발" }.isEmpty, z5)
+        // O-6: 활동의 장소·다리 질의도 같다. 이동이 없는 활동도 장소를 못 풀면 묻는다(위치 없는
+        //      활동으로 조용히 등록되던 자리 — M의 사후 보고보다 앞에서 막힌다).
+        let zActPlace = aiZ.drvAsk("create_activity", ["title": "Z-활동", "place_query": "회사",
+                                                       "start_iso": "2027-03-11T14:00:00",
+                                                       "end_iso": "2027-03-11T18:00:00"])
+        aiZ.drvCheck("O-6: 이동 없는 활동도 못 푸는 장소면 활동 장소 줄이 뜬다(이동 줄은 그대로 없다)",
+                     zActPlace?.fields.map(\.key) == ["place_query"],
+                     "keys=\(zActPlace?.fields.map(\.key) ?? [])")
+        let zAct = aiZ.drvAsk("create_activity", ["title": "Z-왕복", "place_query": "회사",
+                                                  "start_iso": "2027-03-11T14:00:00",
+                                                  "end_iso": "2027-03-11T18:00:00",
+                                                  "travel_from_query": "학교", "return_to_query": "사무실",
+                                                  "travel_mode_this_time": "car", "return_mode_this_time": "transit",
+                                                  "buffer_minutes": 10, "notify_lead_minutes": 10])
+        // 활동의 최악은 이 일곱 줄이다(단발 일정의 최악과 같은 수) — G11의 상한이 그대로 유지된다.
+        aiZ.drvCheck("O-6: 세 질의가 각각 자기 줄로 뜨고, 활동 카드의 최악은 일곱 줄이다",
+                     zAct?.fields.map(\.key) == ["place_query", "travel_from_query", "return_to_query",
+                                                 "travel_mode_this_time", "return_mode_this_time",
+                                                 "buffer_minutes", "notify_lead_minutes"],
+                     "keys=\(zAct?.fields.map(\.key) ?? [])")
+        aiZ.drvCheck("O-6: 사용자가 말한 가는 편 출발지에는 '가는 편 없음' 탈출 칩을 붙이지 않는다",
+                     zAct?.fields.first { $0.key == "travel_from_query" }?
+                        .options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == false,
+                     "options=\(zAct?.fields.first { $0.key == "travel_from_query" }?.options.map(\.value) ?? [])")
+        aiZ.drvCheck("O-6: 모델이 비워 보낸 가는 편 출발지에는 탈출 칩이 그대로 있다(A절 회귀 방지)",
+                     aiZ.drvAsk("create_activity", ["title": "Z-편도", "place_query": "가산 오피스",
+                                                    "start_iso": "2027-03-11T14:00:00",
+                                                    "end_iso": "2027-03-11T18:00:00",
+                                                    "return_to_query": "가산 오피스"])?
+                        .fields.first { $0.key == "travel_from_query" }?
+                        .options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true,
+                     "탈출 칩이 사라졌다")
+        // O-7: 같은 일반명사를 직접입력으로 다시 적는 건 답이 아니다 — 받아들이면 확인 뒤 같은
+        //      이유로 막혀 대화가 한 바퀴 더 돈다. 칩·진짜 장소명은 그대로 받는다.
+        let aiZ2 = fresh()
+        let z7 = aiZ2.drvAsk("create_schedule", zFull)
+        aiZ2.bubbles.append(.init(role: .assistant, text: "", ask: z7))
+        if let zf = z7?.fields.first {
+            aiZ2.drvCheck("O-7: 직접입력에 '회사'를 다시 적으면 받지 않는다",
+                          aiZ2.submitCustom(field: zf.id, text: "회사") == false, "받아들였다")
+            aiZ2.drvCheck("O-7: 거절된 자리에 이유가 붙는다('그 값은 쓸 수 없어요'만 남지 않는다)",
+                          (aiZ2.drvLiveAsk()?.fields.first { $0.id == zf.id }?.note)?.contains("회사") == true,
+                          "note=\(aiZ2.drvLiveAsk()?.fields.first { $0.id == zf.id }?.note ?? "nil")")
+            aiZ2.drvCheck("O-7: 진짜 장소명은 직접입력으로 받는다(막다른 골목이 아니다)",
+                          aiZ2.submitCustom(field: zf.id, text: "가산3차 SK V1센터") == true, "거절했다")
+        }
+        // O-8: 반복 생성에도 같은 줄이 붙는다(118건 사고가 난 도구).
+        let z8Args: [String: Any] = ["title": "Z-반복", "destination_query": "회사", "origin_query": "집",
+                                     "weekdays": ["mon"], "arrival_time": "09:00"]
+        aiZ2.drvCheck("O-8: 반복 일정의 못 푸는 목적지도 줄로 뜬다(118건 사고가 난 도구)",
+                      aiZ2.drvAsk("create_recurring_schedule", z8Args)?.fields.map(\.key)
+                        == ["destination_query"] + zBase + ["weeks"],
+                      "keys=\(aiZ2.drvAsk("create_recurring_schedule", z8Args)?.fields.map(\.key) ?? [])")
+        store.events = []
+        store.activities = []
+        if let zEventsBackup { try? zEventsBackup.write(to: zEventsURL) }
+        else { try? FileManager.default.removeItem(at: zEventsURL) }
+        if let zActsBackup { try? zActsBackup.write(to: zActsURL) }
+        else { try? FileManager.default.removeItem(at: zActsURL) }
+        store.favorites = zFavBackup
+
+        // ── P. 장소 줄의 직접입력이 그냥 빈 칸이라, 틀린 값은 **카드를 다 채우고 확인을 누른 뒤에야**
+        //      실행부에서 실패했다(2026-09-16 실기기: 'ㅁㄴㅇㄹ'). 이제 검색해서 고르고, 고른 순간
+        //      좌표까지 확정된다. 여기 단언은 전부 그 확정값이 실행부까지 그대로 가는지를 본다.
+        store.config.autoAddToCalendar = false   // Z절과 같은 이유(N절의 설정 되돌리기 뒤에 있다)
+        print("\nP. 장소 줄 검색 — 고른 후보의 좌표가 실행부까지 간다 (결함 P)")
+        let psEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
+        let psEventsBackup = try? Data(contentsOf: psEventsURL)
+        let psFavBackup = store.favorites
+        let psHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
+        store.favorites = [psHome]
+        store.events = []
+        let aiPS = fresh()
+        let psPicked = Place(name: "가산3차 SK V1센터", address: "서울 금천구 가산디지털1로 173",
+                            latitude: 37.4812, longitude: 126.8827)
+        let psAsk = aiPS.drvAsk("create_schedule", ["title": "P-확정", "destination_query": "회사",
+                                                  "origin_query": "집", "arrival_iso": "2027-03-12T09:00:00"])
+        aiPS.bubbles.append(.init(role: .assistant, text: "", ask: psAsk))
+        for f in psAsk?.fields ?? [] {
+            switch f.key {
+            case "destination_query": aiPS.choose(field: f.id, place: psPicked)   // ← 후보 탭
+            case "mode_this_time": aiPS.choose(field: f.id, value: "transit")
+            default: aiPS.choose(field: f.id, value: "10")
+            }
+        }
+        _ = await aiPS.drvResolvePendingAsk()
+        let psArgs = aiPS.drvLastCallArgs()
+        let psEvent = store.events.first { $0.title == "P-확정" }
+        aiPS.drvCheck("P-1: 인자에는 **이름만** 실린다(내부 토큰이 모델·요약으로 새지 않는다)",
+                     (psArgs["destination_query"] as? String) == "가산3차 SK V1센터",
+                     "dest=\(psArgs["destination_query"] ?? "nil")")
+        aiPS.drvCheck("P-1: 실행부가 이름을 다시 검색하지 않고 **고른 좌표 그대로** 등록한다",
+                     psEvent?.destination == psPicked,
+                     "dest=\(String(describing: psEvent?.destination))")
+        // P-2: 거절과 검색이 갈리는 지점 — 자유 텍스트로 확정하는 건 여전히 거절, 후보로 고른
+        //      같은 이름은 통과. '사무실'은 일반명사 목록에 있고 즐겨찾기엔 없다.
+        let aiPS2 = fresh()
+        let ps2Ask = aiPS2.drvAsk("create_schedule", ["title": "P-사무실", "destination_query": "사무실",
+                                                    "origin_query": "집", "arrival_iso": "2027-03-12T10:00:00"])
+        aiPS2.bubbles.append(.init(role: .assistant, text: "", ask: ps2Ask))
+        let ps2Dest = ps2Ask?.fields.first { $0.key == "destination_query" }
+        aiPS2.drvCheck("P-2: 고르기 전에는 자유 텍스트 '사무실'을 받지 않는다(O의 거절 유지)",
+                      ps2Dest.map { aiPS2.submitCustom(field: $0.id, text: "사무실") } == false, "받아들였다")
+        let ps2Picked = Place(name: "사무실", address: "서울 강남구 테헤란로 1", latitude: 37.4979, longitude: 127.0276)
+        if let ps2Dest { aiPS2.choose(field: ps2Dest.id, place: ps2Picked) }
+        aiPS2.drvCheck("P-2: 후보로 고른 뒤에는 같은 이름도 받아들인다(좌표가 생겼으므로)",
+                      ps2Dest.map { aiPS2.submitCustom(field: $0.id, text: "사무실") } == true, "거절했다")
+        aiPS2.drvCheck("P-2: 고른 뒤에는 카드가 그 값을 다시 묻지 않는다",
+                      aiPS2.drvAsk("create_schedule", ["title": "P-사무실", "destination_query": "사무실",
+                                                      "origin_query": "집", "arrival_iso": "2027-03-12T10:00:00"])?
+                        .fields.contains { $0.key == "destination_query" } == false,
+                      "목적지 줄이 다시 떴다")
+        // P-3: 이름이 즐겨찾기와 겹치면 **즐겨찾기가 이긴다**(오래 사는 설정 쪽). 뒤집히면
+        //      "집이라고 했는데 아까 고른 카페"가 된다.
+        let aiPS3 = fresh()
+        let ps3Ask = aiPS3.drvAsk("create_schedule", ["title": "P-겹침", "destination_query": "회사",
+                                                    "origin_query": "집", "arrival_iso": "2027-03-12T11:00:00"])
+        aiPS3.bubbles.append(.init(role: .assistant, text: "", ask: ps3Ask))
+        if let f = ps3Ask?.fields.first(where: { $0.key == "destination_query" }) {
+            aiPS3.choose(field: f.id, place: Place(name: "집", address: "카페 집", latitude: 37.1, longitude: 126.1))
+            for g in ps3Ask?.fields ?? [] where g.key != "destination_query" {
+                aiPS3.choose(field: g.id, value: g.key == "mode_this_time" ? "transit" : "10")
+            }
+        }
+        _ = await aiPS3.drvResolvePendingAsk()
+        aiPS3.drvCheck("P-3: 확정 장소와 즐겨찾기 이름이 겹치면 즐겨찾기가 이긴다(출발지=목적지로 막힌다)",
+                      store.events.filter { $0.title == "P-겹침" }.isEmpty,
+                      "events=\(store.events.filter { $0.title == "P-겹침" }.count)")
+        // P-4: 0건이 조용히 넘어가지 않는다. **네트워크 의존** — 다만 온라인이든 오프라인이든
+        //      이 질의의 결과는 0건이라 판정은 양쪽에서 같다(J절 라벨 선례).
+        let aiPS4 = fresh()
+        let ps4Ask = aiPS4.drvAsk("create_schedule", ["title": "P-빈결과", "destination_query": "회사",
+                                                    "origin_query": "집", "arrival_iso": "2027-03-12T12:00:00"])
+        aiPS4.bubbles.append(.init(role: .assistant, text: "", ask: ps4Ask))
+        let ps4Dest = ps4Ask?.fields.first { $0.key == "destination_query" }
+        if let ps4Dest {
+            aiPS4.searchPlaces(field: ps4Dest.id, text: "ㅁㄴㅇㄹ쀍똙")
+            aiPS4.drvCheck("P-4: 부르는 즉시 '찾는 중'이 되고 확인 버튼은 그대로 잠겨 있다(카드를 막지 않는다)",
+                          AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "searching"
+                            && aiPS4.drvLiveAsk()?.isReady == false,
+                          "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
+            try? await Task.sleep(nanoseconds: 2_500_000_000)
+            aiPS4.drvCheck("P-4: 0건이면 '찾지 못함'이 줄에 남는다 — 조용히 넘어가지 않는다 〔네트워크 의존〕",
+                          AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "empty",
+                          "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
+            // P-5: 같은 질의를 연달아 부르면 다시 부르지 않는다(묶음의 관측 가능한 계약) —
+            //      다시 불렀다면 상태가 'searching'으로 돌아갔을 것이다.
+            aiPS4.searchPlaces(field: ps4Dest.id, text: "ㅁㄴㅇㄹ쀍똙")
+            aiPS4.drvCheck("P-5: 같은 질의는 다시 부르지 않는다(상태가 '찾는 중'으로 돌아가지 않는다)",
+                          AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "empty",
+                          "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
+            aiPS4.searchPlaces(field: ps4Dest.id, text: "")
+            aiPS4.drvCheck("P-5: 입력을 비우면 상태도 비워진다(옛 결과가 남지 않는다)",
+                          AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .searching) == "idle",
+                          "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .searching))")
+        }
+        // P-6: 검색이 도는 사이 카드가 사라지면 결과를 버린다(H1 — await 앞뒤로 자리를 믿지 않는다).
+        let aiPS6 = fresh()
+        let ps6Ask = aiPS6.drvAsk("create_schedule", ["title": "P-사라짐", "destination_query": "회사",
+                                                    "origin_query": "집", "arrival_iso": "2027-03-12T13:00:00"])
+        aiPS6.bubbles.append(.init(role: .assistant, text: "", ask: ps6Ask))
+        if let f = ps6Ask?.fields.first(where: { $0.key == "destination_query" }) {
+            aiPS6.searchPlaces(field: f.id, text: "강남역")
+        }
+        aiPS6.drvCancelPendingAsk()
+        let ps6New = aiPS6.drvAsk("create_schedule", ["title": "P-새카드", "destination_query": "회사",
+                                                    "origin_query": "집", "arrival_iso": "2027-03-12T14:00:00"])
+        aiPS6.bubbles.append(.init(role: .assistant, text: "", ask: ps6New))
+        try? await Task.sleep(nanoseconds: 2_500_000_000)
+        aiPS6.drvCheck("P-6: 카드가 사라진 뒤 돌아온 결과는 새 카드에 앉지 않는다(조용히 버려진다)",
+                      aiPS6.drvLiveAsk()?.fields.allSatisfy { AIAssistant.drvLookup($0.lookup) == "idle" } == true,
+                      "lookups=\(aiPS6.drvLiveAsk()?.fields.map { AIAssistant.drvLookup($0.lookup) } ?? [])")
+        // P-7: 캘린더 대기 문구 — 판정의 출처는 레코드의 pending 표시다. 이 환경은 구글 미연결이라
+        //      pending이 안 붙고, 그래서 문구도 없다(없는데 기다리라고 하면 거짓이다).
+        let psDone = store.events.first { $0.title == "P-확정" }
+        aiPS.drvCheck("P-7: 미연결이면 캘린더 문구를 붙이지 않는다",
+                     psDone.map { aiPS.drvCalendarNote([$0.id]).isEmpty } == true,
+                     "note=\(psDone.map { aiPS.drvCalendarNote([$0.id]) } ?? "nil")")
+        if let psDone, let i = store.events.firstIndex(where: { $0.id == psDone.id }) {
+            store.events[i].calendarUpload = .pending
+            aiPS.drvCheck("P-7: pending이면 '아직 안 올라갔다'고 말한다(올라간 것처럼 읽히지 않는다)",
+                         aiPS.drvCalendarNote([psDone.id]).contains("아직 올라가지 않았")
+                            && aiPS.drvCalendarNote([psDone.id]).contains("캘린더"),
+                         aiPS.drvCalendarNote([psDone.id]))
+        }
+        store.events = []
+        if let psEventsBackup { try? psEventsBackup.write(to: psEventsURL) }
+        else { try? FileManager.default.removeItem(at: psEventsURL) }
+        store.favorites = psFavBackup
+
+        // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
+        // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
+        // drvAssertNoCalendarPush를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
+        drvAssertNoCalendarPush(fresh(), "전체 실행")
 
         print("\n\(drvPass)/\(drvPass + drvFail) 통과")
         exit(drvFail == 0 ? 0 : 1)
