@@ -121,6 +121,35 @@ struct FavoritePlace: Identifiable, Codable, Equatable {
     var place: Place
 }
 
+/// 캘린더 업로드가 아직 안 끝났거나 실패했다는 기록.
+///
+/// **성공은 여기 두지 않는다** — 성공의 단일 출처는 `googleEventId`다(계약 5). 성공을 이쪽에도
+/// 적으면 업로드 직후 앱이 죽었을 때 두 값이 어긋나고, 어느 쪽을 믿을지가 화면마다 갈린다.
+///
+/// 왜 필요한가: 등록은 로컬에서 끝나고 업로드는 뒤따라 돈다. 그 사이의 "아직 안 올라감"과
+/// "올리다 실패함"이 사용자에게 서로 다르게 보이지 않으면, 빠른 "등록 완료"만 남고
+/// 캘린더가 비어 있는 것을 아무도 모른다 — 이번 결함이 더 나빠질 뿐이다.
+enum CalendarUploadState: String, Codable {
+    /// 올릴 차례를 기다리는 중이거나 올리는 중.
+    case pending
+    /// 시도했고 실패했다(미연결·취소·네트워크 등). 재시도 대상.
+    case failed
+
+    var title: String {
+        switch self {
+        case .pending: return "캘린더에 올리는 중이에요"
+        case .failed:  return "캘린더에 못 올렸어요"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .pending: return "arrow.triangle.2.circlepath"
+        case .failed:  return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
 /// 등록된 일정.
 struct ScheduledEvent: Identifiable, Codable {
     var id: UUID = UUID()
@@ -148,6 +177,10 @@ struct ScheduledEvent: Identifiable, Codable {
     var notificationId: String?
     /// 구글 캘린더에 등록된 경우 그 이벤트 ID(동기화·삭제 전파용).
     var googleEventId: String?
+    /// 캘린더 업로드 진행 상태. nil = 올릴 일이 없거나(연동 꺼짐·미연결·이 일정만 제외) 이미 끝났다.
+    /// 옛 데이터의 JSON에는 이 키가 아예 없다 — Optional이라 합성된 디코더가 그대로 nil로 읽는다
+    /// (기본값을 가진 비-Optional로 만들면 옛 파일이 통째로 디코딩 실패해 일정이 사라진다).
+    var calendarUpload: CalendarUploadState?
     /// 반복 일정으로 한 번에 생성된 경우 같은 값을 공유(그룹 일괄 삭제용). 단발성 일정은 nil.
     var recurrenceId: UUID?
     /// 이 이동 구간이 딸려 있는 활동 블록(ActivityBlock.id).
@@ -471,6 +504,8 @@ struct ActivityBlock: Identifiable, Codable {
     /// 반복 일정 그룹(ScheduledEvent의 recurrenceId)과 공유 — 같이 일괄 삭제된다.
     var recurrenceId: UUID?
     var googleEventId: String?
+    /// 캘린더 업로드 진행 상태. 이동 구간(ScheduledEvent)과 같은 이유·같은 규칙이다.
+    var calendarUpload: CalendarUploadState?
     /// 이 활동을 구글 캘린더에 올릴지. nil(옛 데이터)이면 전역 설정을 따른다.
     var syncToCalendar: Bool?
 
