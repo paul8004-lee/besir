@@ -164,6 +164,11 @@ private struct AskCardView: View {
     @State private var customOpen: Set<UUID> = []
     @State private var draft: [UUID: String] = [:]
     @State private var rejected: Set<UUID> = []
+    // 시각 줄의 임시 상태 — 기준 칩과 에디터의 바퀴 위치. 커밋 전까지 어떤 것도 값이 아니다.
+    // 기준은 처음에 아무것도 골라두지 않는다(사용자 결정: 앱이 먼저 정해둔 값이 오늘 하루 종일
+    // 없애던 것이므로, 여기서도 예외를 두지 않는다).
+    @State private var draftBasis: [UUID: ScheduleAnchor] = [:]
+    @State private var draftDate: [UUID: Date] = [:]
 
     // 칩 높이는 글자 크기를 따라 커진다 — 고정하면 큰 글씨 설정에서 칩이 잘린다.
     // iOS는 손가락이라 44pt가 최소고, macOS는 포인터라 그만큼 키우면 카드만 길어진다.
@@ -189,7 +194,7 @@ private struct AskCardView: View {
             }
 
             ForEach(ask.fields) { field in
-                fieldRow(field)
+                fieldRow(field, depBasis: departureAnchored)
             }
 
             confirmButton
@@ -199,43 +204,77 @@ private struct AskCardView: View {
         .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
     }
 
+    /// 시각 줄이 출발 기준으로 확정됐는지 — 이면 도착 여유 줄이 흐려지고 캡션이 붙는다.
+    private var departureAnchored: Bool {
+        guard let time = ask.fields.first(where: { $0.kind == .datetime }) else { return false }
+        return currentBasis(time) == .departure
+    }
+
     // MARK: 줄
 
     @ViewBuilder
-    private func fieldRow(_ field: AIAssistant.AskField) -> some View {
+    private func fieldRow(_ field: AIAssistant.AskField, depBasis: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(field.label)
                 .font(.caption)
                 .foregroundStyle(Theme.faint)
 
-            ChipFlow(spacing: 6, lineSpacing: 6) {
-                ForEach(field.options) { option in
-                    chip(option.label, selected: field.chosen == option.value) {
-                        assistant.choose(field: field.id, value: option.value)
-                        closeCustom(field)
+            // 값이 차 있는데 앱이 풀지 못해 뜬 줄에만 붙는다. 줄 이름만 있으면 "말한 적 없는 값"을
+            // 묻는 줄과 구분되지 않아, 방금 "회사"라고 말한 사용자가 왜 또 묻는지 알 수 없다(결함 O).
+            // fixedSize로 줄바꿈을 강제한다 — 길어도 잘리지 않는다(G11: 줄을 숨기지 않는다).
+            if let note = field.note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if field.kind == .datetime {
+                datetimeRow(field)
+            } else {
+                ChipFlow(spacing: 6, lineSpacing: 6) {
+                    ForEach(field.options) { option in
+                        chip(option.label, selected: field.chosen == option.value) {
+                            assistant.choose(field: field.id, value: option.value)
+                            closeCustom(field)
+                        }
+                    }
+                    // 직접 적은 값도 선택된 칩으로 남긴다 — 고른 값이 화면에 없으면 안 고른 것과 같다.
+                    if let typed = typedLabel(field) {
+                        chip(typed, selected: true) { openCustom(field) }
+                    }
+                    if field.allowsCustom {
+                        // 장소 줄의 그 칩은 이제 빈 칸이 아니라 검색창을 연다 — 이름을 그렇게 적는다.
+                        chip(field.kind == .place ? "장소 검색" : "직접입력",
+                             selected: false, dashed: true) { openCustom(field) }
                     }
                 }
-                // 직접 적은 값도 선택된 칩으로 남긴다 — 고른 값이 화면에 없으면 안 고른 것과 같다.
-                if let typed = typedLabel(field) {
-                    chip(typed, selected: true) { openCustom(field) }
-                }
-                if field.allowsCustom {
-                    chip("직접입력", selected: false, dashed: true) { openCustom(field) }
+
+                if customOpen.contains(field.id) { customEditor(field) }
+
+                // 거절 사유에 범위를 적지 않는 이유: 상한이 Store 상수라 문구에 박으면 두 곳이 된다.
+                if rejected.contains(field.id) {
+                    Text("그 값은 쓸 수 없어요")
+                        .font(.caption)
+                        .foregroundStyle(Theme.warn)
                 }
             }
 
-            if customOpen.contains(field.id) { customEditor(field) }
-
-            // 거절 사유에 범위를 적지 않는 이유: 상한이 Store 상수라 문구에 박으면 두 곳이 된다.
-            if rejected.contains(field.id) {
-                Text("그 값은 쓸 수 없어요")
+            // 출발 기준으로 확정된 카드의 도착 여유는 쓰이지 않는다 — 색(흐림)만으로 상태를 말하지
+            // 않고 캡션 한 줄로 이중 표현한다. 값은 그대로 골을 수 있고 chosen도 남아 있어서
+            // 확인 버튼이 막히지 않는다(직렬화에서만 빠진다).
+            if field.kind == .buffer, depBasis {
+                Text("출발 기준이라 쓰지 않아요")
                     .font(.caption)
-                    .foregroundStyle(Theme.warn)
+                    .foregroundStyle(Theme.faint)
             }
         }
+        // 흐려진 여유 줄 — 살아 있는 줄과 0.5 대 1의 차이만으로는 부족해 캡션과 함께 읽힌다.
+        .opacity(field.kind == .buffer && depBasis ? 0.5 : 1)
         // 칩만 따로 읽히면 무엇에 대한 선택인지 알 수 없다 — 줄 이름과 묶어서 읽히게 한다.
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(field.label)
+        // 캡션이 있으면 줄 이름과 함께 읽힌다 — 왜 떴는지가 화면에만 있고 음성엔 없으면 안 된다.
+        .accessibilityLabel(field.note.map { "\(field.label). \($0)" } ?? field.label)
     }
 
     /// 칩 목록에 없는 값이 골라져 있으면 그 표시 문구. 없으면 nil.
@@ -243,6 +282,84 @@ private struct AskCardView: View {
         guard let chosen = field.chosen,
               !field.options.contains(where: { $0.value == chosen }) else { return nil }
         return field.chosenLabel
+    }
+
+    // MARK: 시각 줄
+
+    /// 시각 줄의 현재 기준. 커밋된 값이 있으면 그 접두가 정답이고, 없으면 사용자가 방금 탭한
+    /// 임시값이다(처음엔 둘 다 없다 — 기준은 미리 골라두지 않는다).
+    private func currentBasis(_ field: AIAssistant.AskField) -> ScheduleAnchor? {
+        if let chosen = field.chosen { return chosen.hasPrefix("arr:") ? .arrival : .departure }
+        return draftBasis[field.id]
+    }
+
+    private func tapBasis(_ field: AIAssistant.AskField, _ basis: ScheduleAnchor) {
+        // 이미 커밋된 시각이면 같은 시각으로 접두만 바꿔 재확정한다(에디터 재오픈 없이) — 이때
+        // 도착 여유 줄의 흐림이 함께 바뀐다.
+        _ = assistant.rechooseTimeBasis(field: field.id, basis: basis)
+        draftBasis[field.id] = basis
+    }
+
+    /// 시각 줄 몸통 — 기준 칩 2개 + (미선택) 점선 캡슐 또는 (커밋) 확정 칩. 칩으로 값을 열거하지
+    /// 않는 이유는 AIAssistant.timeField 주석에 있다.
+    private func datetimeRow(_ field: AIAssistant.AskField) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            ChipFlow(spacing: 6, lineSpacing: 6) {
+                ForEach([ScheduleAnchor.arrival, .departure], id: \.self) { basis in
+                    chip(basis == .arrival ? "도착 기준" : "출발 기준",
+                         selected: currentBasis(field) == basis) {
+                        tapBasis(field, basis)
+                    }
+                }
+                if let label = typedLabel(field) {
+                    // 커밋된 값도 선택된 칩 문법으로 남는다(재탭 = 에디터 재오픈) — 텍스트 줄의
+                    // 직접입력 칩과 같은 동작. 긴 날짜 문구는 접근성 크기에서 감기게 놔둔다.
+                    chip(label, selected: true) { openCustom(field) }
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    chip("날짜·시각 고르기", selected: false, dashed: true) { openCustom(field) }
+                }
+            }
+
+            if customOpen.contains(field.id) { datetimeEditor(field) }
+        }
+    }
+
+    /// 시각 에디터 — 다른 줄의 텍스트 에디터 자리에 네이티브 DatePicker가 온다. 바퀴가 보여주는
+    /// 위치는 값이 아니다: 확인을 눌러야 chosen이 생긴다. 기준을 아직 안 골랐다면 확인은 아무것도
+    /// 확정하지 않는다(기준 없는 시각은 없다).
+    private func datetimeEditor(_ field: AIAssistant.AskField) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            DatePicker("날짜·시각", selection: Binding(
+                get: { draftDate[field.id] ?? Self.nextWholeHour() },
+                set: { draftDate[field.id] = $0 }))
+            #if os(iOS)
+                .datePickerStyle(.graphical)
+            #endif
+            HStack {
+                Spacer()
+                Button("확인") {
+                    guard let basis = currentBasis(field) else { return }
+                    if assistant.chooseTime(field: field.id, basis: basis,
+                                            date: draftDate[field.id] ?? Self.nextWholeHour()) {
+                        closeCustom(field)
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(Theme.travelInk)
+                .padding(.horizontal, 10)
+                .frame(minHeight: chipHeight)
+                .background(Theme.travelFill, in: Capsule())
+            }
+        }
+    }
+
+    /// 에디터의 처음 바퀴 위치 — "지금에서 다음 정각". 커밋 전까지 이 값은 어떤 것도 아니다.
+    private static func nextWholeHour() -> Date {
+        Calendar.current.nextDate(after: Date(), matching: DateComponents(minute: 0),
+                                  matchingPolicy: .nextTime) ?? Date().addingTimeInterval(3600)
     }
 
     /// 칩 하나. 선택 표시를 색에만 맡기지 않는다(체크 글리프 + 글자 굵기) — 색을 구분 못 하면
@@ -271,14 +388,90 @@ private struct AskCardView: View {
 
     // MARK: 직접입력
 
+    /// 텍스트 에디터의 안내문 — .datetime은 여기 안 온다(시각 줄의 에디터는 DatePicker다).
+    private func placeholder(for field: AIAssistant.AskField) -> String {
+        switch field.kind {
+        case .place: return "장소 검색 (예: 강남역, 가산디지털단지)"
+        case .title: return "제목"
+        case .datetime: return "날짜·시각"
+        case .mode, .buffer, .notify, .weeks: return "숫자만"
+        }
+    }
+
     @ViewBuilder
     private func customEditor(_ field: AIAssistant.AskField) -> some View {
+        if field.kind == .place { placeSearchEditor(field) } else { textCustomEditor(field) }
+    }
+
+    /// 장소 줄의 입력칸 — 빈 칸이 아니라 **검색해서 고르는 자리**다. 자유 텍스트를 그대로 확정하는
+    /// 버튼을 두지 않는다: 확정해봐야 좌표가 없어 실행부가 같은 검색으로 다시 실패하고, 그 실패는
+    /// 카드를 다 채우고 확인을 누른 **뒤에** 온다(결함 P의 증상 그 자체). 못 찾으면 다른 말로 다시
+    /// 치게 하는 쪽이 왕복을 줄인다. 즐겨찾기 칩과 "현재 위치" 칩은 그대로라 길이 막히지 않는다.
+    @ViewBuilder
+    private func placeSearchEditor(_ field: AIAssistant.AskField) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            TextField(placeholder(for: field), text: placeQueryBinding(field))
+                .textFieldStyle(.roundedBorder)
+                #if os(iOS)
+                .submitLabel(.search)
+                #endif
+            switch field.lookup {
+            case .idle:
+                EmptyView()
+            case .searching:
+                // 검색이 도는 동안에도 다른 줄은 그대로 조작할 수 있다 — 카드를 막지 않는다.
+                HStack(spacing: 6) {
+                    ProgressView().controlSize(.small)
+                    Text("찾는 중…").font(.caption).foregroundStyle(Theme.muted)
+                }
+            case .empty:
+                // 0건과 검색 실패(오프라인)를 PlaceSearch가 같은 빈 배열로 돌려줘 앱이 구분하지
+                // 못한다 — 구분 못 하는 것을 구분한 척하지 않고 양쪽을 함께 말한다.
+                Text("후보를 찾지 못했어요. 다른 이름이나 주소로 적어보세요(인터넷이 끊겨 있을 때도 이렇게 보여요).")
+                    .font(.caption).foregroundStyle(Theme.warn)
+                    .fixedSize(horizontal: false, vertical: true)
+            case .results(let places):
+                ForEach(places, id: \.self) { place in
+                    suggestionRow(field, place)
+                }
+            }
+        }
+    }
+
+    /// 후보 한 줄. 탭하면 그 순간 좌표까지 확정된다 — 확인 뒤에 실패할 자리가 사라진다.
+    private func suggestionRow(_ field: AIAssistant.AskField, _ place: Place) -> some View {
+        Button {
+            assistant.choose(field: field.id, place: place)
+            closeCustom(field)
+        } label: {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(place.name).font(.callout).foregroundStyle(Theme.ink)
+                // 같은 이름의 다른 지점을 가르는 건 주소뿐이다 — 이름만 보여주면 고르는 의미가 없다.
+                if !place.address.isEmpty {
+                    Text(place.address).font(.caption).foregroundStyle(Theme.muted)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .frame(minHeight: chipHeight)
+            .background(Theme.bg, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(place.address.isEmpty ? place.name : "\(place.name), \(place.address)")
+    }
+
+    /// 숫자·제목 줄의 입력칸(장소 외 전부). 여기는 값을 그대로 확정하는 것이 맞다 — 확인 뒤에
+    /// 실패할 외부 조회가 없다.
+    @ViewBuilder
+    private func textCustomEditor(_ field: AIAssistant.AskField) -> some View {
         HStack(spacing: 6) {
-            TextField(field.kind == .place ? "장소 이름" : "숫자만", text: draftBinding(field))
+            TextField(placeholder(for: field), text: draftBinding(field))
                 .textFieldStyle(.roundedBorder)
                 #if os(iOS)
                 // 숫자 줄은 숫자판이 편하지만 숫자판엔 완료 키가 없다 — 그래서 확인 버튼이 있다.
-                .keyboardType(field.kind == .place ? .default : .numberPad)
+                .keyboardType(field.kind == .place || field.kind == .title ? .default : .numberPad)
                 #endif
                 .onSubmit { submitCustom(field) }
             Button("확인") { submitCustom(field) }
@@ -289,6 +482,19 @@ private struct AskCardView: View {
                 .frame(minHeight: chipHeight)
                 .background(Theme.travelFill, in: Capsule())
         }
+    }
+
+    /// 장소 줄의 입력 바인딩. 묶음(디바운스)은 assistant가 한다 — 뷰가 타이머를 들면 카드가 다시
+    /// 그려질 때마다 흩어져 글자마다 호출이 나간다(카카오 일일 할당량).
+    private func placeQueryBinding(_ field: AIAssistant.AskField) -> Binding<String> {
+        Binding(
+            get: { draft[field.id] ?? "" },
+            set: { text in
+                draft[field.id] = text
+                rejected.remove(field.id)
+                assistant.searchPlaces(field: field.id, text: text)
+            }
+        )
     }
 
     private func draftBinding(_ field: AIAssistant.AskField) -> Binding<String> {
