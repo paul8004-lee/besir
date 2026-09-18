@@ -20,11 +20,11 @@
 |---|---|---|---|---|
 | M1 | — (D-1·D-2) | — | 설계 확정 — 중립 표면의 형태와 새 파일 이름. **2026-09-18 `ui-design` 협의로 해소**: D-1 = 클로저 묶음, D-2 = `Shared/EditCard.swift` + `Shared/EditCardView.swift`. 근거·기각 사유는 spec.md §4 | 🟢 |
 | M2 | REQ-001~005 | AC-001 | 필드 모델 중립화 — `AskField`(`:38-113`)·`PendingAsk`(`:117-127`)를 `Shared/EditCard.swift`로. 날짜 3멤버는 **정의 이동 + 위탁**(REQ-002), 별칭 2줄로 `AIAssistant` 본문·드라이버 무변경(REQ-005). **드라이버 `swiftc` 인자 목록과 CLAUDE.md 갱신을 같은 마일스톤에서 한다** — 미루면 M3 내내 드라이버가 빨갛다 (2026-09-18 `f9cd9bb` — 드라이버 205/205 baseline 동일; AC-001 조건 5는 계측 오류 시정, HISTORY 0.2.1) | 🟢 |
-| M3 | REQ-010~013 | AC-002 | 카드 뷰 추출 — `AskCardView`(`:158-557`)·`ChipFlow`(`:564-612`)·`chip` 빌더를 `Shared/EditCardView.swift`로, `private` 해제. 9개 결합 지점(`:181`·`:238`·`:299`·`:344`·`:444`·`:495`·`:523`·`:534`·`:537`)을 `EditCardActions`로 대체. `AIChatView`는 `EditCardView(card:busy:actions:)`를 호출만 한다(612줄 → 약 200줄) | ⬜ |
-| M4 | REQ-020~022, REQ-040~041 | AC-003, AC-004, AC-006 | 불변식 **절 단위** 대조 — 디자인 4절, 접근성 9절, 동작 4절. 여기에 범위 경계 확인(네 화면 무변경, 날짜 형식 복제 0, `parts` 사후 대입 0). **일괄 통과 금지** — 절마다 하나씩 원본과 맞춰 본다 | ⬜ |
-| M5 | REQ-030~031 | AC-005, AC-007, AC-008 | 품질 게이트 — 가드 드라이버 전체 초록(단언 추가 없음), iOS·macOS 무경고 빌드, `cd proxy && npm test`, 실기기에서 AI 카드 무변화 확인 | ⬜ |
+| M3 | REQ-010~013 | AC-002 | 카드 뷰 추출 — `AskCardView`(`:158-557`)·`ChipFlow`(`:564-612`)·`chip` 빌더를 `Shared/EditCardView.swift`로, `private` 해제. 9개 결합 지점(`:181`·`:238`·`:299`·`:344`·`:444`·`:495`·`:523`·`:534`·`:537`)을 `EditCardActions`로 대체. `AIChatView`는 `EditCardView(card:busy:actions:)`를 호출만 한다(612줄 → 약 200줄) (2026-09-18 `bb09e01` — AC-002 3조건·AC-003 14절 PASS) | 🟢 |
+| M4 | REQ-020~022, REQ-040~041 | AC-003, AC-004, AC-006 | 불변식 **절 단위** 대조 — 디자인 4절, 접근성 9절, 동작 4절. 여기에 범위 경계 확인(네 화면 무변경, 날짜 형식 복제 0, `parts` 사후 대입 0). **일괄 통과 금지** — 절마다 하나씩 원본과 맞춰 본다 (2026-09-18 — AC-004 4/4·AC-006 4/5+문언갭 시정, 위해·간결성 신규 0건) | 🟢 |
+| M5 | REQ-030~031 | AC-005, AC-007, AC-008 | 품질 게이트 — 가드 드라이버 전체 초록(단언 추가 없음), iOS·macOS 무경고 빌드, `cd proxy && npm test`, 실기기에서 AI 카드 무변화 확인 (2026-09-18 — 기계 게이트 전부 초록(드라이버 205/205·양쪽 빌드·프록시 7/7) — Team 재선택 요청·실기기 AC-007 대기) | 🟡 |
 
-**M1·M2는 닫혔고 M3 착수 가능하다.** D-3(`AIChatView`에 남는 계약 6 우회·전송 버튼 접근성 라벨을 t1에 포함할지)은 **운영자 결정 대기**이지만 M3~M5를 막지 않는다 — 기본값이 "t1 밖"이므로, 결정이 늦으면 그대로 후속 항목이 된다.
+**M1·M2·M3·M4는 닫혔고 M5는 실기기 확인만 남았다.** D-3(`AIChatView`에 남는 계약 6 우회·전송 버튼 접근성 라벨을 t1에 포함할지)은 **운영자 확정으로 해소 — 전부 t1 밖**(2026-09-18 lead 디스패치, progress.md §E.1), 후속 항목으로 남긴다.
 
 
 ## 2. 알려진 이슈 / 리스크
@@ -60,7 +60,7 @@
 
 ## 4. 후속 (본 SPEC 밖)
 
-- `SPEC-UIKIT-002` (카드 t2) — `AddEventView`(550) · `EventDetailView`(377) 전환. 본 SPEC이 done이 된 뒤 착수(같은 컴포넌트를 쓰므로 순서 의존). 기존 기능 손실 0 기준 — 캘린더 업로드 상태 표시(`EventDetailView.swift:110-146`) 포함.
-- `SPEC-UIKIT-003` (카드 t3) — `AddActivityView`(267) · `ActivityDetailView`(222) 전환. 활동의 이동 다리(leg)를 컴포넌트 옵션으로 흡수하고 화면마다 따로 계산하지 않는다. `PlaceField`의 계약 6 위반·디바운스 부재가 여기서 사라진다.
+- `SPEC-UIKIT-002` (카드 t2) — `AddEventView`(550) · `EventDetailView`(377) 전환. 본 SPEC이 done이 된 뒤 착수(같은 컴포넌트를 쓰므로 순서 의존). 기존 기능 손실 0 기준 — 캘린더 업로드 상태 표시(`EventDetailView.swift:110-146`) 포함. **휴면 위해 계약(완료 조건에 명시)**: 추출된 `EditCardView`는 아무것도 관찰하지 않는 순수 값 뷰다 — 화면은 `chooseValue` 등의 동작으로 소유자 쪽 `@Published` 상태를 바꿔 재렌더를 일으켜야 하고, 그러지 않으면 동작은 실행돼도 화면이 갱신되지 않는다(`AIChatView`는 부모가 `assistant`를 `@ObservedObject`로 관찰해 자연히 성립하던 계약).
+- `SPEC-UIKIT-003` (카드 t3) — `AddActivityView`(267) · `ActivityDetailView`(222) 전환. 활동의 이동 다리(leg)를 컴포넌트 옵션으로 흡수하고 화면마다 따로 계산하지 않는다. `PlaceField`의 계약 6 위반·디바운스 부재가 여기서 사라진다. **휴면 위해 계약(002와 같은 것, 완료 조건에 명시)**: `EditCardView`는 순수 값 뷰라 스스로 재렌더하지 않는다 — 소유자 화면이 동작(`chooseValue` 등)으로 `@Published` 상태를 바꿔야 칩 선택 등이 화면에 반영된다.
 
 🗿 MoAI
