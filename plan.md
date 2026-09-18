@@ -408,13 +408,36 @@ SPEC-ASK-001이 없애려던 조용한 적용이 그대로 재현된 것이다.
 G는 `Shared/ContentView.swift`, ①은 `Shared/AIChatView.swift`가 함께 바뀐다.
 **CHECKLIST.md 정정 필요**: F1(충돌 검사)·G10(출발지)·K9(자정 넘김)의 ✅는 이번 관찰로 반증됐다.
 
-**다음 Day — 일정·활동 화면 UI 통일** (2026-09-16 사용자 요청, 범위 확정: **활동까지 전부**).
-`AddEventView`(550) · `EventDetailView`(366) · `AddActivityView`(267) · `ActivityDetailView`(222)
+### Phase 1.7 — 일정·활동 화면 UI 통일 (2026-09-16 사용자 요청, 범위 확정: **활동까지 전부**) — 진행 중
+
+`AddEventView`(550) · `EventDetailView`(377) · `AddActivityView`(267) · `ActivityDetailView`(222)
 네 화면을 AI 카드와 **같은 UI**로 통일한다 — 약 1,800줄. 같은 일(일정 만들기)을 하는 화면이
 세 벌이라 한 곳을 고치면 나머지가 어긋나는 구조를 없앤다(계약 5의 단일 출처 원칙을 화면에도 적용).
-**이번 Day에 넣지 않는 이유**: 카드의 바탕(D)이 아직 기기에서 검증되지 않았고, 깨진 바탕 위에
-얹으면 바탕을 고칠 때 얹은 것까지 전부 다시 테스트해야 한다. 한 Day 3~4파일 제한도 넘는다.
+
+**세 장으로 쪼갰다** (2026-09-18, 칸반 대기열). 네 화면 + 컴포넌트 + AI 카드는 6파일이라 한 Day
+3~4파일 제한을 넘는다. 그래서 컴포넌트 추출을 먼저 떼어내고, 화면 전환을 일정·활동으로 나눴다.
+
+| 카드 | 범위 | SPEC | 상태 |
+|---|---|---|---|
+| t1 | 편집 카드 컴포넌트를 `Shared/`로 추출 + **AI 카드만** 그것을 쓰도록 전환 | `SPEC-UIKIT-001` | plan 완료 |
+| t2 | `AddEventView` · `EventDetailView` 전환 (t1 done 이후) | `SPEC-UIKIT-002` | 대기 |
+| t3 | `AddActivityView` · `ActivityDetailView` 전환 (t2 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | 대기 |
+
+**t1이 AI 카드까지 전환하는 이유**: 추출한 컴포넌트를 아무도 쓰지 않으면 옳게 추출됐는지 알
+방법이 없다. 추출 원본인 AI 카드가 그것을 쓰고도 동작이 그대로인 것이 정확성의 유일한 증거다.
+네 화면을 함께 옮기면 "추출이 틀렸다"와 "전환이 틀렸다"가 한 덩어리로 도착해 가를 수 없다.
+
+**Phase 1.6에 넣지 않은 이유**(2026-09-16 판단, 그대로 유효): 카드의 바탕(D)이 아직 기기에서
+검증되지 않았고, 깨진 바탕 위에 얹으면 바탕을 고칠 때 얹은 것까지 전부 다시 테스트해야 한다.
+
 SPEC를 쓰고 ui-design + swift-impl을 붙여 진행한다.
+
+**t1에서 실측된 제약 2건**(`291db49`, `SPEC-UIKIT-001` plan.md §2에 상세):
+- `AskField`가 `AIAssistant`의 `private static` 셋(`parseDatetime`·`when`·`isoFormatter`)에 기대고
+  있어, 중첩을 벗어나면 그 참조가 끊긴다. 해석이 두 곳에 생기지 않게 옮기는 것이 판정 기준이다.
+- 가드 드라이버가 `AskField`/`PendingAsk`를 20곳에서 쓰고, 드라이버 컴파일 집합에는 `import
+  SwiftUI`가 한 건도 없다. 그래서 꺼낸 **모델 파일은 SwiftUI를 몰라야** 하고, 모델과 뷰는 반드시
+  다른 파일이다. CLAUDE.md의 드라이버 `swiftc` 인자 목록도 함께 갱신해야 한다.
 
 ## 7. 리스크 / 열린 질문
 
