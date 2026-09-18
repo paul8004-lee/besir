@@ -414,14 +414,18 @@ G는 `Shared/ContentView.swift`, ①은 `Shared/AIChatView.swift`가 함께 바�
 네 화면을 AI 카드와 **같은 UI**로 통일한다 — 약 1,800줄. 같은 일(일정 만들기)을 하는 화면이
 세 벌이라 한 곳을 고치면 나머지가 어긋나는 구조를 없앤다(계약 5의 단일 출처 원칙을 화면에도 적용).
 
-**세 장으로 쪼갰다** (2026-09-18, 칸반 대기열). 네 화면 + 컴포넌트 + AI 카드는 6파일이라 한 Day
+**네 장으로 쪼갰다** (2026-09-18, 칸반 대기열). 네 화면 + 컴포넌트 + AI 카드는 6파일이라 한 Day
 3~4파일 제한을 넘는다. 그래서 컴포넌트 추출을 먼저 떼어내고, 화면 전환을 일정·활동으로 나눴다.
+t2는 plan 단계에서 한 번 더 쪼개졌다 — 장소 검색 디바운스를 계약 5대로 단일화하려면
+`AIAssistant.swift`가 열려야 해 5파일이 되므로, 운영자가 2a(추가 화면+디바운서)/2b(상세 화면)
+분할을 확정했다(2026-09-18).
 
 | 카드 | 범위 | SPEC | 상태 |
 |---|---|---|---|
 | t1 | 편집 카드 컴포넌트를 `Shared/`로 추출 + **AI 카드만** 그것을 쓰도록 전환 | `SPEC-UIKIT-001` | plan 완료 |
-| t2 | `AddEventView` · `EventDetailView` 전환 (t1 done 이후) | `SPEC-UIKIT-002` | 대기 |
-| t3 | `AddActivityView` · `ActivityDetailView` 전환 (t2 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | 대기 |
+| t2 | UI 통일 2a — `AddEventView` 전환 + 장소 검색 디바운서 단일화(4파일) (t1 done 이후) | `SPEC-UIKIT-002` | plan 완료 |
+| t4 | UI 통일 2b — `EventDetailView` 크롬 통일 + 시각 포매터 단일화(2파일) (t2 done 이후) | 별도 SPEC — t4 plan에서 확정 | 대기 |
+| t3 | `AddActivityView` · `ActivityDetailView` 전환 (t4 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | 대기 |
 
 **t1이 AI 카드까지 전환하는 이유**: 추출한 컴포넌트를 아무도 쓰지 않으면 옳게 추출됐는지 알
 방법이 없다. 추출 원본인 AI 카드가 그것을 쓰고도 동작이 그대로인 것이 정확성의 유일한 증거다.
