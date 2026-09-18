@@ -165,7 +165,7 @@ run_complete_at: 2026-09-18
 
 sync_status: audit-ready — **sync 단계 종료(3-phase close)**
 sync_complete_at: 2026-09-18
-sync_commit_sha: pending-backfill
+sync_commit_sha: c156c4deff90c0fbb41614ebd5b4d85327dfdfec
 실행: sync lane (session 53e1309e), lead 디스패치 2026-09-18 · lens `--security --deep`
 
 ### Claim
