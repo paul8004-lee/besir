@@ -30,9 +30,9 @@
 - **Then** 네 가지가 동시에 성립한다:
   1. `Shared/AIAssistant.swift`에 두 타입의 **정의**가 남지 않는다 — `grep -n "struct AskField\|struct PendingAsk" Shared/AIAssistant.swift`가 0건.
   2. 새 모델 파일에 `import SwiftUI`가 없다 — `grep -c "import SwiftUI" <새 모델 파일>`이 `0`(REQ-003).
-  3. 값 해석(`chosenLabel`·`customLabel`·`accepts`)이 **한 곳에만** 있다 — 세 `private static`의 소재를 옮겼든 승격했든, 같은 해석이 두 파일에 나타나지 않는다(계약 5). 대조 방법: 날짜 접두 해석(`"arr:"` 판정)과 ISO 직렬화가 등장하는 파일을 `grep`으로 세어 **1개**임을 확인.
+  3. 값 해석(`chosenLabel`·`customLabel`·`accepts`)이 **한 곳에만** 있다 — 세 `private static`의 소재를 옮겼든 승격했든, 같은 해석이 두 파일에 나타나지 않는다(계약 5). 대조 방법: 날짜 접두 해석(`"arr:"` 판정)과 카드 왕복 ISO 직렬화가 등장하는 파일은 **`EditCard.swift` 한 곳**이다. ISO 리터럴의 파일 수를 세면 `AIAssistant.swift`의 `parseDate` 때문에 2가 나오지만 그것은 실행부 완화 파서의 선행·합법 발생이지 카드 왕복 직렬화가 아니므로(조건 5) 위반이 아니다.
   4. 가드 드라이버가 컴파일된다 — CLAUDE.md의 `swiftc` 인자 목록에 새 모델 파일이 들어가 있고, 드라이버가 `AskField`/`PendingAsk`를 참조하는 20곳이 모두 해결된다. REQ-005의 별칭 두 줄이 있으면 **`AIAssistant` 본문과 드라이버는 한 줄도 바뀌지 않는다** — 변경 파일 목록에 `Tools/GuardDriver.swift`가 등장하면 별칭이 빠진 것이다.
-  5. **날짜 형식이 복제되지 않았다** — `grep -rc "yyyy-MM-dd'T'HH:mm:ss" Shared/`의 합이 **1**이다. 2 이상이면 REQ-002가 금지한 복제이고, 증상은 훨씬 늦게 온다(카드가 확정한 시각이 실행부 파싱에서 실패). 드라이버도 빌드도 이것을 잡지 못하므로 **이 grep이 유일한 기계적 신호**다.
+  5. **날짜 형식이 복제되지 않았다** — 리터럴 `"yyyy-MM-dd'T'HH:mm:ss"`이 `Shared/EditCard.swift`에 **정확히 1건**(카드 왕복 형식의 소유자 `BesirTime`)이고, 추출 diff가 **어느 파일에도 발생을 추가하지 않는다**. `Shared/AIAssistant.swift`의 `parseDate`가 형식 후보 목록으로 갖는 선행 발생분 1건은 **합법적으로 남는다** — 모델이 보낸 ISO 시각을 파싱하는 실행부의 완화 파서지 카드 왕복 형식이 아니며, 건드리면 REQ-041 위반이다. 계획 시점의 "합이 1" 기준은 이 선행 발생분을 못 잰 측정 오류였고 HISTORY 0.2.1에서 시정했다(순수 이동으로는 도달할 수 없는 숫자였다). 기계적 대조: `grep -rc "yyyy-MM-dd'T'HH:mm:ss" Shared/` 합이 **2**(`EditCard.swift` 1 + `AIAssistant.swift` 1)이다 — 늘면 복제(REQ-002), 줄어들면 `parseDate`를 무단 수정한 것이다. 복제의 증상은 훨씬 늦게 온다(카드가 확정한 시각이 실행부 파싱에서 실패). 드라이버도 빌드도 이것을 잡지 못하므로 **이 grep이 유일한 기계적 신호**다.
   6. **모델 파일에 SwiftUI가 새어 들어오지 않았다** — `grep -c '^import SwiftUI' Shared/EditCard.swift`가 `0`. 조건 2와 같은 대상이지만 이쪽은 **작업 도중 새로 생기는** 누출을 본다 — 편의상 `Color`나 `View` 확장을 모델 파일에 얹는 순간 드라이버 집합의 SwiftUI-free 성질이 깨진다.
 - **왜 이 AC가 6개 조건인가**: 여섯이 각각 다른 방식으로 깨진다(정의 잔류 / SwiftUI 누출 / 해석 복제 / 컴파일 인자 누락 / 별칭 누락 / 작업 중 누출). 하나만 확인하면 나머지가 조용히 남고, 3·5는 빌드와 드라이버 **양쪽 모두 잡지 못한다**.
 

@@ -19,17 +19,17 @@
 | M | REQ | AC | 요약 | 상태 |
 |---|---|---|---|---|
 | M1 | — (D-1·D-2) | — | 설계 확정 — 중립 표면의 형태와 새 파일 이름. **2026-09-18 `ui-design` 협의로 해소**: D-1 = 클로저 묶음, D-2 = `Shared/EditCard.swift` + `Shared/EditCardView.swift`. 근거·기각 사유는 spec.md §4 | 🟢 |
-| M2 | REQ-001~005 | AC-001 | 필드 모델 중립화 — `AskField`(`:38-113`)·`PendingAsk`(`:117-127`)를 `Shared/EditCard.swift`로. 날짜 3멤버는 **정의 이동 + 위탁**(REQ-002), 별칭 2줄로 `AIAssistant` 본문·드라이버 무변경(REQ-005). **드라이버 `swiftc` 인자 목록과 CLAUDE.md 갱신을 같은 마일스톤에서 한다** — 미루면 M3 내내 드라이버가 빨갛다 | ⬜ |
+| M2 | REQ-001~005 | AC-001 | 필드 모델 중립화 — `AskField`(`:38-113`)·`PendingAsk`(`:117-127`)를 `Shared/EditCard.swift`로. 날짜 3멤버는 **정의 이동 + 위탁**(REQ-002), 별칭 2줄로 `AIAssistant` 본문·드라이버 무변경(REQ-005). **드라이버 `swiftc` 인자 목록과 CLAUDE.md 갱신을 같은 마일스톤에서 한다** — 미루면 M3 내내 드라이버가 빨갛다 (2026-09-18 `f9cd9bb` — 드라이버 205/205 baseline 동일; AC-001 조건 5는 계측 오류 시정, HISTORY 0.2.1) | 🟢 |
 | M3 | REQ-010~013 | AC-002 | 카드 뷰 추출 — `AskCardView`(`:158-557`)·`ChipFlow`(`:564-612`)·`chip` 빌더를 `Shared/EditCardView.swift`로, `private` 해제. 9개 결합 지점(`:181`·`:238`·`:299`·`:344`·`:444`·`:495`·`:523`·`:534`·`:537`)을 `EditCardActions`로 대체. `AIChatView`는 `EditCardView(card:busy:actions:)`를 호출만 한다(612줄 → 약 200줄) | ⬜ |
 | M4 | REQ-020~022, REQ-040~041 | AC-003, AC-004, AC-006 | 불변식 **절 단위** 대조 — 디자인 4절, 접근성 9절, 동작 4절. 여기에 범위 경계 확인(네 화면 무변경, 날짜 형식 복제 0, `parts` 사후 대입 0). **일괄 통과 금지** — 절마다 하나씩 원본과 맞춰 본다 | ⬜ |
 | M5 | REQ-030~031 | AC-005, AC-007, AC-008 | 품질 게이트 — 가드 드라이버 전체 초록(단언 추가 없음), iOS·macOS 무경고 빌드, `cd proxy && npm test`, 실기기에서 AI 카드 무변화 확인 | ⬜ |
 
-**M1은 닫혔고 M2 착수 가능하다.** D-3(`AIChatView`에 남는 계약 6 우회·전송 버튼 접근성 라벨을 t1에 포함할지)은 **운영자 결정 대기**이지만 M2~M5를 막지 않는다 — 기본값이 "t1 밖"이므로, 결정이 늦으면 그대로 후속 항목이 된다.
+**M1·M2는 닫혔고 M3 착수 가능하다.** D-3(`AIChatView`에 남는 계약 6 우회·전송 버튼 접근성 라벨을 t1에 포함할지)은 **운영자 결정 대기**이지만 M3~M5를 막지 않는다 — 기본값이 "t1 밖"이므로, 결정이 늦으면 그대로 후속 항목이 된다.
 
 
 ## 2. 알려진 이슈 / 리스크
 
-- **`private static` 3개가 이 카드의 가장 단단한 제약**(REQ-002, 형태 확정됨). `AskField.customLabel`·`accepts`가 `AIAssistant.parseDatetime`·`when`·`isoFormatter`를 부르는데 셋 다 `private static`이라, 중첩을 벗어나는 순간 컴파일이 깨진다. **해석을 복제해 "양쪽 다 되게" 만드는 것이 이 카드에서 가장 하기 쉬운 실수**이고 계약 5 위반이다 — 그래서 REQ-002가 형태를 "정의 이동 + 위탁"으로 지정했다. `when`은 카드 밖 **13곳**에서 쓰이므로(실측) 그냥 옮기면 호출부 13곳이 함께 바뀌어 REQ-041과 부딪힌다. 기계적 신호: `grep -rc "yyyy-MM-dd'T'HH:mm:ss" Shared/` 합이 1을 넘으면 복제다(AC-001 조건 5).
+- **`private static` 3개가 이 카드의 가장 단단한 제약**(REQ-002, 형태 확정됨). `AskField.customLabel`·`accepts`가 `AIAssistant.parseDatetime`·`when`·`isoFormatter`를 부르는데 셋 다 `private static`이라, 중첩을 벗어나는 순간 컴파일이 깨진다. **해석을 복제해 "양쪽 다 되게" 만드는 것이 이 카드에서 가장 하기 쉬운 실수**이고 계약 5 위반이다 — 그래서 REQ-002가 형태를 "정의 이동 + 위탁"으로 지정했다. `when`은 카드 밖 **12줄(20발생)**에서 쓰이므로(실측) 그냥 옮기면 호출부 12줄이 함께 바뀌어 REQ-041과 부딪힌다. 기계적 신호: `grep -rc "yyyy-MM-dd'T'HH:mm:ss" Shared/` 합이 **2**(`EditCard.swift`의 `BesirTime` 1 + `AIAssistant.swift`의 `parseDate` 1)여야 한다 — 늘면 복제고 줄어들면 `parseDate`를 건든 것이다. 계획 시점의 "합이 1"은 `parseDate`의 선행 발생분을 못 잰 측정 오기다(AC-001 조건 5, HISTORY 0.2.1 시정).
 - **재렌더 경로가 끊기는 위험**(D-1의 보류된 판단). 뷰에서 `@ObservedObject var assistant`를 없애도 부모(`AIChatView.chat`이 `assistant.bubbles`를 읽는다)가 재렌더를 담당한다는 것은 **코드 구조 독해에 근거한 추론**이며 실행으로 확인한 사실이 아니다. 반증 신호 셋 중 하나라도 나오면 즉시 되돌린다: 칩을 탭해도 체크가 안 뜬다 / 검색 결과가 줄에 안 얹힌다 / `isThinking` 중 확인 버튼이 안 잠긴다.
 - **카드 지역 `@State`가 뷰 정체성에 묶여 있다**(REQ-013). 교체 중 카드를 `Group`이나 조건문으로 한 겹 싸면 정체성이 바뀌어 `customOpen`·`draft`·`rejected`·`draftBasis`·`draftDate`가 날아간다. 증상: 장소 줄 타이핑 중 `idle→searching→results` 재렌더 사이에 **에디터가 닫히거나 글자가 지워진다**. `.id(bubble.id)`와 `ForEach` 안 위치가 지금과 같은지 확인한다.
 - **`parts` 불변성이 느슨해진다**(D-2). 화면 카드가 `parts` 없이 카드를 만들려면 기본값이 필요하고, Swift는 `let` + 기본값을 멤버와이즈 이니셜라이저에서 제외하므로 `var`로 바뀐다. `grep -rn '\.parts = ' Shared/`가 0건이어야 한다 — 0이 아니면 카드가 붙잡은 보류 호출이 사후 변조되고 있다(AC-006).
