@@ -21,3 +21,8 @@ proxy/node_modules/
 
 # xcodegen 결과물이 아니라 실험용으로 남은 사본
 besir-iOS copy-Info.plist
+
+# 하네스 런타임 상태 — session_id·writer_pid 같은 기기 로컬 값이라 공유하면 거짓 정보가 된다
+# (SPEC 디렉터리 안에 중첩 생성되는 경우까지 함께 막는다)
+.moai/state/
+**/.moai/state/

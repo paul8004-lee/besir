@@ -11,7 +11,7 @@ import Foundation
 /// 파일마다 제각각 생기는 것이 이 프로젝트가 이미 한 번 당한 어긋남이라 정의는 이곳 하나고,
 /// AIAssistant는 위탁 한 줄로 같은 시그니처를 유지한다.
 @MainActor enum BesirTime {
-    static let whenFormatter: DateFormatter = {
+    private static let whenFormatter: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "ko_KR")
         f.dateFormat = "M월 d일 (E) a h시 m분"
@@ -44,7 +44,7 @@ import Foundation
 
 /// 앱이 직접 물을 인자 하나 = 카드의 한 줄.
 ///
-/// 되묻는 주제가 모델이 아니라 앱인 이유: 이 모델은 선언된 선택 인자를 비워두지 못하고 전부
+/// 되묻는 주체가 모델이 아니라 앱인 이유: 이 모델은 선언된 선택 인자를 비워두지 못하고 전부
 /// 채운다(b303f41 — 저장해둔 여유 10분이 0으로 덮여 35건이 등록되고도 아무도 몰랐다).
 /// "비워둬라"·"물어봐라"는 이 프로젝트에서 가장 안 지켜지는 지시였고 두 번 실패했다.
 /// 그래서 이 인자들은 툴 선언에서 아예 뺐다 — 모델이 채울 수 없어야 앱이 "비었다"를 관측한다.
