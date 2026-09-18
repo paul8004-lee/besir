@@ -10,14 +10,16 @@
 
 | AC | 대응 REQ | 검증 수단 | 상태 |
 |---|---|---|---|
-| AC-001 | REQ-001~004 | 컴파일 + grep | ⬜ |
+| AC-001 | REQ-001~005 | 컴파일 + grep | ⬜ |
 | AC-002 | REQ-010~013 | 컴파일 + grep | ⬜ |
-| AC-003 | REQ-020~023 | grep + 원본 대조 | ⬜ |
-| AC-004 | REQ-024~026 | 원본 대조 + 드라이버 | ⬜ |
+| AC-003 | REQ-020 (a~d) · REQ-021 (a~i) | grep + 원본 절별 대조 | ⬜ |
+| AC-004 | REQ-022 (a~d) | 원본 절별 대조 + 드라이버 | ⬜ |
 | AC-005 | REQ-030 | 드라이버 실행 | ⬜ |
-| AC-006 | REQ-040~041 | `git diff --stat` | ⬜ |
-| AC-007 (실기기) | REQ-032 | 실기기 조작 | ⬜ 리스크 |
-| AC-008 (게이트) | REQ-031 + 전체 | 빌드 + 프록시 테스트 | ⬜ |
+| AC-006 | REQ-040~041 | 변경 파일 대조 + grep | ⬜ |
+| AC-007 (실기기) | REQ-031 (d) | 실기기 조작 | ⬜ 리스크 |
+| AC-008 (게이트) | REQ-031 (a~c) | 빌드 + 프록시 테스트 | ⬜ |
+
+§2.3·§2.4의 REQ는 절(clause)을 품는다(spec.md §0 "REQ 예산"). **대조는 절 단위**이며, REQ 하나를 통째로 "통과"로 적는 경로는 없다 — AC-003·AC-004의 표가 그 절 목록이다.
 
 ---
 
@@ -29,8 +31,10 @@
   1. `Shared/AIAssistant.swift`에 두 타입의 **정의**가 남지 않는다 — `grep -n "struct AskField\|struct PendingAsk" Shared/AIAssistant.swift`가 0건.
   2. 새 모델 파일에 `import SwiftUI`가 없다 — `grep -c "import SwiftUI" <새 모델 파일>`이 `0`(REQ-003).
   3. 값 해석(`chosenLabel`·`customLabel`·`accepts`)이 **한 곳에만** 있다 — 세 `private static`의 소재를 옮겼든 승격했든, 같은 해석이 두 파일에 나타나지 않는다(계약 5). 대조 방법: 날짜 접두 해석(`"arr:"` 판정)과 ISO 직렬화가 등장하는 파일을 `grep`으로 세어 **1개**임을 확인.
-  4. 가드 드라이버가 컴파일된다 — CLAUDE.md의 `swiftc` 인자 목록에 새 모델 파일이 들어가 있고, 드라이버가 `AskField`/`PendingAsk`를 참조하는 20곳이 모두 해결된다.
-- **왜 이 AC가 4개 조건인가**: 1·2·4는 각각 다른 방식으로 깨진다(정의 잔류 / SwiftUI 누출 / 컴파일 인자 누락). 하나만 확인하면 나머지 둘이 조용히 남는다.
+  4. 가드 드라이버가 컴파일된다 — CLAUDE.md의 `swiftc` 인자 목록에 새 모델 파일이 들어가 있고, 드라이버가 `AskField`/`PendingAsk`를 참조하는 20곳이 모두 해결된다. REQ-005의 별칭 두 줄이 있으면 **`AIAssistant` 본문과 드라이버는 한 줄도 바뀌지 않는다** — 변경 파일 목록에 `Tools/GuardDriver.swift`가 등장하면 별칭이 빠진 것이다.
+  5. **날짜 형식이 복제되지 않았다** — `grep -rc "yyyy-MM-dd'T'HH:mm:ss" Shared/`의 합이 **1**이다. 2 이상이면 REQ-002가 금지한 복제이고, 증상은 훨씬 늦게 온다(카드가 확정한 시각이 실행부 파싱에서 실패). 드라이버도 빌드도 이것을 잡지 못하므로 **이 grep이 유일한 기계적 신호**다.
+  6. **모델 파일에 SwiftUI가 새어 들어오지 않았다** — `grep -c '^import SwiftUI' Shared/EditCard.swift`가 `0`. 조건 2와 같은 대상이지만 이쪽은 **작업 도중 새로 생기는** 누출을 본다 — 편의상 `Color`나 `View` 확장을 모델 파일에 얹는 순간 드라이버 집합의 SwiftUI-free 성질이 깨진다.
+- **왜 이 AC가 6개 조건인가**: 여섯이 각각 다른 방식으로 깨진다(정의 잔류 / SwiftUI 누출 / 해석 복제 / 컴파일 인자 누락 / 별칭 누락 / 작업 중 누출). 하나만 확인하면 나머지가 조용히 남고, 3·5는 빌드와 드라이버 **양쪽 모두 잡지 못한다**.
 
 ## AC-002 — 카드 뷰가 `AIAssistant`를 타입으로 모른다 ⬜
 
@@ -83,7 +87,8 @@
 - **When** 구현이 끝나면
 - **Then** `git diff --stat` 출력에 `Shared/AddEventView.swift`·`Shared/EventDetailView.swift`·`Shared/AddActivityView.swift`·`Shared/ActivityDetailView.swift` 네 경로가 **등장하지 않는다**.
 - 함께 확인: `AddActivityView.PlaceField`(`:187-267`)의 계약 6 위반(`.secondary` `:206`·`:245`, `.quaternary` `:213`, `.bordered` `:220`)과 디바운스 부재(`runSearch :259` → `placeSearch.search :263`)가 **그대로 남아 있다** — 고쳤다면 범위를 넘은 것이다(t3 소관). 이 AC는 "안 고친 것"을 통과로 판정하는 유일한 AC다.
-- 바뀐 파일은 4개뿐이어야 한다 — 새 파일 2개 + `AIAssistant.swift` + `AIChatView.swift`. 문서(`CLAUDE.md`·루트 `plan.md`·본 SPEC 3종)는 별도.
+- 바뀐 파일은 4개뿐이어야 한다 — 새 파일 2개(`Shared/EditCard.swift`·`Shared/EditCardView.swift`) + `AIAssistant.swift` + `AIChatView.swift`. 문서(`CLAUDE.md`·루트 `plan.md`·본 SPEC 3종)는 별도.
+- **`parts` 불변성 확인**(D-2의 실측 필요 항목): `let parts`가 `var`로 바뀌면서 사후 변조가 가능해진다. `grep -rn '\.parts = ' Shared/`가 **0건**이어야 한다 — 0이 아니면 카드가 붙잡은 보류 호출이 생성 후에 바뀌고 있다는 뜻이고, 사용자가 고른 값과 실제 실행되는 값이 갈릴 수 있다.
 
 ## AC-007 — 실기기에서 AI 카드 동작이 구분되지 않는다 ⬜ 리스크
 
