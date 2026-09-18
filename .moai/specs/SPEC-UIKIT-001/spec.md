@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-001
 title: "일정·활동 편집 카드 컴포넌트 추출 (UI 통일 1/3)"
-version: "0.1.0"
+version: "0.1.1"
 status: draft
 created: "2026-09-18"
 updated: "2026-09-18"
@@ -23,6 +23,7 @@ kanban_card: t1
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-18 | 최초 작성 — 루트 `plan.md:411-417`("다음 Day — 일정·활동 화면 UI 통일", 2026-09-16 사용자 요청, 범위 확정 "활동까지 전부")을 GEARS로 정식화. 칸반 카드 t1이 그 Day를 세 장으로 쪼갠 첫 장이므로 본 SPEC의 범위는 **컴포넌트 추출 + AI 카드 전환**까지이며 네 화면은 건드리지 않는다(t2·t3 소관). 인용 줄번호는 작업 트리 `291db49` 실측 |
+| 0.1.1 | 2026-09-18 | 인용 줄번호 **실측 재정렬 27건**. 0.1.0의 결합 지점 9곳(`:181`·`:238`·`:299`·`:344`·`:444`·`:495`·`:523`·`:534`·`:537`)과 `private static` 셋(`:1636`·`:1641`·`:1651`)은 `awk`로 대조해 정확했으나, 접근성·디자인 인용 다수가 어긋나 있었다 — 지역 상태 `:167-179`→`:164-171`, 체크 글리프 `:434-437`→`:372`, 접근성 `:271-275`→`:275`·`:277`, 흐린 여유 줄 `:262-268`→`:267`·`:273`, 힌트 `:554`→`:555`, 디바운스 주석 `:489-490`→`:487-488`, 거절 문구 `:254`→`:257`, 칩 높이 `:174-179`→`:176`·`:178`, `accepts` `:88-111`→`:89-106`, 결함 P `:391-396`→`:407-408`, 0건 문구 `:412-415`→`:430`, `arrange` `:604`→`:595`, 가로스크롤 주석 `:559-562`→`:561`. `PlaceField`의 계약 6 위반 줄(`:206`·`:213`·`:220`·`:245`)과 디바운스 부재 줄(`:259`→`:263`)을 새로 실측해 §1.1·AC-006에 명시. **원인**: 0.1.0 작성 시 일부 줄번호를 grep 실측이 아니라 읽은 출력에서 눈으로 어림했다 — run-phase가 없는 코드를 찾아다니게 만드는 종류의 오차다 |
 
 ## 0. 이 SPEC의 성격
 
@@ -46,7 +47,7 @@ kanban_card: t1
 | `Shared/AddActivityView.swift` | 267 | 4 |
 | `Shared/ActivityDetailView.swift` | 222 | 2 |
 
-CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰을 거친다"고 못박는다. 토큰 사용 수가 28 대 2~6으로 갈리는 것은 카드 쪽만 그 계약을 지키고 있다는 뜻이며, 실제로 `AddActivityView.PlaceField`(`Shared/AddActivityView.swift:187-267`)는 `.quaternary`·`.secondary`·`.bordered`를 그대로 쓴다. 같은 파일의 `PlaceField`는 장소 검색도 다시 구현하는데 **디바운스가 없다** — 제출 시 `store.placeSearch.search`를 바로 부른다(`:258-266`). 카드 쪽은 같은 실패를 이미 겪고 디바운스를 어시스턴트에 두었고, 그 이유가 주석에 남아 있다: "뷰가 타이머를 들면 카드가 다시 그려질 때마다 흩어져 글자마다 호출이 나간다(카카오 일일 할당량)"(`Shared/AIChatView.swift:489-490`).
+CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰을 거친다"고 못박는다. 토큰 사용 수가 28 대 2~6으로 갈리는 것은 카드 쪽만 그 계약을 지키고 있다는 뜻이며, 실제로 `AddActivityView.PlaceField`(`Shared/AddActivityView.swift:187-267`)는 `.secondary`(`:206`·`:245`)·`.quaternary`(`:213`)·`.bordered`(`:220`)를 그대로 쓴다. 같은 `PlaceField`는 장소 검색도 다시 구현하는데 **디바운스가 없다** — `runSearch`(`:259`)가 `store.placeSearch.search`를 바로 부른다(`:263`). 카드 쪽은 같은 실패를 이미 겪고 디바운스를 어시스턴트에 두었고, 그 이유가 주석에 남아 있다: "뷰가 타이머를 들면 카드가 다시 그려질 때마다 흩어져 글자마다 호출이 나간다(카카오 일일 할당량)"(`Shared/AIChatView.swift:487-488`).
 
 즉 카드 UI가 "나은 쪽"인 것은 취향이 아니라 **사고를 겪고 고친 이력이 쌓인 결과**다. 그래서 통일의 방향은 카드 → 화면이고, 카드가 단일 출처가 된다.
 
@@ -75,7 +76,7 @@ CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰�
 - **REQ-010 (Ubiquitous)**: The card view shall live in `Shared/` and be non-private — `AskCardView`(`Shared/AIChatView.swift:158-557`)·`ChipFlow`(`:564-612`)·그 안의 `chip(_:selected:dashed:action:)` 빌더가 새 뷰 파일로 옮겨진다. 현재 셋 다 `private`이므로 파일 밖에서 쓸 수 없다.
 - **REQ-011 (Unwanted)**: The extracted view shall not name `AIAssistant` as a type. 근거(실측): 결합 지점은 정확히 **9곳**이다 — `isThinking`(`:181`, `:537`), `choose(field:value:)`(`:238`), `rechooseTimeBasis`(`:299`), `chooseTime`(`:344`), `choose(field:place:)`(`:444`), `searchPlaces`(`:495`), `submitCustom`(`:523`), `confirmAsk()`(`:534`). 아홉 지점 전부가 중립 표면을 거쳐야 하며, 남은 한 곳이 있으면 네 화면이 그 컴포넌트를 쓸 수 없다.
 - **REQ-012 (Ubiquitous)**: `AIAssistant` shall remain the sole AI-side adapter of that neutral surface — 새 AI 클래스를 만들지 않는다(CLAUDE.md 계약 4). 어댑터는 기존 `AIAssistant`가 중립 표면을 만족시키는 형태이고, 별도의 카드 전용 컨트롤러·이벤트버스·영속화 레이어를 두지 않는다(계약 3).
-- **REQ-013 (Ubiquitous)**: The extracted view shall keep its card-lifetime local state — `customOpen`·`draft`·`rejected`·`draftBasis`·`draftDate`(`:167-179`)가 컴포넌트 안에 남는다. 근거(주석 `:165-166`): 이 상태를 채팅 뷰로 올렸더니 "카드가 요약으로 바뀐 뒤에도 열린 입력창과 거절 표시가 남아 다음 카드로 흘러갔다". 호출자에게 상태를 넘기는 설계는 그 사고를 되돌린다.
+- **REQ-013 (Ubiquitous)**: The extracted view shall keep its card-lifetime local state — `customOpen`·`draft`·`rejected`·`draftBasis`·`draftDate`(`:164-171`)가 컴포넌트 안에 남는다. 근거(주석 `:162-163`): 이 상태를 채팅 뷰로 올렸더니 "카드가 요약으로 바뀐 뒤에도 열린 입력창과 거절 표시가 남아 다음 카드로 흘러갔다". 호출자에게 상태를 넘기는 설계는 그 사고를 되돌린다.
 
 ### 2.3 보존해야 할 불변식 (020번대)
 
@@ -83,15 +84,15 @@ CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰�
 
 - **REQ-020 (Ubiquitous)**: The extracted component shall use only `Theme` tokens for color — 원시 색·`.secondary`·`.quaternary`·시스템 머티리얼을 쓰지 않는다(계약 6). 현재 카드가 쓰는 토큰: `ink`·`muted`·`faint`·`line`·`bg`·`raised`·`travel`·`travelFill`·`travelInk`·`warn`·`radius`. `preferredColorScheme`을 강제하지 않는다.
 - **REQ-021 (Ubiquitous)**: The extracted component shall preserve four accessibility invariants verbatim:
-  (a) 선택 표시를 색에만 맡기지 않는다 — 체크 글리프 + 글자 굵기(`:434-437`);
-  (b) 칩은 줄 이름과 묶여 읽힌다 — `accessibilityElement(children: .contain)` + `accessibilityLabel(field.note.map { "\(label). \($0)" } ?? label)`(`:271-275`);
-  (c) 흐려진 여유 줄은 색(투명도 0.5)만으로 상태를 말하지 않고 캡션을 함께 둔다(`:262-268`);
-  (d) 확인 버튼의 잠김 이유는 힌트로 읽힌다 — `accessibilityHint`(`:554`).
-- **REQ-022 (Unwanted)**: The extracted view shall not hold a search debounce timer — 장소 검색의 묶음은 어댑터 쪽에 남는다. 근거(주석 `:489-490`): 뷰가 타이머를 들면 재렌더마다 흩어져 글자마다 호출이 나가고, 그것이 곧 카카오 일일 할당량이다.
-- **REQ-023 (Ubiquitous)**: The extracted component shall preserve the platform chip-height split — iOS `44`pt / macOS `28`pt, 둘 다 `@ScaledMetric(relativeTo: .callout)`(`:174-179`). 근거(주석): 고정하면 큰 글씨 설정에서 칩이 잘리고, macOS는 포인터라 44pt면 카드만 길어진다.
-- **REQ-024 (Ubiquitous)**: The extracted model shall preserve the per-kind acceptance ranges — 여유 `0...Store.maxBufferMinutes`, 알림 `0...1440`, 반복 `1...Store.maxRecurrenceWeeks`, 이동수단 `TransportMode(rawValue:)` 유효, 시각은 접두 + 정규 ISO만(`:88-111`). 상한을 문구에 박지 않는다 — 현재도 거절 사유가 "그 값은 쓸 수 없어요"뿐인 이유가 "상한이 Store 상수라 문구에 박으면 두 곳이 된다"(`:254`)이다.
-- **REQ-025 (Ubiquitous)**: The extracted component shall preserve the place-row contract — 자유 텍스트를 그대로 확정하는 버튼을 두지 않고, 후보를 탭해 좌표까지 확정한다. 근거(주석 `:391-396`): 좌표 없는 확정은 카드를 다 채우고 확인을 누른 **뒤에야** 실행부 검색에서 실패했다(2026-09-16 실기기 결함 P). 0건과 오프라인을 구분한 척하지 않고 양쪽을 함께 말하는 문구도 그대로 둔다(`:412-415`).
-- **REQ-026 (Ubiquitous)**: The extracted component shall keep chips reachable without horizontal scrolling — `ChipFlow`가 줄바꿈으로 흘려 넣는다. 근거(주석 `:559-562`): "화면 밖으로 밀린 칩은 고를 수 없는 값이고, 이 카드에서 못 고른 값은 그대로 조용한 기본값이 된다."
+  (a) 선택 표시를 색에만 맡기지 않는다 — 체크 글리프 + 글자 굵기(`:372`);
+  (b) 칩은 줄 이름과 묶여 읽힌다 — `accessibilityElement(children: .contain)` + `accessibilityLabel(field.note.map { "\(label). \($0)" } ?? label)`(`:275`·`:277`);
+  (c) 흐려진 여유 줄은 색(투명도 0.5)만으로 상태를 말하지 않고 캡션을 함께 둔다(`:267`(캡션)·`:273`(opacity));
+  (d) 확인 버튼의 잠김 이유는 힌트로 읽힌다 — `accessibilityHint`(`:555`).
+- **REQ-022 (Unwanted)**: The extracted view shall not hold a search debounce timer — 장소 검색의 묶음은 어댑터 쪽에 남는다. 근거(주석 `:487-488`): 뷰가 타이머를 들면 재렌더마다 흩어져 글자마다 호출이 나가고, 그것이 곧 카카오 일일 할당량이다.
+- **REQ-023 (Ubiquitous)**: The extracted component shall preserve the platform chip-height split — iOS `44`pt / macOS `28`pt, 둘 다 `@ScaledMetric(relativeTo: .callout)`(`:176`(iOS 44)·`:178`(macOS 28)). 근거(주석): 고정하면 큰 글씨 설정에서 칩이 잘리고, macOS는 포인터라 44pt면 카드만 길어진다.
+- **REQ-024 (Ubiquitous)**: The extracted model shall preserve the per-kind acceptance ranges — 여유 `0...Store.maxBufferMinutes`, 알림 `0...1440`, 반복 `1...Store.maxRecurrenceWeeks`, 이동수단 `TransportMode(rawValue:)` 유효, 시각은 접두 + 정규 ISO만(`:89-106`). 상한을 문구에 박지 않는다 — 현재도 거절 사유가 "그 값은 쓸 수 없어요"뿐인 이유가 "상한이 Store 상수라 문구에 박으면 두 곳이 된다"(`:257`)이다.
+- **REQ-025 (Ubiquitous)**: The extracted component shall preserve the place-row contract — 자유 텍스트를 그대로 확정하는 버튼을 두지 않고, 후보를 탭해 좌표까지 확정한다. 근거(주석 `:407-408`): 좌표 없는 확정은 카드를 다 채우고 확인을 누른 **뒤에야** 실행부 검색에서 실패했다(2026-09-16 실기기 결함 P). 0건과 오프라인을 구분한 척하지 않고 양쪽을 함께 말하는 문구도 그대로 둔다(`:430`).
+- **REQ-026 (Ubiquitous)**: The extracted component shall keep chips reachable without horizontal scrolling — `ChipFlow`가 줄바꿈으로 흘려 넣는다. 근거(주석 `:561`): "화면 밖으로 밀린 칩은 고를 수 없는 값이고, 이 카드에서 못 고른 값은 그대로 조용한 기본값이 된다."
 
 ### 2.4 검증 (030번대)
 
@@ -102,7 +103,7 @@ CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰�
 ### 2.5 범위 경계 (040번대)
 
 - **REQ-040 (Unwanted)**: This SPEC shall not modify the four editing screens — `AddEventView`·`EventDetailView`·`AddActivityView`·`ActivityDetailView`는 한 줄도 바뀌지 않는다. 근거: 카드 t1의 본문이 "이 카드에서는 기존 4화면을 건드리지 않는다"로 못박고, §0이 그 이유(두 실패가 한 덩어리로 도착하는 것을 막는다)를 적었다. `AddActivityView.PlaceField`가 계약 6을 어기는 것은 §1.1에 측정돼 있지만 **고치지 않는다** — t3 소관이다.
-- **REQ-041 (Unwanted)**: This SPEC shall change no observable behavior — 순수 추출이다. 칩 문구·순서·간격, 거절 문구, 확인 버튼 문구("등록하기"), 시각 에디터의 처음 바퀴 위치("지금에서 다음 정각", `:359-362`), 기준을 미리 골라두지 않는 것(`:176-177`) 전부 그대로다. 추출 중 개선하고 싶은 것이 보이면 **하지 않고 plan.md의 후속 항목으로 적는다**(CLAUDE.md: "계획에 없는 리팩터링은 하지 않는다").
+- **REQ-041 (Unwanted)**: This SPEC shall change no observable behavior — 순수 추출이다. 칩 문구·순서·간격, 거절 문구, 확인 버튼 문구("등록하기"), 시각 에디터의 처음 바퀴 위치("지금에서 다음 정각", `:359`), 기준을 미리 골라두지 않는 것(`:168`·`:290`) 전부 그대로다. 추출 중 개선하고 싶은 것이 보이면 **하지 않고 plan.md의 후속 항목으로 적는다**(CLAUDE.md: "계획에 없는 리팩터링은 하지 않는다").
 
 ## 3. Out of Scope
 
