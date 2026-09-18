@@ -1,7 +1,7 @@
 // besir의 AI 도구 인자 가드를 모델 없이 실행해 보는 드라이버.
 //
 //   실행(리포지토리 루트에서):
-//     cat Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd.swift \
+//     cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd.swift \
 //       && swiftc -o /tmp/gd /tmp/gd.swift Shared/Store.swift Shared/Models.swift \
 //            Shared/Config.swift Shared/PlaceSearch.swift Shared/DirectionsService.swift \
 //            Shared/LocationManager.swift Shared/NotificationManager.swift \

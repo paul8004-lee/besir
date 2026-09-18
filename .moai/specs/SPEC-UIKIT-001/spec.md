@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-001
 title: "일정·활동 편집 카드 컴포넌트 추출 (UI 통일 1/3)"
 version: "0.2.0"
-status: draft
+status: in-progress
 created: "2026-09-18"
 updated: "2026-09-18"
 author: "manager-spec"

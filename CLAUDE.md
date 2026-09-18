@@ -56,7 +56,7 @@ xcodebuild -scheme besir-macOS -derivedDataPath build build
 cd proxy && npm test && npx wrangler deploy
 
 # AI 인자 가드 드라이버 — 모델 없이 결정적으로 돈다(API 할당량 안 씀)
-cat Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd.swift \
+cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd.swift \
   && swiftc -o /tmp/gd /tmp/gd.swift Shared/Store.swift Shared/Models.swift \
        Shared/Config.swift Shared/PlaceSearch.swift Shared/DirectionsService.swift \
        Shared/LocationManager.swift Shared/NotificationManager.swift \
