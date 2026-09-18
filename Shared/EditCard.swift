@@ -144,3 +144,16 @@ import Foundation
     var fields: [EditField]
     var isReady: Bool { fields.allSatisfy { $0.chosen != nil } }
 }
+
+/// 카드 뷰가 값을 소유한 쪽(AIAssistant 등)을 타입으로 모르게 하는 다리 — 뷰가 부르는
+/// 일곱 동작을 클로저로 묶어 넘긴다. 값은 Store/AIAssistant에만 있고, 결합이 이 어댑터로
+/// 수축한다(네 편집 화면이 같은 카드를 쓰려면 뷰가 특정 소유자를 가져선 안 된다).
+struct EditCardActions {
+    var chooseValue: @MainActor (UUID, String) -> Void
+    var rechooseTimeBasis: @MainActor (UUID, ScheduleAnchor) -> Void
+    var chooseTime: @MainActor (UUID, ScheduleAnchor, Date) -> Bool
+    var choosePlace: @MainActor (UUID, Place) -> Void
+    var searchPlaces: @MainActor (UUID, String) -> Void
+    var submitCustom: @MainActor (UUID, String) -> Bool
+    var confirm: @MainActor () async -> Void
+}

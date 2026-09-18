@@ -14,6 +14,7 @@
 		14B7CAB7C4CC19AAC90B4D8E /* AddEventView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 189CA69464716B298203991E /* AddEventView.swift */; };
 		1AD4281ECA64C14D429B11AB /* AddActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FAEDA63C0F7B5B68ED668 /* AddActivityView.swift */; };
 		1BEE301ED7ECD498B9FC845A /* besirShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = BC169546B85CB4879AE9BB36 /* besirShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1BF2E38B02B67E4567B74D2F /* EditCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F538B7505451FAED569EF8A2 /* EditCardView.swift */; };
 		236F436510829252A0585DF7 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9B887D575F46D2B6B96DFE /* RootView.swift */; };
 		25BD545470458D8692590285 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E864C9431C67F80C5DD0A8E5 /* SharedInbox.swift */; };
 		27E99ACDAC427A5B83F38499 /* FullSirView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7BD28A011CF28AD7279D4165 /* FullSirView.swift */; };
@@ -24,6 +25,7 @@
 		32F9B6959FA04D27C93DDD8F /* Store.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97586074DF0CFDC13642EBC2 /* Store.swift */; };
 		37B304771CDBE73F30D990B6 /* KakaoMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C8498E49C7779C28E16E052 /* KakaoMapView.swift */; };
 		44DF757E3B6059C51001B192 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A9B887D575F46D2B6B96DFE /* RootView.swift */; };
+		496DD33610AA53AA2EB89B94 /* EditCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1894E28ACB6CAC4E60CB82 /* EditCard.swift */; };
 		4E51AD11C4916BDD7B2742A6 /* SharedInbox.swift in Sources */ = {isa = PBXBuildFile; fileRef = E864C9431C67F80C5DD0A8E5 /* SharedInbox.swift */; };
 		553A2E0084672E260A29049F /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADCAD2871934B2F2AA78F55 /* App.swift */; };
 		5781D4534502376DF6EF81C7 /* AIAssistant.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61B96E092C945FC011A6A05E /* AIAssistant.swift */; };
@@ -39,6 +41,7 @@
 		7F09A92CB6D7210F7AFDF876 /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DD211D2AB1F655484B50B23 /* FavoritesView.swift */; };
 		84F961C30E232E92E344629E /* AIChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8E95864B00A0C95FEE6B673 /* AIChatView.swift */; };
 		8A4B671D024B0F4F89575A02 /* map.html in Resources */ = {isa = PBXBuildFile; fileRef = 3B5150D9121D02B9040CF938 /* map.html */; };
+		8D52545993E6BA0301737F4F /* EditCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1894E28ACB6CAC4E60CB82 /* EditCard.swift */; };
 		8F33302D57881F37F5714BD5 /* localhost.p12 in Resources */ = {isa = PBXBuildFile; fileRef = 8E339ACEE509A2F5BD1B7BE3 /* localhost.p12 */; };
 		926A7B99CEC853FD1DD26109 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8871E68B27797EAE7B73CAD2 /* LocationManager.swift */; };
 		92DE1C77ED65FC91FF622888 /* GoogleCalendarService.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBFBC5BC16564199A66D0D9E /* GoogleCalendarService.swift */; };
@@ -60,6 +63,7 @@
 		D8A6995E5A994420DBD10EF7 /* PlaceSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F56FEC62DB59044435E14E0 /* PlaceSearch.swift */; };
 		DC0144BAFD1E917A3277B423 /* AddActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203FAEDA63C0F7B5B68ED668 /* AddActivityView.swift */; };
 		DD63A1CB9082738B6DF0E85A /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD4D80F06BA150599C053050 /* Models.swift */; };
+		EA7B81E8AF2215FFA3439698 /* EditCardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F538B7505451FAED569EF8A2 /* EditCardView.swift */; };
 		ECF7B169723D4D35C036E7C9 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4EC7DA30712E266729A3567 /* Theme.swift */; };
 		F0F38FF92A36745B700951F8 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A87C99A8B7F714E320985371 /* SettingsView.swift */; };
 		F2D7F34BB72EA6505AB83614 /* App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3ADCAD2871934B2F2AA78F55 /* App.swift */; };
@@ -96,7 +100,7 @@
 		0C5EF483586213420EA61B2D /* EventDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EventDetailView.swift; sourceTree = "<group>"; };
 		0DD211D2AB1F655484B50B23 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FavoritesView.swift; sourceTree = "<group>"; };
 		189CA69464716B298203991E /* AddEventView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddEventView.swift; sourceTree = "<group>"; };
-		1FF8D9DADD176C3F969BE0CC /* besir-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; name = "besir-macOS.app"; path = besir.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1FF8D9DADD176C3F969BE0CC /* besir-macOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "besir-macOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		203FAEDA63C0F7B5B68ED668 /* AddActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddActivityView.swift; sourceTree = "<group>"; };
 		2D43C776E75BF96D8054E241 /* ShareViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareViewController.swift; sourceTree = "<group>"; };
 		3ADCAD2871934B2F2AA78F55 /* App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App.swift; sourceTree = "<group>"; };
@@ -110,7 +114,7 @@
 		7BD28A011CF28AD7279D4165 /* FullSirView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FullSirView.swift; sourceTree = "<group>"; };
 		8871E68B27797EAE7B73CAD2 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		8BF072D66500B552ABA20FC9 /* NotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationManager.swift; sourceTree = "<group>"; };
-		8E339ACEE509A2F5BD1B7BE3 /* localhost.p12 */ = {isa = PBXFileReference; lastKnownFileType = file; path = localhost.p12; sourceTree = "<group>"; };
+		8E339ACEE509A2F5BD1B7BE3 /* localhost.p12 */ = {isa = PBXFileReference; path = localhost.p12; sourceTree = "<group>"; };
 		97586074DF0CFDC13642EBC2 /* Store.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Store.swift; sourceTree = "<group>"; };
 		9C8498E49C7779C28E16E052 /* KakaoMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KakaoMapView.swift; sourceTree = "<group>"; };
 		9FD4D96BD09F359D21486D79 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -118,12 +122,14 @@
 		A8E95864B00A0C95FEE6B673 /* AIChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIChatView.swift; sourceTree = "<group>"; };
 		B3DAC490BF931827011AB46F /* RouteMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouteMapView.swift; sourceTree = "<group>"; };
 		BBFBC5BC16564199A66D0D9E /* GoogleCalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GoogleCalendarService.swift; sourceTree = "<group>"; };
-		BC169546B85CB4879AE9BB36 /* besirShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = besirShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BC169546B85CB4879AE9BB36 /* besirShare.appex */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = "wrapper.app-extension"; path = besirShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		BE1894E28ACB6CAC4E60CB82 /* EditCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditCard.swift; sourceTree = "<group>"; };
 		D95EC55522C12C425099C4E1 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 		DD4D80F06BA150599C053050 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		E864C9431C67F80C5DD0A8E5 /* SharedInbox.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedInbox.swift; sourceTree = "<group>"; };
-		EAA2A1C3F3C5A17DBB165C2F /* besir.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = besir.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		EAA2A1C3F3C5A17DBB165C2F /* besir-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "besir-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F4EC7DA30712E266729A3567 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		F538B7505451FAED569EF8A2 /* EditCardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditCardView.swift; sourceTree = "<group>"; };
 		FA45CB9A63421F7134E9020E /* LocalMapServer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalMapServer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -141,7 +147,7 @@
 		6D94E37E1B15FB792C2E1845 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				EAA2A1C3F3C5A17DBB165C2F /* besir.app */,
+				EAA2A1C3F3C5A17DBB165C2F /* besir-iOS.app */,
 				1FF8D9DADD176C3F969BE0CC /* besir-macOS.app */,
 				BC169546B85CB4879AE9BB36 /* besirShare.appex */,
 			);
@@ -170,6 +176,8 @@
 				D95EC55522C12C425099C4E1 /* Config.swift */,
 				66D7F7E1BDFBB76CFE89F37F /* ContentView.swift */,
 				694BE3D5592B3DE12040B605 /* DirectionsService.swift */,
+				BE1894E28ACB6CAC4E60CB82 /* EditCard.swift */,
+				F538B7505451FAED569EF8A2 /* EditCardView.swift */,
 				0C5EF483586213420EA61B2D /* EventDetailView.swift */,
 				0DD211D2AB1F655484B50B23 /* FavoritesView.swift */,
 				7BD28A011CF28AD7279D4165 /* FullSirView.swift */,
@@ -253,7 +261,7 @@
 			packageProductDependencies = (
 			);
 			productName = "besir-iOS";
-			productReference = EAA2A1C3F3C5A17DBB165C2F /* besir.app */;
+			productReference = EAA2A1C3F3C5A17DBB165C2F /* besir-iOS.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -270,9 +278,11 @@
 						ProvisioningStyle = Automatic;
 					};
 					826FE78C09EEB86DC07E232C = {
+						DevelopmentTeam = DFEME8ZQT9;
 						ProvisioningStyle = Automatic;
 					};
 					C9CE8EE73707E4C1AEA90410 = {
+						DevelopmentTeam = DFEME8ZQT9;
 						ProvisioningStyle = Automatic;
 					};
 				};
@@ -335,6 +345,8 @@
 				32CC8971F6FB734DBD8FF3AB /* Config.swift in Sources */,
 				C5128DD3D71731A923549006 /* ContentView.swift in Sources */,
 				01E6D0DCC07F2C8186EDAC79 /* DirectionsService.swift in Sources */,
+				8D52545993E6BA0301737F4F /* EditCard.swift in Sources */,
+				1BF2E38B02B67E4567B74D2F /* EditCardView.swift in Sources */,
 				A6F7CE2133DF42B19363A5B1 /* EventDetailView.swift in Sources */,
 				7F09A92CB6D7210F7AFDF876 /* FavoritesView.swift in Sources */,
 				27E99ACDAC427A5B83F38499 /* FullSirView.swift in Sources */,
@@ -376,6 +388,8 @@
 				66511C212B7408088104ED51 /* Config.swift in Sources */,
 				6CC6F17E5FE45090FB89E3AC /* ContentView.swift in Sources */,
 				F5222374B3228F913F985809 /* DirectionsService.swift in Sources */,
+				496DD33610AA53AA2EB89B94 /* EditCard.swift in Sources */,
+				EA7B81E8AF2215FFA3439698 /* EditCardView.swift in Sources */,
 				2BFE98DB745A497DEF98FFD9 /* EventDetailView.swift in Sources */,
 				744B498C138A64293F2C1813 /* FavoritesView.swift in Sources */,
 				B2E2833B5FCECE205E616439 /* FullSirView.swift in Sources */,
@@ -431,7 +445,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Generated/besir-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Y54D2W4F4T;
+				DEVELOPMENT_TEAM = DFEME8ZQT9;
 				INFOPLIST_FILE = "Generated/Info-iOS.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -448,7 +462,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Generated/besirShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Y54D2W4F4T;
+				DEVELOPMENT_TEAM = DFEME8ZQT9;
 				INFOPLIST_FILE = "Generated/Info-ShareExtension.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -467,7 +481,7 @@
 			buildSettings = {
 				CODE_SIGN_ENTITLEMENTS = Generated/besirShare.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Y54D2W4F4T;
+				DEVELOPMENT_TEAM = DFEME8ZQT9;
 				INFOPLIST_FILE = "Generated/Info-ShareExtension.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -615,7 +629,7 @@
 				CODE_SIGN_ENTITLEMENTS = "Generated/besir-iOS.entitlements";
 				CODE_SIGN_IDENTITY = "iPhone Developer";
 				CODE_SIGN_STYLE = Automatic;
-				DEVELOPMENT_TEAM = Y54D2W4F4T;
+				DEVELOPMENT_TEAM = DFEME8ZQT9;
 				INFOPLIST_FILE = "Generated/Info-iOS.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

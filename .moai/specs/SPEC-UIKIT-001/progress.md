@@ -54,7 +54,27 @@ plan_complete_at: 2026-09-18
 - 참고 측정: `when` 호출부는 spec이 "13곳"으로 적었으나 실측은 `Self.when(` **12줄/20발생**(fda161c,
   M2 후 동일·전부 무수정 — REQ-002). 문서 시정 커밋에서 AC-001 조건 3·5와 함께 HISTORY 0.2.1로 반영.
 
-### M3 — 카드 뷰 추출 (REQ-010~013) ⬜
+### M3 — 카드 뷰 추출 (REQ-010~013) ✅
+
+구현: `swift-impl` 전문가. 검증·커밋: run lane.
+
+- **변경**: `Shared/EditCardView.swift` 신규 465줄(`EditCardView` internal + `ChipFlow` internal + 이동 전체,
+  `import SwiftUI`만), `Shared/EditCard.swift` +13(`EditCardActions` — 7개 `@MainActor` 클로저),
+  `Shared/AIChatView.swift` 612→164줄(호출부 `EditCardView(card:busy:actions:)` 교체 + 어댑터 1곳에
+  AI 결합 집중), `besir.xcodeproj/project.pbxproj`(xcodegen — 신규 파일 2종 등록).
+- **Claim**: AC-002 3조건 성립. REQ-011의 주석 속 이름 2건만 의미 보존하여 걷음(파일머리·datetimeRow).
+- **Evidence** (run lane 직접 실행):
+  1. `grep -c "AIAssistant" Shared/EditCardView.swift` → `0`.
+  2. `grep -n "^private struct" Shared/EditCardView.swift` → 0건(둘 다 internal).
+  3. `grep -c "import SwiftUI" Shared/EditCard.swift` → 여전히 `0`(EditCardActions 추가 후에도).
+  4. `grep -rn '\.parts = ' Shared/` → 0건(AC-006 조건).
+  5. xcodegen exit=0 → iOS `BUILD SUCCEEDED`·프로젝트 코드 경고 0(로그 유일 warning은
+     appintentsmetadataprocessor 툴체인 공지) / macOS 동일(`build-ios.log`·`build-mac.log`).
+  6. 드라이버(M3 트리): `205/205 통과`(`/tmp/gd-m3-run.txt`).
+  7. 뷰 본문 465줄 전수 대조(run lane 직접 Read) — 이동 충실, 치환만 존재.
+- **미검증(Gaps)**: 재렌더(D-1 보류 추론)·제스처·낭독은 런타임 — AC-007 실기기 항목.
+- **후속 기록**: 디바운스 주석 "assistant가 한다" 문구가 verbatim 보존으로 남음(REQ-041 준수) —
+  중립 컴포넌트 산문으로는 AI 냄새가 남아 t3(SPEC-UIKIT-003) 이름 통일 때 함께 다듪을 후보.
 
 ### M4 — 불변식 절 단위 대조 (REQ-020~022, 040~041) ⬜
 
