@@ -113,8 +113,15 @@ plan_complete_at: 2026-09-18
 | 프록시 npm test (AC-008-4) | ✅ 7/7 통과 | 본 SPEC은 프록시 무변경 — 게이트만 확인 |
 | xcodegen (AC-008-1 전단) | ✅ exit=0, 신규 파일 2종 등록 | **Team 재선택(besir-iOS·besirShare)은 사용자 조치로 대기** |
 
-- **AC-007 (실기기) — 대기**: ux-check가 15항목 확인 목록 작성(아래). 설치 전 사용자 조치:
-  ① Xcode에서 두 타깃 Team 재선택, ② iPhone(8D9B807B…) 연결·잠금 해제.
+- **AC-007 (실기기) — 설치 완료·실행 대기(기기 신뢰 단계)**: ux-check가 15항목 확인 목록 작성(아래).
+  배포 경위(2026-09-18): 사용자가 Team 재선택 완료했으나 `xcodebuild`가 `No Account for Team DFEME8ZQT9`로
+  실패 — project.yml의 iOS 타깃 팀(DFEME8ZQT9) 뒤에 계정이 더 없다. 실측: 키체인 신원 2개는
+  DFEME8ZQT9, 그러나 계정 세션이 내린 새 프로파일 2종(besir·besir.share, 만료 9/25)은 **Y54D2W4F4T**
+  (macOS 타깃이 쓰던 개인 팀). **레포 무변경** 빌드 오버라이드 `DEVELOPMENT_TEAM=Y54D2W4F4T`로
+  BUILD SUCCEEDED → 기기 설치 성공(com.iseongmin.besir). 실행은 "profile has not been explicitly
+  trusted"로 차단 — 개인 팀 프로파일의 기기 신뢰 단계(사용자가 기기에서 수행) 대기.
+  **후속(사용자 결정 사항, 본 카드 범위 밖)**: project.yml iOS 타깃의 DFEME8ZQT9가 유령이 되었으니
+  어느 팀을 정식으로 쓸지(개인 팀 지속=7일마다 재설치 vs 유료 멤버십 복원) 정해야 한다.
   반증 신호 지점: 칩 탭 즉시 체크 / 검색 결과 줄 적림 / "생각 중…" 중 확인 버튼 잠김(D-1 재렌더),
   "찾는 중…" 동안 에디터 유지·글자 보존(@State 정체성).
 - **잔여 위험**: 드라이버 J절 2단언은 MapKit 실경로 의존(환경민감 — 변경 전 바이너리에서도 1회
