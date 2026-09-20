@@ -56,11 +56,22 @@ import Foundation
     /// 고른 문자열을 툴 인자로 되돌릴 때 쓰는 해석 방식.
     /// 줄마다 받아들이는 범위가 달라서 종류를 나눈다 — 여유와 알림은 상한이 다르다
     /// (여유는 Store가 180분에서 묶고, 알림은 "하루 전에 알려줘"가 실제 요청이라 안 묶는다).
-    enum Kind { case place, mode, buffer, notify, weeks, title, datetime }
+    enum Kind {
+        case place, mode, buffer, notify, weeks, title, datetime
+        // 불(예·아니요)을 고르는 줄. 진짜 Toggle 컨트롤을 새 문법으로 넣지 않고 칩 두 개로
+        // 굴린다 — 카드 안에 문법이 둘이 되면 줄마다 익히는 법이 둘이 된다(D-2). 칩은 고른
+        // 값이 없으면 확인이 영원히 풀리지 않으므로(isReady), 토글 줄은 생성 시 "true"/"false"로
+        // chosen을 seed한다.
+        case toggle
+    }
     struct Option: Identifiable {
         let id = UUID()
         let label: String
         let value: String
+        /// 칩 안에 작게 따라붙는 근거 글(이동수단의 소요시간). 고르는 값과 고르는 근거를 같은
+        /// 자리에 두는 것이 목적이라 줄 캡션으로 몰지 않는다 — 몰면 어느 칩이 어느 시간인지
+        /// 눈으로 다시 맞춰야 한다. 기본값이 있어 기존 생성부는 한 줄도 바뀌지 않는다.
+        var detail: String? = nil
     }
     let id = UUID()
     /// 툴 인자 이름. 확인 시 이 키로 값이 실린다.
@@ -83,6 +94,15 @@ import Foundation
     var lookup: Lookup = .idle
     /// 사용자가 고른 원시 값. nil이면 아직 안 골랐다 — 확인 버튼이 잠긴다.
     var chosen: String? = nil
+    /// 줄이 진행 중임을 알리는 깃발. 카드 뷰는 순수 값 뷰라 외부 상태를 스스로 관찰할 수
+    /// 없어, 소유 화면이 자기 상태(현재 위치 찾기·이동시간 계산)를 이 값으로 줄에 잇고 바꿔
+    /// 재렌더를 일으킨다. 참이면 줄 이름 옆에 작은 ProgressView가 뜬다.
+    var busy: Bool = false
+    /// 카드가 뜰 때 에디터를 열어두는 줄(제목·목적지처럼 새 일정마다 반드시 새로 치는 값).
+    /// 칩 문법은 점선 칩을 먼저 탭해야 입력칸이 열리므로 이 깃발이 없으면 주 경로에 탭이 하나
+    /// 늘어난다. 소유 화면이 카드를 완성한 뒤에 띄운다는 전제로 뷰가 onAppear에서 씨앗을
+    /// 뿌린다. AI 카드는 전부 기본값 false라 무변화다.
+    var startsOpen: Bool = false
 
     var chosenLabel: String? {
         guard let chosen else { return nil }
@@ -92,7 +112,9 @@ import Foundation
         switch kind {
         case .buffer, .notify: return "\(value)분"
         case .weeks: return "\(value)주"
-        case .place, .mode, .title: return value
+        // .toggle 가지는 컴파일 강제일 뿐 실행 중 오지 않는다 — 토글 줄은 allowsCustom이
+        // false라 칩 밖에서 온 값(customLabel의 유일한 호출 경로)이 생기지 않는다.
+        case .place, .mode, .title, .toggle: return value
         case .datetime:
             // "arr:2026-09-17T15:00:00" → "도착 9월 17일 (목) 오후 3:00" — 기준이 글자로 박혀
             // 나간다(확정 요약·재오픈 칩 모두 이 문구를 쓴다).
@@ -107,7 +129,8 @@ import Foundation
         let t = raw.trimmingCharacters(in: .whitespaces)
         guard !t.isEmpty else { return nil }
         switch kind {
-        case .place, .title: return t
+        // .toggle도 컴파일 강제 가지다 — 토글 줄은 직접입력 에디터가 없어 accepts가 불리지 않는다.
+        case .place, .title, .toggle: return t
         case .mode: return TransportMode(rawValue: t) != nil ? t : nil
         case .buffer:
             guard let v = Int(t), (0...Store.maxBufferMinutes).contains(v) else { return nil }
@@ -145,6 +168,15 @@ import Foundation
     var isReady: Bool { fields.allSatisfy { $0.chosen != nil } }
 }
 
+/// 카드가 스스로 그리는 크롬(머리글·확인 문구)을 끄는 스위치. 소유 화면이 자기 제목과 제출
+/// 버튼을 이미 갖고 있으면 카드 쪽을 꺼야 한다 — 둘을 다 그리면 제목이 둘, 제출 버튼이 둘로
+/// 보인다. nil이면 숨긴다. AI 카드의 기본 문구는 뷰 쪽 기본값에 두고 이 타입엔 없다 — 모델이
+/// 특정 화면의 문구를 알면 중립 타입이 아니게 된다.
+struct EditCardChrome {
+    var header: String?
+    var confirmTitle: String?
+}
+
 /// 카드 뷰가 값을 소유한 쪽(AIAssistant 등)을 타입으로 모르게 하는 다리 — 뷰가 부르는
 /// 일곱 동작을 클로저로 묶어 넘긴다. 값은 Store/AIAssistant에만 있고, 결합이 이 어댑터로
 /// 수축한다(네 편집 화면이 같은 카드를 쓰려면 뷰가 특정 소유자를 가져선 안 된다).
@@ -156,4 +188,70 @@ struct EditCardActions {
     var searchPlaces: @MainActor (UUID, String) -> Void
     var submitCustom: @MainActor (UUID, String) -> Bool
     var confirm: @MainActor () async -> Void
+}
+
+/// 장소 검색 묶음(debounce) — **입력이 멈춘 뒤 한 번만** 부르게 만드는 정책의 단일 소유자.
+/// 글자마다 부르면 카카오 일일 할당량을 그대로 태운다(이 프로젝트는 외부 한도로 이미 데였다:
+/// iOS 알림 64건). 350ms인 이유는 한글 조합이 한 글자를 완성하는 간격보다는 길고
+/// ("가"→"강"→"강남"이 한 번으로 묶인다) 다 치고 기다리는 느낌이 나기엔 짧아서다.
+/// 같은 질의가 이어서 오면 아예 부르지 않는다(지우고 다시 친 경우).
+///
+/// 정책이 이 타입에만 있는 이유는 계약 5(같은 계산은 한 곳에)다 — AI 카드와 이 카드를 빌려 쓸
+/// 화면이 각자 지연 시간을 들고 있으면 한쪽만 늙는다. 지연 상수도 이 타입이 유일하게 소유하고,
+/// 소유자는 인스턴스를 하나씩 들며 줄 id(UUID)로 서로 다른 줄의 검색을 구분한다.
+@MainActor struct PlaceSearchDebouncer {
+    /// gate의 판정. 호출자는 이 세 갈래를 그대로 따를 뿐 정책을 다시 해석하지 않는다 —
+    /// 판단이 밖으로 새면 정책이 두 벌이 된다.
+    enum Outcome {
+        /// 정리된 질의로 검색을 시작해야 한다.
+        case fire(String)
+        /// 같은 질의가 이어서 왔다 — 부르지 않고, 상태도 되돌리지 않는다.
+        case skip
+        /// 입력이 비었다 — 호출자가 줄 상태를 비운다.
+        case clear
+    }
+
+    /// 지연 시간은 이곳이 유일한 출처다(REQ-010). 350ms.
+    private static let delayNanos: UInt64 = 350_000_000
+
+    private var tasks: [UUID: Task<Void, Never>] = [:]
+    private var lastQuery: [UUID: String] = [:]
+
+    /// 새 입력에 대한 판정. 예전 작업은 이 자리에서 끊는다 — gate이 끊어 주지 않으면
+    /// 호출자의 취소 실수 하나로 묶음이 아니라 지연된 연쇄 호출이 된다.
+    mutating func gate(_ key: UUID, _ raw: String) -> Outcome {
+        let q = raw.trimmingCharacters(in: .whitespaces)
+        tasks[key]?.cancel()
+        guard !q.isEmpty else {
+            lastQuery[key] = nil
+            return .clear
+        }
+        guard lastQuery[key] != q else { return .skip }
+        return .fire(q)
+    }
+
+    /// 판정이 fire일 때만 부른다. 지연을 기다렸다가 그새 취소되지 않았으면 호출자의 클로저를 실행한다.
+    mutating func arm(_ key: UUID, fire: @escaping @MainActor () async -> Void) {
+        tasks[key] = Task {
+            try? await Task.sleep(nanoseconds: Self.delayNanos)
+            guard !Task.isCancelled else { return }
+            await fire()
+        }
+    }
+
+    /// 완료한 질의를 기록한다 — **비동기 작업이 돌아온 뒤에만**(호출자는 fire 클로저의 끝에서
+    /// 부른다). 예약 시점에 기록하면 관측 가능한 동작이 달라진다: 첫 검색이 아직 도는 중에 같은
+    /// 질의를 다시 치면 gate이 예전 작업을 취소하고도 skip으로 판정해, 유일한 결과가 버려지고
+    /// 줄은 "찾는 중"에 갇힌다. 완료 시점에 기록해야 "지우고 다시 친 같은 질의"는 다시 불린다.
+    /// 드라이버 P-5가 단언 추가 없이 초록인 것이 이 시점이 살아 있다는 증거다.
+    mutating func noteDone(_ key: UUID, _ query: String) {
+        lastQuery[key] = query
+    }
+
+    /// 모든 작업을 끊고 기록을 비운다. 카드가 사라지는 순간(취소·확인)에 불린다.
+    mutating func cancelAll() {
+        tasks.values.forEach { $0.cancel() }
+        tasks = [:]
+        lastQuery = [:]
+    }
 }

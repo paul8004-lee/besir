@@ -43,6 +43,10 @@
      만드는 경로가 있으면 `isReady`(`EditCard.swift:145`)가 영원히 풀리지 않는다.
   4. 드라이버가 초록이다 — `Kind`를 망라 `switch`로 쓰는 곳이 없어(실측, 비교 6곳뿐) `case toggle`
      추가로 깨지지 않는다. 드라이버 **본문**이 바뀌어 있으면 REQ-041 위반의 신호다.
+  5. **(HISTORY 0.1.1 추가)** `AIAssistant.swift:890-900`의 네 번째 전수 switch(보류 턴 인자
+     채우기)에 `.toggle` 가지가 `:892` 나열에 들어가 있다 — `git diff -- Shared/AIAssistant.swift`의
+     이 시점 유일한 hunk다(REQ-041 예외 절). 실행 중 도달하지 않는다(AI 카드는 토글 줄을 만들지
+     않는다).
 
 ## AC-002 — 디바운서가 정확히 한 곳에 산다 ⬜
 

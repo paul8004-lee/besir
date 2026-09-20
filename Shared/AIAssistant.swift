@@ -47,9 +47,9 @@ final class AIAssistant: ObservableObject {
     /// (현재 위치·가는 편 없음), 이름만 실으면 실행부가 같은 이름을 **다시 검색**해 다른 지점이
     /// 잡힌다('회사' → 농업회사법인 화조원). 대화가 끝날 때까지 산다(resetConversation이 지운다).
     private var confirmedPlaces: [String: Place] = [:]
-    /// 장소 줄별 검색 작업·마지막 질의(묶음 처리용). 줄 id는 카드마다 새로 만들어져 겹치지 않는다.
-    private var placeSearchTasks: [UUID: Task<Void, Never>] = [:]
-    private var lastPlaceQuery: [UUID: String] = [:]
+    /// 장소 줄별 검색 묶음(지연·취소·같은 질의 스킵). 정책 전부는 EditCard.swift의
+    /// PlaceSearchDebouncer가 단독으로 소유한다. 줄 id는 카드마다 새로 만들어져 겹치지 않는다.
+    private var placeDebounce = PlaceSearchDebouncer()
     /// 이번 대화에서 가장 최근에 만든 반복 일정 그룹 — "방금 만든 거 자동차로 바꿔줘" 같은 수정
     /// 요청이 새로 만들지 않고 이 그룹을 그대로 갱신하도록(update_recurring_schedule) 참조한다.
     private var lastRecurrenceId: UUID?
@@ -754,33 +754,31 @@ final class AIAssistant: ObservableObject {
     /// 들어오고, 원하는 곳이 없으면 더 적어서 좁히는 쪽이 목록을 훑는 것보다 빠르다.
     static let maxPlaceSuggestions = 5
 
-    /// 장소 줄의 검색. **입력이 멈춘 뒤 한 번만** 부른다 — 글자마다 부르면 카카오 일일 할당량을
-    /// 그대로 태운다(이 프로젝트는 외부 한도로 이미 데였다: iOS 알림 64건). 350ms인 이유는 한글
-    /// 조합이 한 글자를 완성하는 간격보다는 길고("가"→"강"→"강남"이 한 번으로 묶인다) 다 치고
-    /// 기다리는 느낌이 나기엔 짧아서다. 같은 질의가 이어서 오면 아예 부르지 않는다(지우고 다시 친 경우).
+    /// 장소 줄의 검색. 묶음 정책(350ms 지연·취소·같은 질의 스킵)은 EditCard.swift의
+    /// PlaceSearchDebouncer가 단독으로 소유하고, 여기는 그 판정을 줄 상태로 옮기기만 한다.
     ///
     /// 카드를 막지 않는다: 호출자는 기다리지 않고, 결과는 돌아왔을 때 그 줄에만 얹힌다. 확인 버튼의
     /// 잠금은 `chosen`만 보므로 검색 중이라고 열리거나 잠기지 않는다.
     func searchPlaces(field: UUID, text: String) {
-        let q = text.trimmingCharacters(in: .whitespaces)
-        placeSearchTasks[field]?.cancel()
-        guard !q.isEmpty else {
-            lastPlaceQuery[field] = nil
+        switch placeDebounce.gate(field, text) {
+        case .clear:
             setLookup(field, .idle)
-            return
-        }
-        guard lastPlaceQuery[field] != q else { return }
-        setLookup(field, .searching)
-        placeSearchTasks[field] = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            guard !Task.isCancelled, let self else { return }
-            let found = await self.store.placeSearch.search(q, near: self.location.currentLocation)
-            guard !Task.isCancelled else { return }
-            self.lastPlaceQuery[field] = q
-            // 0건과 검색 실패(오프라인)는 PlaceSearch.search가 둘 다 빈 배열로 돌려준다 — 여기서는
-            // 구분할 수 없어 문구가 양쪽을 함께 말한다. 조용히 넘기지는 않는다(상태가 보인다).
-            self.setLookup(field, found.isEmpty ? .empty
-                           : .results(Array(found.prefix(Self.maxPlaceSuggestions))))
+        case .skip:
+            break
+        case .fire(let q):
+            // '찾는 중'은 arm보다 먼저 동기로 뿌린다 — 드라이버 P-4가 호출 직후를 단언하기 때문이다.
+            setLookup(field, .searching)
+            placeDebounce.arm(field) { [weak self] in
+                guard let self else { return }
+                let found = await self.store.placeSearch.search(q, near: self.location.currentLocation)
+                guard !Task.isCancelled else { return }
+                // 완료 기록이 상태 반영보다 먼저다 — 옮겨 오기 전의 순서를 그대로 둔다.
+                self.placeDebounce.noteDone(field, q)
+                // 0건과 검색 실패(오프라인)는 PlaceSearch.search가 둘 다 빈 배열로 돌려준다 — 여기서는
+                // 구분할 수 없어 문구가 양쪽을 함께 말한다. 조용히 넘기지는 않는다(상태가 보인다).
+                self.setLookup(field, found.isEmpty ? .empty
+                               : .results(Array(found.prefix(Self.maxPlaceSuggestions))))
+            }
         }
     }
 
@@ -797,9 +795,7 @@ final class AIAssistant: ObservableObject {
     /// 카드가 사라지는 순간(취소·확인) 도는 검색을 끊는다. 남겨두면 아무 데도 못 앉을 결과를
     /// 위해 네트워크만 쓴다.
     private func cancelPlaceSearches() {
-        placeSearchTasks.values.forEach { $0.cancel() }
-        placeSearchTasks = [:]
-        lastPlaceQuery = [:]
+        placeDebounce.cancelAll()
     }
 
     /// 직접입력 제출. 빈 입력과 범위 밖은 받아들이지 않는다 — 값이 안 정해지므로 확인 버튼도
@@ -889,7 +885,7 @@ final class AIAssistant: ObservableObject {
                    Self.parseDatetime(time)?.prefix == "dep:" { continue }
                 switch f.kind {
                 case .buffer, .notify, .weeks: args[f.key] = Int(chosen) ?? 0
-                case .place, .mode, .title: args[f.key] = chosen
+                case .place, .mode, .title, .toggle: args[f.key] = chosen
                 case .datetime:
                     // 접두가 곧 도착/출발 기준이다 — arrival·departure 중 정확히 하나만 쓴다.
                     // 실행부의 parseDate가 받는 형식 그대로다.

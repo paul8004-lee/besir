@@ -11,6 +11,9 @@ struct EditCardView: View {
     // 동작은 전부 이 묶음으로 온다 — 값의 주인을 뷰가 직접 부르면 네 편집 화면이 이 카드를
     // 빌려 쓸 수 없다.
     let actions: EditCardActions
+    // 카드 크롬의 뷰 쪽 기본값 — AI 카드가 지금까지 하드코딩으로 쓰던 문구 그대로다. 기본값이
+    // 있어야 유일한 기존 호출부(채팅)가 무변경으로 컴파일된다.
+    var chrome: EditCardChrome = EditCardChrome(header: "몇 가지만 알려주세요", confirmTitle: "등록하기")
 
     // 직접입력 상태는 카드와 수명을 같이 한다. 채팅 뷰에 두면 카드가 요약으로 바뀐 뒤에도
     // 열린 입력창과 거절 표시가 남아 다음 카드로 흘러간다.
@@ -35,9 +38,13 @@ struct EditCardView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("몇 가지만 알려주세요")
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(Theme.ink)
+            // 머리글은 카드가 스스로 그리는 크롬이라 소유 화면이 끌 수 있다 — 화면 제목과
+            // 겹치는 화면에서 둘 다 보이면 제목이 둘로 읽힌다.
+            if let header = chrome.header {
+                Text(header)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(Theme.ink)
+            }
 
             // 줄이 안 생긴 값 = 묻지 않고 정해진 값. 적어두지 않으면 그게 곧 조용한 기본값이다.
             if !card.stated.isEmpty {
@@ -55,6 +62,12 @@ struct EditCardView: View {
         .padding(14)
         .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
         .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
+        // startsOpen 줄의 에디터를 카드가 뜰 때 연다. 합집합으로 씨앗을 뿌리는 까닭은 이미
+        // 열려 있는 입력칸을 닫을 근거가 없어서고, draft를 채우지 않는 까닭은 빈 칸이 곧
+        // "새로 입력하라"는 뜻이라서다 — 완성 전 카드가 뜨는 일은 소유 화면이 막는다.
+        .onAppear {
+            customOpen.formUnion(card.fields.filter(\.startsOpen).map(\.id))
+        }
     }
 
     /// 시각 줄이 출발 기준으로 확정됐는지 — 이면 도착 여유 줄이 흐려지고 캡션이 붙는다.
@@ -68,9 +81,16 @@ struct EditCardView: View {
     @ViewBuilder
     private func fieldRow(_ field: EditField, depBasis: Bool) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(field.label)
-                .font(.caption)
-                .foregroundStyle(Theme.faint)
+            // 줄 이름 옆의 진행 표시 — 화면 소유 상태가 이 줄에서 일하는 중임을 알린다.
+            // 장소 검색의 "찾는 중…"과 같은 문법이라 두 진행이 한 카드에서 같게 읽힌다.
+            HStack(spacing: 6) {
+                Text(field.label)
+                if field.busy {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .font(.caption)
+            .foregroundStyle(Theme.faint)
 
             // 값이 차 있는데 앱이 풀지 못해 뜬 줄에만 붙는다. 줄 이름만 있으면 "말한 적 없는 값"을
             // 묻는 줄과 구분되지 않아, 방금 "회사"라고 말한 사용자가 왜 또 묻는지 알 수 없다(결함 O).
@@ -87,7 +107,7 @@ struct EditCardView: View {
             } else {
                 ChipFlow(spacing: 6, lineSpacing: 6) {
                     ForEach(field.options) { option in
-                        chip(option.label, selected: field.chosen == option.value) {
+                        chip(option.label, selected: field.chosen == option.value, detail: option.detail) {
                             actions.chooseValue(field.id, option.value)
                             closeCustom(field)
                         }
@@ -217,7 +237,7 @@ struct EditCardView: View {
 
     /// 칩 하나. 선택 표시를 색에만 맡기지 않는다(체크 글리프 + 글자 굵기) — 색을 구분 못 하면
     /// 어느 값을 골랐는지 알 방법이 사라진다. 직접입력 칩은 점선 테두리로 성격이 다름을 보인다.
-    private func chip(_ label: String, selected: Bool, dashed: Bool = false,
+    private func chip(_ label: String, selected: Bool, dashed: Bool = false, detail: String? = nil,
                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -225,6 +245,13 @@ struct EditCardView: View {
                     Image(systemName: "checkmark").font(.caption2.weight(.bold))
                 }
                 Text(label).font(.callout.weight(selected ? .semibold : .regular))
+                // 칩 안의 작은 근거 글(소요시간). 한 단계 작게, 미선택일 때는 색도 흐리게 둬
+                // 값과 근거가 한 덩어리로 읽히지 않게 한다. 별도 접근성 문구는 붙이지 않는다 —
+                // 칩의 Text들이 이미 합쳐 읽히기 때문이다("자동차 32분").
+                if let detail {
+                    Text(detail).font(.caption)
+                        .foregroundStyle(selected ? Theme.bg : Theme.muted)
+                }
             }
             .foregroundStyle(selected ? Theme.bg : Theme.ink)
             .padding(.horizontal, 12)
@@ -248,6 +275,9 @@ struct EditCardView: View {
         case .title: return "제목"
         case .datetime: return "날짜·시각"
         case .mode, .buffer, .notify, .weeks: return "숫자만"
+        // 토글 줄은 allowsCustom이 false라 에디터가 열리지 않아 실행 중 도달하지 않는다 —
+        // "숫자만"과 묶으면 뜻도 없는 안내문이 붙으므로 따로 둔다(전수 switch 유지).
+        case .toggle: return ""
         }
     }
 
@@ -383,29 +413,34 @@ struct EditCardView: View {
 
     // MARK: 확인
 
+    // 확인 문구가 nil이면 아예 그리지 않는다 — 소유 화면이 자기 제출 버튼을 갖고 있을 때
+    // 둘이면 제출이 두 군데서 일어나는 것처럼 읽히기 때문이다.
+    @ViewBuilder
     private var confirmButton: some View {
-        Button { Task { await actions.confirm() } } label: {
-            HStack(spacing: 6) {
-                Spacer(minLength: 0)
-                if busy {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Text("등록하기").font(.callout.weight(.semibold))
+        if let confirmTitle = chrome.confirmTitle {
+            Button { Task { await actions.confirm() } } label: {
+                HStack(spacing: 6) {
+                    Spacer(minLength: 0)
+                    if busy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(confirmTitle).font(.callout.weight(.semibold))
+                    }
+                    Spacer(minLength: 0)
                 }
-                Spacer(minLength: 0)
+                .foregroundStyle(canConfirm ? Theme.bg : Theme.muted)
+                .frame(maxWidth: .infinity, minHeight: chipHeight)
+                .background(canConfirm ? Theme.travel : Theme.bg,
+                            in: RoundedRectangle(cornerRadius: Theme.radius))
+                .overlay(
+                    RoundedRectangle(cornerRadius: Theme.radius)
+                        .stroke(canConfirm ? Color.clear : Theme.line)
+                )
             }
-            .foregroundStyle(canConfirm ? Theme.bg : Theme.muted)
-            .frame(maxWidth: .infinity, minHeight: chipHeight)
-            .background(canConfirm ? Theme.travel : Theme.bg,
-                        in: RoundedRectangle(cornerRadius: Theme.radius))
-            .overlay(
-                RoundedRectangle(cornerRadius: Theme.radius)
-                    .stroke(canConfirm ? Color.clear : Theme.line)
-            )
+            .buttonStyle(.plain)
+            .disabled(!canConfirm)
+            .accessibilityHint(card.isReady ? "" : "빠진 값을 모두 고르면 눌 수 있어요")
         }
-        .buttonStyle(.plain)
-        .disabled(!canConfirm)
-        .accessibilityHint(card.isReady ? "" : "빠진 값을 모두 고르면 눌 수 있어요")
     }
 }
 

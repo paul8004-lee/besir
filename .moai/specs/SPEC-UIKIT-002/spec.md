@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-002
 title: "AddEventView를 편집 카드 컴포넌트로 전환 + 장소 검색 디바운서 단일화 (UI 통일 2a)"
-version: "0.1.0"
+version: "0.1.1"
 status: draft
 created: "2026-09-18"
 updated: "2026-09-18"
@@ -23,6 +23,7 @@ kanban_card: t2
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-18 | 최초 작성. 루트 `plan.md` §Phase 1.7의 t2를 GEARS로 정식화. **범위는 카드 분할 뒤의 2a**다 — 운영자가 2026-09-18 A안(분할)을 확정해 `EventDetailView`는 카드 t4(`SPEC-UIKIT-003` 아님 — 별도 SPEC)로 빠졌고, 그 대신 장소 검색 디바운서 단일화가 본 SPEC에 들어왔다. 인용 줄번호는 `434610e`(= `origin/master`, t1 머지 직후) 실측. 작성 중단 후 이어받은 plan 세션이 같은 날 전수 재실측해 **5건 바로잡음** — `Kind` `:60→:59`, t1 별칭의 소유 파일(=`AIAssistant.swift:31-32`, 컴포넌트 아님), `parseDatetime` `:36-44→:35-42`, `setLookup` 인용(호출 `:769`·`:773`·`:782`, `:755`는 `maxPlaceSuggestions` 선언), 칩 경로 `:93-104→:88-104` |
+| 0.1.1 | 2026-09-18 | run(M2) 중 재실측 — `Kind`의 전수 switch가 세 곳이 아니라 **네 곳**(`AIAssistant.swift:890-900`, 보류 턴 인자 채우기 — swift-impl 전문가가 발견, 런 세션이 재검증)임을 정정. REQ-001에 네 번째 가지(`:892` 나열)를, REQ-041에 그 가지의 좁은 예외 절을 반영. D-3 해소 기록((i) 운영자 확정, lead 디스패치) 포함. 측정 오류 정정이지 요구사항 변화가 아니다 |
 
 ## 0. 이 SPEC의 성격
 
@@ -90,7 +91,7 @@ kanban_card: t2
 
 ### 2.1 컴포넌트 표면 확장 (001번대)
 
-- **REQ-001 (Ubiquitous)**: The field model shall carry a boolean field kind whose chosen value is seeded at creation. `EditField.Kind`에 `case toggle`을 더하고, 토글 줄은 반드시 `chosen: "true"` 또는 `"false"`로 생성한다. 근거(실측): `EditCard.isReady`가 `fields.allSatisfy { $0.chosen != nil }`(`:145`)이므로 seed하지 않으면 Bool은 영원히 "안 고른 값"이고 제출이 풀리지 않는다 — `SPEC-UIKIT-001/plan.md` §2가 t1 시점에 미리 적어둔 함정이다. 렌더링은 기존 칩 경로(`EditCardView:88-104`)를 그대로 쓰며 **뷰 코드를 새로 만들지 않는다**. `customLabel`(`EditCard.swift:91-102`)·`accepts`(`:106-129`)·`placeholder(for:)`(`EditCardView:245-252`)의 `switch`가 전수라 세 곳에 가지가 추가되지만 `allowsCustom: false`·`chosen` seed 때문에 실행 중 도달하지 않는다 — 컴파일 강제가 목적이다.
+- **REQ-001 (Ubiquitous)**: The field model shall carry a boolean field kind whose chosen value is seeded at creation. `EditField.Kind`에 `case toggle`을 더하고, 토글 줄은 반드시 `chosen: "true"` 또는 `"false"`로 생성한다. 근거(실측): `EditCard.isReady`가 `fields.allSatisfy { $0.chosen != nil }`(`:145`)이므로 seed하지 않으면 Bool은 영원히 "안 고른 값"이고 제출이 풀리지 않는다 — `SPEC-UIKIT-001/plan.md` §2가 t1 시점에 미리 적어둔 함정이다. 렌더링은 기존 칩 경로(`EditCardView:88-104`)를 그대로 쓰며 **뷰 코드를 새로 만들지 않는다**. `customLabel`(`EditCard.swift:91-102`)·`accepts`(`:106-129`)·`placeholder(for:)`(`EditCardView:245-252`)의 `switch`가 전수라 세 곳에 가지가 추가되지만 `allowsCustom: false`·`chosen` seed 때문에 실행 중 도달하지 않는다 — 컴파일 강제가 목적이다. **run(M2) 중 재실측(HISTORY 0.1.1)**: 전수 switch는 세 곳이 아니라 **네 곳**이다 — `AIAssistant.swift:890-900`(보류 턴의 인자 채우기)도 `Kind`를 전수 분기하므로 `:892`의 `case .place, .mode, .title: args[f.key] = chosen` 나열에 `.toggle`이 들어가야 컴파일된다. 이 가지 역시 실행 중 도달하지 않는다(AI 카드는 토글 줄을 만들지 않는다) — REQ-041의 예외 절이 이 한 가지만 허용한다.
   - **seed가 "앱이 먼저 정해두지 않는다" 원칙과 부딪히지 않는 이유**를 함께 적는다: AI 카드에서 미리 골라둔 값은 **모델이 조용히 정한 값**이고 그것이 `b303f41`(저장해둔 여유 10분이 0으로 덮여 35건 등록)의 모양이었다. 편집 폼의 `notifyEnabled = true`·`syncToCalendar = true`(`AddEventView:36-37`)는 **앱이 문서화해 둔 기본값**이고 사용자가 보면서 바꾼다. 같은 형태가 아니다.
 
 - **REQ-002 (Ubiquitous)**: The field model shall carry per-option detail text and a per-row busy flag, without breaking any existing construction site. `EditField.Option`에 `var detail: String? = nil`, `EditField`에 `var busy: Bool = false`를 더한다. 근거(실측): 기본값이 있는 저장 프로퍼티는 멤버와이즈 이니셜라이저에서 생략 가능하므로 `AIAssistant`의 필드 팩토리 **11곳**(`.init(key:` 11회)과 `Option` 생성 **16곳**이 한 줄도 바뀌지 않는다. `detail`은 칩 안에 작게 따라붙고(이동수단의 소요시간), `busy`는 줄 이름 옆 `ProgressView`를 띄운다 — 후자는 `placeSearchEditor`의 "찾는 중…"(`EditCardView:274-279`)이 이미 쓰는 문법과 같다. 둘 다 SwiftUI-free라 REQ-040 (d)의 드라이버 경계를 깨지 않는다.
@@ -141,7 +142,7 @@ kanban_card: t2
   - (c) `cd proxy && npm test` 전체 통과(본 SPEC은 프록시를 건드리지 않지만 게이트는 돈다).
   - (d) **새 소스 파일을 만들지 않는다** — 변경은 전부 기존 4파일 안에서 일어난다. 따라서 CLAUDE.md의 `xcodegen generate` 조건("새 소스 파일이나 Info.plist 키를 추가했을 때만")에 걸리지 않고, **서명 계정 리셋이 없으며 `besir-iOS`·`besirShare` 두 타깃의 Team 재선택 요청도 필요 없다.** t1과 다른 점이라 명시한다. 기계적 신호: `git diff --name-only --diff-filter=A origin/master...HEAD -- 'Shared/*.swift'`가 0건.
 
-- **REQ-041 (Unwanted)**: This SPEC shall not modify anything outside its four files. `Shared/AddEventView.swift`·`Shared/EditCard.swift`·`Shared/EditCardView.swift`·`Shared/AIAssistant.swift` 넷 **외의 소스 파일이 한 줄도 바뀌지 않는다** — 특히 `EventDetailView`(t4)·`AddActivityView`·`ActivityDetailView`(t3)·`AIChatView`는 무변경이다. 근거: `EditCardChrome`·`Option.detail`·`EditField.busy`·`startsOpen` 전부 기본값을 가지므로 `AIChatView.swift:106`이 바뀔 이유가 없고, 바뀌었다면 기본값을 빠뜨린 것이다. `AIAssistant`에 허용되는 변경은 **`searchPlaces`가 공용 디바운서를 쓰는 것뿐**(REQ-010·011)이며 필드 팩토리 11곳·`Option` 생성 16곳은 무변경이다. 추출 중 눈에 띈 개선은 코드가 아니라 루트 `plan.md`의 후속 항목으로 적는다.
+- **REQ-041 (Unwanted)**: This SPEC shall not modify anything outside its four files. `Shared/AddEventView.swift`·`Shared/EditCard.swift`·`Shared/EditCardView.swift`·`Shared/AIAssistant.swift` 넷 **외의 소스 파일이 한 줄도 바뀌지 않는다** — 특히 `EventDetailView`(t4)·`AddActivityView`·`ActivityDetailView`(t3)·`AIChatView`는 무변경이다. 근거: `EditCardChrome`·`Option.detail`·`EditField.busy`·`startsOpen` 전부 기본값을 가지므로 `AIChatView.swift:106`이 바뀔 이유가 없고, 바뀌었다면 기본값을 빠뜨린 것이다. `AIAssistant`에 허용되는 변경은 **`searchPlaces`가 공용 디바운서를 쓰는 것뿐**(REQ-010·011)이며 필드 팩토리 11곳·`Option` 생성 16곳은 무변경이다. **한 가지 예외(HISTORY 0.1.1)**: `Kind.toggle` 추가에 따른 전수 switch 가지 — `:892` 나열에 `, .toggle` 7글자 — 는 컴파일 강제를 위해 허용한다. 실행 중 도달하지 않는 가지다(REQ-001). 추출 중 눈에 띈 개선은 코드가 아니라 루트 `plan.md`의 후속 항목으로 적는다.
 
 ## 3. Out of Scope
 
@@ -180,7 +181,10 @@ kanban_card: t2
 
 **드라이버 영향 확인(실측)**: `Tools/GuardDriver.swift`는 `Kind`를 **망라 `switch`로 쓰지 않는다** — `==`/`!=` 비교 6곳뿐이다(`:547`·`:935`·`:948`·`:970`·`:980`·`:1019`). `case toggle` 추가로 드라이버가 깨지지 않고, AI 카드는 `.toggle` 필드를 만들지 않으므로 `:547`의 `f.kind == .mode ? "car" : "10"` 분기도 안전하다.
 
-### D-3 — 과거 시각을 계속 막을지 — **미해소 (운영자 결정 필요, run 착수 전)**
+### D-3 — 과거 시각을 계속 막을지 — **해소됨**
+
+- **결정**: **(i) 그대로 둔다** — 폼도 AI 카드와 같이 과거를 허용하고 피커에 범위를 넣지 않는다(운영자 확정, 2026-09-18 lead 디스패치). REQ-041 예외 절은 불필요하다. "과거 일정에는 알림이 안 걸린다"를 화면이 말하게 하는 후속 항목은 **Day 닫기 이월 목록으로 리드가 넘긴다 — run이 만들지 않는다.**
+- **반영**: AC-008 절 4의 기록 절((i) 경로), AC-009 시뮬레이터 11번 항목
 
 전환하면 **폼에서 과거 일정을 만들 수 있게 된다.** 실측 사실 셋:
 
