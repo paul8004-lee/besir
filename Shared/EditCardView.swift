@@ -86,7 +86,10 @@ struct EditCardView: View {
             HStack(spacing: 6) {
                 Text(field.label)
                 if field.busy {
+                    // 이름 없는 스피너는 VoiceOver에서 소리만 나고 무엇이 진행 중인지 안 들린다 —
+                    // 줄 컨테이너(.contain)가 줄 이름 뒤에 이 문구를 이어 읽는다.
                     ProgressView().controlSize(.small)
+                        .accessibilityLabel("진행 중")
                 }
             }
             .font(.caption)

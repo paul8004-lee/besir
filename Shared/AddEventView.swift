@@ -73,6 +73,13 @@ struct AddEventView: View {
         #endif
         // 카드는 정확히 한 번 만든다(REQ-021(a)) — 이후로는 줄을 제자리에서 고치거나 넣고 뺀다.
         .task { await bootstrap() }
+        // 시트가 내려가도 예약돼 있던 검색은 350ms 뒤 그대로 나간다 — 사라진 화면의 결과를 위해
+        // 네트워크를 태우지 않는다는 AI 쪽 정리 계약(cancelPlaceSearches)의 폼 쪽 이행이다.
+        .onDisappear {
+            var d = placeDebounce
+            d.cancelAll()
+            placeDebounce = d
+        }
         // 카드 뷰는 순수 값 뷰라 외부 상태를 스스로 못 본다 — 진행 깃발을 줄의 busy로 명시적으로
         // 잇는다. 잊으면 동작은 돼도 진행 표시가 조용히 안 뜬다(REQ-021(c), 휴면 계약).
         .onChange(of: estimating) { _, on in setBusy(key: "mode", on) }
@@ -99,6 +106,9 @@ struct AddEventView: View {
                 else { Text(editing == nil ? "추가" : "저장") }
             }
             .keyboardShortcut(.defaultAction)
+            // 저장 중에는 라벨이 스피너로 접혀 이름이 사라진다 — VoiceOver는 여전히 무슨 버튼인지
+            // 알아야 한다.
+            .accessibilityLabel(editing == nil ? "추가" : "저장")
             .disabled(!(card?.isReady ?? false))
         }
         .padding()
@@ -351,7 +361,7 @@ struct AddEventView: View {
                 : (originCoord ?? location.currentLocation)
             setLookup(field, .searching)
             var armed = placeDebounce
-            armed.arm(field) {
+            armed.arm(field, q) {
                 let found = await self.store.placeSearch.search(q, near: near)
                 guard !Task.isCancelled else { return }
                 self.finishPlaceSearch(field: field, query: q, found: found)
@@ -416,6 +426,12 @@ struct AddEventView: View {
                                                  address: "", latitude: c.latitude, longitude: c.longitude)
         if var c2 = card, let i = c2.fields.firstIndex(where: { $0.key == "origin_query" }) {
             c2.fields[i].chosen = Self.hereMarker
+            // GPS가 내가 생각한 곳으로 풀렸는지 보는 유일한 확인 수단이다 — 원본 확정 카드가 지명을
+            // 보여줬던 것의 계승. 칩 글자에 지명을 얹고, 못 얻었으면 "현재 위치" 그대로 둔다.
+            if let town = location.currentPlaceName, !town.isEmpty,
+               let oi = c2.fields[i].options.firstIndex(where: { $0.value == Self.hereMarker }) {
+                c2.fields[i].options[oi].label = "현재 위치(\(town))"
+            }
             card = c2
         }
         ensureGatedRows()

@@ -78,7 +78,9 @@ import Foundation
     }
     struct Option: Identifiable {
         let id = UUID()
-        let label: String
+        /// 칩 글자는 소유 화면이 확정 뒤에 고칠 수 있다(현재 위치 칩에 지명을 얹는 확인 경로).
+        /// options와 같은 이유로 var — 새 Option으로 갈아끼우면 id가 다시 찍혀 칩 신원이 흔들린다.
+        var label: String
         let value: String
         /// 칩 안에 작게 따라붙는 근거 글(이동수단의 소요시간). 고르는 값과 고르는 근거를 같은
         /// 자리에 두는 것이 목적이라 줄 캡션으로 몰지 않는다 — 몰면 어느 칩이 어느 시간인지
@@ -209,11 +211,13 @@ struct EditCardActions {
 /// 글자마다 부르면 카카오 일일 할당량을 그대로 태운다(이 프로젝트는 외부 한도로 이미 데였다:
 /// iOS 알림 64건). 350ms인 이유는 한글 조합이 한 글자를 완성하는 간격보다는 길고
 /// ("가"→"강"→"강남"이 한 번으로 묶인다) 다 치고 기다리는 느낌이 나기엔 짧아서다.
-/// 같은 질의가 이어서 오면 아예 부르지 않는다(지우고 다시 친 경우).
 ///
 /// 정책이 이 타입에만 있는 이유는 계약 5(같은 계산은 한 곳에)다 — AI 카드와 이 카드를 빌려 쓸
 /// 화면이 각자 지연 시간을 들고 있으면 한쪽만 늙는다. 지연 상수도 이 타입이 유일하게 소유하고,
 /// 소유자는 인스턴스를 하나씩 들며 줄 id(UUID)로 서로 다른 줄의 검색을 구분한다.
+/// 같은 질의를 건너뛰는 것도 정책의 일부다 — 단 **직전 검색이 완료된 뒤의 같은 질의에만** 내린
+/// 다. 방금 진행 중 작업을 끊은 참이면 같은 질의라도 다시 실행한다: 끊긴 작업이 줄에 뿌린
+/// '찾는 중'을 되돌릴 주체가 더는 없어서다.
 @MainActor struct PlaceSearchDebouncer {
     /// gate의 판정. 호출자는 이 세 갈래를 그대로 따를 뿐 정책을 다시 해석하지 않는다 —
     /// 판단이 밖으로 새면 정책이 두 벌이 된다.
@@ -230,37 +234,50 @@ struct EditCardActions {
     private static let delayNanos: UInt64 = 350_000_000
 
     private var tasks: [UUID: Task<Void, Never>] = [:]
+    /// 완료된 마지막 질의 — skip 판정의 재료.
     private var lastQuery: [UUID: String] = [:]
+    /// 예약(arm)돼 아직 완료되지 않은 질의 — 이번 gate에서 진행 중 작업을 끊었는지 아는 재료.
+    private var armedQuery: [UUID: String] = [:]
 
     /// 새 입력에 대한 판정. 예전 작업은 이 자리에서 끊는다 — gate이 끊어 주지 않으면
-    /// 호출자의 취소 실수 하나로 묶음이 아니라 지연된 연쇄 호출이 된다.
+    /// 호출자의 취소 실수 하나로 묶음이 아니라 지연된 연쇄 호출이 된다. skip은 **완료된 뒤의
+    /// 같은 질의에만** 내린다: 방금 진행 중 작업을 끊었는데 skip을 내리면 그 작업이 줄에 뿌린
+    /// '찾는 중'을 되돌릴 주체가 남지 않아 줄이 영원히 찾는 중에 갇힌다(한 글자 지웠다 다시
+    /// 치는 정정이 대표 경로) — 끊은 작업이 있으면 같은 질의라도 다시 실행한다.
     mutating func gate(_ key: UUID, _ raw: String) -> Outcome {
         let q = raw.trimmingCharacters(in: .whitespaces)
+        let hadLiveTask = armedQuery[key] != nil
         tasks[key]?.cancel()
+        tasks[key] = nil
+        armedQuery[key] = nil
         guard !q.isEmpty else {
             lastQuery[key] = nil
             return .clear
         }
-        guard lastQuery[key] != q else { return .skip }
+        if lastQuery[key] == q, !hadLiveTask { return .skip }
         return .fire(q)
     }
 
-    /// 판정이 fire일 때만 부른다. 지연을 기다렸다가 그새 취소되지 않았으면 호출자의 클로저를 실행한다.
-    mutating func arm(_ key: UUID, fire: @escaping @MainActor () async -> Void) {
+    /// 판정이 fire일 때만 부른다. 지연을 기다렸다가 그새 취소되지 않았으면 호출자의 클로저를
+    /// 실행한다. 예약 질의를 함께 기록한다 — gate가 "방금 진행 중 작업을 끊었는가"를 아는
+    /// 유일한 재료라서, 기록이 남으면 skip이 억제되고 재실행으로 간다.
+    mutating func arm(_ key: UUID, _ query: String, fire: @escaping @MainActor () async -> Void) {
         tasks[key] = Task {
             try? await Task.sleep(nanoseconds: Self.delayNanos)
             guard !Task.isCancelled else { return }
             await fire()
         }
+        armedQuery[key] = query
     }
 
     /// 완료한 질의를 기록한다 — **비동기 작업이 돌아온 뒤에만**(호출자는 fire 클로저의 끝에서
-    /// 부른다). 예약 시점에 기록하면 관측 가능한 동작이 달라진다: 첫 검색이 아직 도는 중에 같은
-    /// 질의를 다시 치면 gate이 예전 작업을 취소하고도 skip으로 판정해, 유일한 결과가 버려지고
-    /// 줄은 "찾는 중"에 갇힌다. 완료 시점에 기록해야 "지우고 다시 친 같은 질의"는 다시 불린다.
-    /// 드라이버 P-5가 단언 추가 없이 초록인 것이 이 시점이 살아 있다는 증거다.
+    /// 부른다). 예약 시점에 기록하면 아직 도는 검색까지 "완료된 질의"로 세여 skip이 결과를
+    /// 덮어써 버린다. 완료 시점에 기록해야 "지우고 다시 친 같은 질의"는 다시 불린다. 드라이버
+    /// P-5가 단언 추가 없이 초록인 것이 이 시점이 살아 있다는 증거다. 예약 기록도 함께 지운다 —
+    /// 완료한 작업은 더 진행 중이 아니다.
     mutating func noteDone(_ key: UUID, _ query: String) {
         lastQuery[key] = query
+        armedQuery[key] = nil
     }
 
     /// 모든 작업을 끊고 기록을 비운다. 카드가 사라지는 순간(취소·확인)에 불린다.
@@ -268,5 +285,6 @@ struct EditCardActions {
         tasks.values.forEach { $0.cancel() }
         tasks = [:]
         lastQuery = [:]
+        armedQuery = [:]
     }
 }

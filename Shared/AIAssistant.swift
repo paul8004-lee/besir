@@ -768,7 +768,7 @@ final class AIAssistant: ObservableObject {
         case .fire(let q):
             // '찾는 중'은 arm보다 먼저 동기로 뿌린다 — 드라이버 P-4가 호출 직후를 단언하기 때문이다.
             setLookup(field, .searching)
-            placeDebounce.arm(field) { [weak self] in
+            placeDebounce.arm(field, q) { [weak self] in
                 guard let self else { return }
                 let found = await self.store.placeSearch.search(q, near: self.location.currentLocation)
                 guard !Task.isCancelled else { return }
