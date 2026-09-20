@@ -255,3 +255,92 @@ run_complete_at: 2026-09-20
   칸도 sync에서 닫는다(본 문서의 29절 대조가 그 근거).
 - **브랜치 `WT-ui-unify-2` 미푸시 — 이 워크트리가 작업의 유일한 사본이므로 폐기 금지.**
   master 통합·push는 lead/sync 소관.
+
+## §E.4 Sync-phase Audit-Ready Signal
+
+sync_status: audit-ready — **sync 단계 종료(3-phase close, 단일 sync 커밋)**
+sync_complete_at: 2026-09-20
+sync_commit_sha: (이 커밋 뒤 백필 커밋에서 기입)
+
+### 게이트 — sync lane이 최종 트리에서 직접 재실측 (t1 sync 전례: 귀속 문제 예방)
+
+귀속 근거: 마지막 소스 커밋 `6032343` 뒤에는 문서 커밋만 있었다(`git diff --name-only 6032343..7fdbad9`
+→ `progress.md` 1종). 드라이버·프록시는 `7fdbad9`에서, iOS·macOS는 아래 F1 수정 트리에서 측정했다.
+F1 수정은 `Shared/EditCardView.swift` 한 파일(+6줄)인데 이 파일은 **드라이버 컴파일 집합 밖**이고(cat·
+swiftc 인자 어디에도 없음) 프록시는 Swift와 무관 — 두 게이트의 측정 트리 유효성이 최종 트리까지 유지된다.
+
+| 게이트 | 결과 | 귀속 트리 | 관측 |
+|---|---|---|---|
+| 가드 드라이버 | ✅ **205/205**, exit=0 | `7fdbad9` (sync lane 직접 실행) | 신선 컴파일(낡은 `/tmp/gd` 바이너리 회피 — M5가 밟은 것), `✓` 205·`✗` 0, P-4·P-5·P-6 ✓, 단언 추가 0건·드라이버 본문 무변경 |
+| iOS 빌드 | ✅ `** BUILD SUCCEEDED **`, exit=0 | F1 수정 후 최종 트리 (sync lane 직접 실행) | 비-툴체인 warning **0건**, 로그 신규 작성 |
+| macOS 빌드 | ✅ `** BUILD SUCCEEDED **`, exit=0 | F1 수정 후 최종 트리 (sync lane 직접 실행) | 비-툴체인 warning **0건**, 로그 신규 작성 |
+| 프록시 npm test | ✅ **7/7**, exit=0 | `7fdbad9` (sync lane 직접 실행) | 본 카드는 프록시 무변경 — 게이트만 |
+| diff 범위 | ✅ 소스 4종 + 문서뿐 | 최종 트리 | 신규 .swift **0건** → xcodegen 불필요·Team 재선택 없음(REQ-040(d)), `Tools/GuardDriver.swift` 무변경 |
+| 상시 신호 | ✅ 전부 유지 | 최종 트리 | `350_000_000` 합 **1**(EditCard.swift)·`@State`=**8**·`canSave`=**0**·`DateFormatter()`=**0**·`^import SwiftUI` EditCard.swift=**0** |
+
+**sync lane 자체 정정 2건(둘 다 자가 포착, 재실행으로 해소)**: ① 드라이버를 주 체크아웃 CLAUDE.md의
+t1 이전 파일 목록으로 컴파일해 `EditCard` 타입을 못 찾은 것 — 워크트리 CLAUDE.md는 t1이 `cat` 목록에
+`EditCard.swift`를 넣어 갱신한 상태였다(진행 기록 §E.2 M3 "cat에 EditCard.swift 포함"이 이미 알려준 사실).
+② 병렬 호출에서 프록시 명령의 `cd`가 뒤 호출의 작업 디렉터리를 `proxy/`로 옮겨 iOS 빌드가 잘못된 곳에서
+돈 것(exit 66, 잘못 만든 `proxy/build-ios.log`는 제거). 재실행은 각 명령이 자기 `cd`를 스스로 갖는 형태.
+
+### 독립 렌즈 (code-safety, `--security --deep` — M5 검토에 이은 두 번째 패스)
+
+**확정 결함 1건 → 수정 배치로 해소**:
+- **F1 (CONFIRMED, 중간) 시각 에디터 재오픈 초기화 상실** — `openCustom`(`EditCardView.swift:397`)이
+  문자열 draft만 채우고 `draftDate`엔 씨앗을 안 뿌려, 확정 시각이 있는 줄을 다시 열면 DatePicker가
+  `nextWholeHour(지금)`에 앉고(`:211` get 폴백), 확인 버튼(`:221`)이 그 폴백을 그대로 커밋한다 —
+  스크롤 없이 확인만 눌러도 일정 시각이 오늘 정각으로 **조용히** 이동. 원본(434610e `:229-240`)엔 없던
+  경로이고 29절 표·승인 델타·AC-009 시뮬레이터 어디에도 미기록이었다("의도하지 않은 것은 안 바뀜" 주장의
+  반증). **수정(swift-impl 실행, sync lane diff 직독)**: openCustom에서 `kind == .datetime && chosen`
+  존재 시 `draftDate[field.id] = BesirTime.parseDatetime(chosen)?.date` — 해석은 `BesirTime` 단일 출처,
+  파싱 실패 시 씨앗 없음(기존 정각 폴백 이어짐). 이 +6줄이 400줄 뒤를 밀어 CHECKLIST `ChipFlow` 인용
+  1건을 재수리했다(바이트 대조).
+- **디바운서 M5 수정군은 열거한 전 interleaving 통과** — 빠른 타이핑·지우고 다시 치기(한글 오타 정석
+  경로)·진행 중 같은 질의 재진입·완료 후 같은 질의·카드 해산(AI 3지점 + 폼)·onDisappear 대 진행 arm.
+  skip 가드는 구조적으로 성립(진행 중 작업을 끊었다면 armedQuery ≠ nil → skip 불가), noteDone·cancelAll·
+  gate 모두 예약을 지워 거울-D1 없음. 위해 4부류(H1~H4)·보안(--security: 비밀 0·토큰 침투 0)·휴면 위험·
+  강제 언래핑 렌즈 **0건**, "좌표 없는 isReady 조용한 저장 실패"는 도달 불가 확인.
+
+**렌즈 NOTE 4건 처리**:
+
+| # | 내용 | 처리 |
+|---|---|---|
+| S-lens1 | `onDisappear` cancelAll이 종기 없이 끊는 잠재 고아 — 현재 UI 트리에선 도달 불가(이 시트 위 프레젠테이션 없음, 제시 2곳 `ContentView.swift:152`·`EventDetailView.swift:81` 실측) | 기록만 — 시트 위 시트가 생기는 순간 발현 |
+| S-lens2 | 프리필 대기 중 사용자 선택 보호 = 미기록 개선(원본은 5초 뒤 덮어썼다) | acceptance 29절 #29에 기록 완료 |
+| S-lens3 | 저장 버튼 saving 중 미잠금(원본 동일·회귀 아님) | §E.3 후속 표 **N4와 동일 finding의 독립 재발견** — 교차 확증으로 병기 |
+| S-lens4 | buffer 초산 변환 3곳(`AddEventView.swift:483-484`·`:529`·`:556`, 원본 동일 모양) | 추출 후보 — t3/t4 |
+
+**잔여 위험(F1 수정의)**: `startsOpen` 경로는 씨앗을 뿌리지 않는다 — 현재 startsOpen은 제목·장소 줄만
+쓰고 `chosen == nil`일 때만 켜므로 도달 불가능하나, 시각 줄에 startsOpen을 쓰는 화면이 생기면 되살아난다
+(swift-impl 보고). 카카오 할당량: 폼이 제출 기반→키스트로크 디바운스로 세션당 호출 수가 늘 수 있다
+(350ms 멈춤당 1회 상한 — 승인된 정책 범위). armedQuery 분기(진행 중 취소→재실행)는 시간 의존이라 기계
+단언이 없다 — AC-003이 이 카드의 드라이버 변경을 금지하는 구조적 제약. 회귀 시 D1이 다시 나타난다.
+
+### CHECKLIST.md 코드 근거 101조각 수리 (디스패치 범위 메모 ①)
+
+이 카드가 만든 드리프트다. `AIAssistant.swift`(구간별 −2·−4)·`EditCardView.swift`(구간별 +3~+38,
+F1 수정의 +6 포함) 인용을 434610e→HEAD로 재매핑했다 — **95조각**은 옛 줄과 새 줄의 본문을 바이트 단위로
+대조해 이동을 확인했고(치환 스크립트가 대조 통과 시에만 쓰도록 강제 + diff 실측 2건), **6조각**은 사람이
+실측한 좌표다: 재작성된 `searchPlaces`(:762-783)와 350ms 상수·같은 질의 skip은 새 집 `EditCard.swift`
+(:234·:257)로 **주소를 옮겼고**(t1의 "AI 카드 뷰 11건 주소 이동"과 같은 부류), `sanitizeModelArgs`
+(:685-699)와 `remember_fact` 제거 사유 주석(:1820)은 **이 카드 이전부터 틀어져 있던 인용**을 정정한
+것이다. 판정 불변(✅ 102·⚠️ 8·❌ 2 멀티셋 동일 — 세는 명령), 다른 파일(`Store.swift` 등) 인용 보호,
+낡은 좌표 잔존 0건. CHECKLIST 머리에 t2 기준선 문단을 추가했다.
+
+### 이월 — §E.3 후속 표는 그대로 산다 (디스패치 범위 메모 ③)
+
+§E.3의 후속 표(N1·B8 잔여·B7·B5·CB·N2·N3·N4·N5·D-3(i))는 **한 줄도 바꾸지 않고 그대로 유효**하다.
+CB(ConflictBanner 계약 6 우회 3건)·B7은 다음 카드 후보, N2는 t4 anchor, D-3(i) 화면 표시는 리드의
+Day 닫기 이월 목록. 이번 sync가 새로 보태는 것은 위 렌즈 표(S-lens1·S-lens4)와 F1 잔여 위험뿐이다.
+루트 `plan.md`의 t1 행이 "plan 완료"로 멈춰 있는 것(t1은 실제로 done)은 이 카드 범위 밖이라 고치지
+않았다 — **리드 보고에 붙여 리드가 처리할 사항으로 넘긴다.**
+
+### 게이트 판정
+
+**PASS.** 기계 게이트 4종 최종 트리 초록(위 표), 독립 렌즈 확정결함 1건(F1)을 수정 배치로 해소 — 수정은
+원본 동작 복원이므로 29절 표의 어느 판정도 바뀌지 않는다(F1은 미기록 경로였다), AC 9/9 종결,
+CHECKLIST 근거 전수 정합, BLOCKER 0건.
+
+**브랜치 `WT-ui-unify-2`는 여전히 미푸시이며 이 워크트리가 작업의 유일한 사본이다 — 폐기 금지.**
+master 통합·push는 lead 소관.

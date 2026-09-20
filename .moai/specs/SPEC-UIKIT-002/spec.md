@@ -1,10 +1,10 @@
 ---
 id: SPEC-UIKIT-002
 title: "AddEventView를 편집 카드 컴포넌트로 전환 + 장소 검색 디바운서 단일화 (UI 통일 2a)"
-version: "0.1.3"
-status: draft
+version: "0.1.4"
+status: completed
 created: "2026-09-18"
-updated: "2026-09-18"
+updated: "2026-09-20"
 author: "manager-spec"
 priority: P1
 phase: "Phase 1.7 — 화면 UI 통일"
@@ -26,6 +26,7 @@ kanban_card: t2
 | 0.1.1 | 2026-09-18 | run(M2) 중 재실측 — `Kind`의 전수 switch가 세 곳이 아니라 **네 곳**(`AIAssistant.swift:890-900`, 보류 턴 인자 채우기 — swift-impl 전문가가 발견, 런 세션이 재검증)임을 정정. REQ-001에 네 번째 가지(`:892` 나열)를, REQ-041에 그 가지의 좁은 예외 절을 반영. D-3 해소 기록((i) 운영자 확정, lead 디스패치) 포함. 측정 오류 정정이지 요구사항 변화가 아니다 |
 | 0.1.2 | 2026-09-20 | run(M4) 중 이탈 1건 승인·기록 — `EditField.options`를 `let`→`var`로. REQ-021(a)의 "원소를 제자리에서 고친다"(모드 칩의 `Option.detail` 갱신)가 `let` 배열로는 컴파일 불가능하고, 유일한 대안인 `EditField` 재구성은 `id = UUID()`가 새로 생겨 카드 정체성 계약 자체를 깬다. 멤버와이즈 시그니처는 그대로라 기존 생성부 무변경(REQ-002 유지). run lane이 승인하고 lead 완료 보고에 띄운다 |
 | 0.1.3 | 2026-09-20 | run(M5 독립 검토) 반영 2건 — ① `Option.label` `let`→`var`: "현재 위치" 칩에 해석 지명을 얹는 확정 뒤 글자 수정(원본 확정 카드의 GPS fix 확인 수단 계승)이 `let`으로 불가능했고 Option 재구성은 `id = UUID()` 재발급이라 칩 신원이 흔들린다. `options` var(0.1.2)와 같은 사정·같은 해법, 생성부 무변경. ② 디바운서 `gate`의 skip 규칙 정교화: **직전 검색이 완료된 뒤의 같은 질의에만** skip을 내린다 — 진행 중 작업을 방금 끊었으면 같은 질의라도 재실행한다(끊긴 작업이 줄에 뿌린 '찾는 중'을 되돌릴 주체가 없어 줄이 갇히는 결함 — code-safety가 디바운서 분리 실행으로 재현·확정). REQ-011의 관측 계약(완료 후 같은 질의 재호출 없음)은 그대로 — 드라이버 P-5 초록 유지가 증거 |
+| 0.1.4 | 2026-09-20 | **sync 단계 종료 — 3-phase close(`completed`).** ① 기계 게이트 4종을 sync lane이 HEAD에서 다시 실측(드라이버 205/205·프록시 7/7·iOS·macOS 무경고 — 마지막 소스 커밋 뒤 문서 커밋뿐임을 `git diff --name-only`로 확인하고 귀속을 명확히 했다). ② 독립 렌즈(code-safety, `--security --deep`)가 "의도하지 않은 것은 안 바뀜" 주장의 반증을 시도해 **확정 1건(F1)**: 시각 에디터 재오픈 시 확정 시각이 아니라 지금 기준 정각으로 바퀴가 초기화되어 확인만 눌러도 일정 시각이 조용히 바뀌던 것(`openCustom`이 `draftDate`에 씨앗을 안 뿌림 — 원본·29절 표·승인 델타·AC-009 어디에도 미기록이던 경로). `swift-impl`이 `BesirTime.parseDatetime` 씨앗으로 수리(단일 출처 유지), 디바운서 M5 수정군은 전 interleaving 통과·보안·휴면·위해 4부류 0건. ③ 루트 `CHECKLIST.md` 코드 근거 **101조각** 수리(이 카드가 민 `AIAssistant` −2·−4·`EditCardView` 구간별 이동 + F1의 +6; 95조각 바이트 대조·6조각 실측 좌표, 판정 불변). ④ AC 매트릭스 종결 — 9건 전부 ✅(AC-009는 시뮬레이터 12/12 + 실기기 전용 Day 이월 기록). 근거·미검증·잔여 위험은 `progress.md` §E.4 |
 
 ## 0. 이 SPEC의 성격
 

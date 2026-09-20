@@ -21,10 +21,10 @@
 | M | REQ | AC | 요약 | 상태 |
 |---|---|---|---|---|
 | M1 | — (D-1·D-2·문서) | — | 설계 확정 — 카드 분할(A안)·컴포넌트 표면 형태 확정, SPEC 3종 완결. **D-3(과거 시각)만 미해소로 남는다** — run 착수 전 운영자 결정(spec.md §4, 기본값 (i)) | 🟢 |
-| M2 | REQ-001~004 | AC-001 | 컴포넌트 표면 확장 — `Kind.toggle`(칩 재사용 + `chosen` seed), `Option.detail`·`EditField.busy`, `startsOpen`, `EditCardChrome`. **전부 기본값을 갖는 추가**라 `AIChatView`·`AIAssistant` 팩토리는 한 줄도 안 바뀐다 | ⬜ |
-| M3 | REQ-010~011 | AC-002·AC-003 | 디바운서 단일화 — 지연(350ms)·취소·같은 질의 스킵을 값 타입 하나로 `EditCard.swift`에 옮기고 `AIAssistant.searchPlaces`가 그것을 쓴다. **드라이버 P-4·P-5·P-6이 옮김의 기계적 증거**(단언 추가 없음) | ⬜ |
-| M4 | REQ-020~023 | AC-004·AC-005 | `AddEventView` 전환 — `@State card: EditCard` 하나(+`confirmedPlaces` 사전), `canSave`→`isReady`, `.task` 1회 생성, header/footer·`ConflictBanner`는 카드 밖 유지, `depFmt`→`BesirTime.compact` | ⬜ |
-| M5 | REQ-030~031, REQ-040~041 | AC-006~009 | 보존 대조와 게이트 — 어포던스 **29절 개별 대조**(일괄 통과 금지), 접근성 순증·후퇴 명시, 무경고 빌드 양쪽, 드라이버 전체 초록, 프록시, 시뮬레이터·실기기 | ⬜ |
+| M2 | REQ-001~004 | AC-001 | 컴포넌트 표면 확장 — `Kind.toggle`(칩 재사용 + `chosen` seed), `Option.detail`·`EditField.busy`, `startsOpen`, `EditCardChrome`. **전부 기본값을 갖는 추가**라 `AIChatView`·`AIAssistant` 팩토리는 한 줄도 안 바뀐다 | 🟢 |
+| M3 | REQ-010~011 | AC-002·AC-003 | 디바운서 단일화 — 지연(350ms)·취소·같은 질의 스킵을 값 타입 하나로 `EditCard.swift`에 옮기고 `AIAssistant.searchPlaces`가 그것을 쓴다. **드라이버 P-4·P-5·P-6이 옮김의 기계적 증거**(단언 추가 없음) | 🟢 |
+| M4 | REQ-020~023 | AC-004·AC-005 | `AddEventView` 전환 — `@State card: EditCard` 하나(+`confirmedPlaces` 사전), `canSave`→`isReady`, `.task` 1회 생성, header/footer·`ConflictBanner`는 카드 밖 유지, `depFmt`→`BesirTime.compact` | 🟢 |
+| M5 | REQ-030~031, REQ-040~041 | AC-006~009 | 보존 대조와 게이트 — 어포던스 **29절 개별 대조**(일괄 통과 금지), 접근성 순증·후퇴 명시, 무경고 빌드 양쪽, 드라이버 전체 초록, 프록시, 시뮬레이터·실기기 | 🟢 |
 
 ## 2. 알려진 이슈 / 리스크
 

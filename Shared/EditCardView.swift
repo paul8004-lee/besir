@@ -396,6 +396,12 @@ struct EditCardView: View {
 
     private func openCustom(_ field: EditField) {
         draft[field.id] = typedLabel(field) == nil ? "" : (field.chosen ?? "")
+        // 시각 줄을 다시 열 때는 확정 시각으로 바퀴 씨앗을 뿌린다 — 재오픈한 바퀴가 지금 기준
+        // 정각에 앉으면 확인만 눌러도 시각이 조용히 바뀐다. 해석은 BesirTime이 단일 출처이고,
+        // 풀리지 않는 값이면 씨앗을 뿌리지 않아 정각 폴백이 이어진다.
+        if field.kind == .datetime, let chosen = field.chosen {
+            draftDate[field.id] = BesirTime.parseDatetime(chosen)?.date
+        }
         customOpen.insert(field.id)
     }
 
