@@ -422,7 +422,7 @@ t2는 plan 단계에서 한 번 더 쪼개졌다 — 장소 검색 디바운스�
 
 | 카드 | 범위 | SPEC | 상태 |
 |---|---|---|---|
-| t1 | 편집 카드 컴포넌트를 `Shared/`로 추출 + **AI 카드만** 그것을 쓰도록 전환 | `SPEC-UIKIT-001` | plan 완료 |
+| t1 | 편집 카드 컴포넌트를 `Shared/`로 추출 + **AI 카드만** 그것을 쓰도록 전환 | `SPEC-UIKIT-001` | done — 2026-09-18 plan·run·sync 완료 |
 | t2 | UI 통일 2a — `AddEventView` 전환 + 장소 검색 디바운서 단일화(4파일) (t1 done 이후) | `SPEC-UIKIT-002` | done — 2026-09-20 run·sync 완료 |
 | t4 | UI 통일 2b — `EventDetailView` 크롬 통일 + 시각 포매터 단일화(2파일) (t2 done 이후) | 별도 SPEC — t4 plan에서 확정 | 대기 |
 | t3 | `AddActivityView` · `ActivityDetailView` 전환 (t4 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | 대기 |
