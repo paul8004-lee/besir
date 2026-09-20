@@ -309,13 +309,20 @@ struct EventDetailView: View {
 
     private var detailRows: some View {
         VStack(alignment: .leading, spacing: 10) {
-            row("이동 수단", "\(event.mode.title)")
-            row("도착 여유(버퍼)", "\(event.bufferMinutes)분")
-            row("알림", "출발 \(event.notifyLeadMinutes)분 전")
-            if event.recurrenceId != nil {
-                Label("반복 일정", systemImage: "repeat")
-                    .font(.caption).foregroundStyle(Theme.muted)
+            // 값 행(+반복 배지)만 카드로 감싼다 — 삭제 단추는 카드 밖에 그대로 둔다(AC-006
+            // 8·9행의 분할이 규범 — REQ-020의 :302-348 인용이 잘못 넓었고 0.1.3으로 정정).
+            VStack(alignment: .leading, spacing: 10) {
+                row("이동 수단", "\(event.mode.title)")
+                row("도착 여유(버퍼)", "\(event.bufferMinutes)분")
+                row("알림", "출발 \(event.notifyLeadMinutes)분 전")
+                if event.recurrenceId != nil {
+                    Label("반복 일정", systemImage: "repeat")
+                        .font(.caption).foregroundStyle(Theme.muted)
+                }
             }
+            .padding(18)
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
             HStack {
                 Spacer()
                 Button(role: .destructive) {
@@ -330,11 +337,6 @@ struct EventDetailView: View {
             }
             .padding(.top, 8)
         }
-        // 상세행 블록도 같은 카드 문법으로 감싼다(D-4 8번) — 섹션이 카드인 화면에서 벌거벗은
-        // 블록은 예외적 모습이다. 내용·순서는 무변경이다.
-        .padding(18)
-        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
-        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
         .confirmationDialog("반복 일정을 어떻게 삭제할까요?", isPresented: $showingDeleteMenu, titleVisibility: .visible) {
             Button(event.recurrenceId != nil ? "전체 반복 일정 삭제" : "같은 제목 일정 모두 삭제(\(sameTitleEvents.count)건)",
                    role: .destructive) {

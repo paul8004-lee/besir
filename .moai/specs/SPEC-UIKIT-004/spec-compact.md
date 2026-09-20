@@ -15,17 +15,18 @@ run 단계가 싣는 요약 판(전문은 spec.md·plan.md·acceptance.md). 기�
 - **REQ-010**: `BesirTime.anchor(ofPrefix:) -> ScheduleAnchor?` + `prefix(for:) -> String` 신설
   (`ScheduleAnchor` = `Models.swift:204`, 드라이버 집합 안).
 - **REQ-011**: 순수 매핑 8곳 제자리 치환 — `AddEventView:325·335·476·531·554`,
-  `EditCardView:168`, `AIAssistant:826·885`. 유지 2곳: `EditCard:139`(라벨), `AIAssistant:893`(인자 키).
+  `EditCardView:168`, `AIAssistant:826·885`. 유지 2곳: `EditCard:139`(라벨, 신규 멤버 삽입로 :178로 이동), `AIAssistant:893`(인자 키).
   신호: `grep -rn 'prefix == "arr:"\|prefix == "dep:"\|hasPrefix("arr:")' Shared/*.swift` = 2,
   `grep -rn '? "arr:" : "dep:"' Shared/*.swift` = 0.
 - **REQ-012**: 폼·AI 카드 관측 동작 무변경 — 드라이버 단언 추가 없음, 기존 P 계열 초록.
 
 **§2.3 크롬 통일**
-- **REQ-020**: 카드 컨테이너 3곳(출발 `:213-214`·여정 `:249-250` 교체, 상세행 `:302-348` 신규
-  감싸기) → `Theme.raised` + `Theme.radius` + `Theme.line` 스트로크. 신호: `grep -c 'thinMaterial'` = 0.
+- **REQ-020**: 카드 컨테이너 3곳(출발 `:213-214`·여정 `:249-250` 교체, 상세행 값 행 `:302-310`
+  신규 감싸기 — 삭제 단추·다이얼로그는 카드 밖, 0.1.3) → `Theme.raised` + `Theme.radius` +
+  `Theme.line` 스트로크. 신호: `grep -c 'thinMaterial'` = 0.
 - **REQ-021**: `.secondary` 9→`Theme.muted`, `.tertiary` 1→`Theme.faint`, `.quaternary` 1→
   `Theme.line`, `:203` `isPast ? Theme.nowLine : Theme.travel`, `:116` `.green`→`Theme.travel`.
-  예외: `.white` 글리프·`Color(hex:)` 노선색·`Theme.bg`. 신호: `grep -c '\.secondary\|\.tertiary\|\.quaternary\|\.red\|\.green'` = 0.
+  예외: `.white` 글리프·`Color(hex:)` 노선색·`Theme.bg`. 신호(0.1.2): `grep -cE '\.secondary|\.tertiary|\.quaternary|\.red[^u]|\.green'` = 0.
 - **REQ-022**: 캘린더 네 갈래(`:115-144`) 분기·문구·재시도 무변경 — 크롬만.
 - **REQ-023**: 접근성 순증(현재 0건) — 출발 카드 결합 낭독·stepRow 결합 낭독·지도 라벨·
   38pt `@ScaledMetric` 상대화.
@@ -45,7 +46,7 @@ run 단계가 싣는 요약 판(전문은 spec.md·plan.md·acceptance.md). 기�
 
 - **AC-001** 포매터 소유권 — grep 3종(화면 1·BesirTime 5·패턴 대조)
 - **AC-002** 패딩 실측 — swift로 5종 찍어 표와 대조(05분/5분/3:05) — **t2a AC-009 S8 승계 종결**
-- **AC-003** 매핑 단일화 — grep 신호 2건+0건, diff 7줄 한정
+- **AC-003** 매핑 단일화 — grep 신호 2건+0건, diff 8줄 한정(0.1.3 — 7은 오기)
 - **AC-004** 관측 무변경 — 드라이버 초록·단언 추가 0
 - **AC-005** 크롬 — grep 0건 3종·컨테이너 3곳·클립 12 유지·@ScaledMetric
 - **AC-006** 어포던스 **11절 개별 대조**(일괄 통과 금지)

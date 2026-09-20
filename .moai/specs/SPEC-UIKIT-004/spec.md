@@ -22,9 +22,10 @@ kanban_card: t4
 
 | 버전 | 날짜 | 변경 |
 |---|---|---|
-| 0.1.0 | 2026-09-20 | 최초 작성. 루트 `plan.md` §Phase 1.7의 t4 행을 GEARS로 정식화 — t2a(SPEC-UIKIT-002)가 2026-09-18 분할 때 예약해 둔 카드다. 인용 줄번호는 `9e4a374`(= `origin/master`, t2a 머지 직후) 실측. 작성 경위 특이: plan 세션의 Agent 스폰이 불가해(세션 팀 파일 오류, `progress.md` §F.1) manager-spec 위임 대신 orchestrator-direct로 작성했고, 설계 교차협의·독립 감사를 GLM(z.ai) 백엔드로 대체 수행했다. 리드 디스패치의 "접두↔기준 매핑 5곳"은 t2a 종료 시점 AddEventView 내 5곳 셈이고 본 SPEC은 현 트리 전수 **10곳**(§1.3)을 기준으로 삼는다 — 숫자 차이를 숨기지 않고 세는 명령과 함께 기록 |
+| 0.1.0 | 2026-09-20 | 최초 작성. 루트 `plan.md` §Phase 1.7의 t4 행을 GEARS로 정식화 — t2a(SPEC-UIKIT-002)가 2026-09-18 분할 때 예약해 둔 카드다. 인용 줄번호는 `9e4a374`(= `origin/master`, t2a 머지 직후) 실측. 작성 경위 특이: plan 세션의 Agent 스폰이 불가해(세션 팀 파일 오류, `progress.md` §F.1) manager-spec 위임 대신 orchestrator-direct로 작성했고, 설계 교차협의·독립 감사를 GLM(z.ai) 백엔드로 대체 시도했다(3회 전부 실패 — §F.1). 리드 디스패치의 "접두↔기준 매핑 5곳"은 t2a 종료 시점 AddEventView 내 5곳 셈이고 본 SPEC은 현 트리 전수 **10곳**(§1.3)을 기준으로 삼는다 — 숫자 차이를 숨기지 않고 세는 명령과 함께 기록 |
 | 0.1.1 | 2026-09-20 | 측정 정정(run M2). AC-003.3의 세는 grep `func prefix(for:`은 관용 Swift 서명과 공존할 수 없다 — `for`는 키워드라 `prefix(for:)` 단일 이름 서술이 불가하고 실제 서명은 `prefix(for anchor:)`가 되므로, 접두 일치 `func prefix(for`로 정정한다. `anchor(ofPrefix:`는 단일 이름으로 원문 grep 그대로 성립. 또한 EditCard 신규 멤버 삽입로 유지 2곳 중 `EditCard.swift:139`(라벨 조립)는 **:178**로 밀렸다(§1.4 예고대로 — CHECKLIST 인용 2건은 sync가 바이트 대조로 수리). |
 | 0.1.2 | 2026-09-20 | 측정 정정(run M3). REQ-021·AC-005.2의 색 신호에서 `\.red`가 원본부터 있던 `.reduce(0)`(stepStartTime 누적)에 오탐한다(review-1이 이미 주석으로 예고했던 것) — `\.red[^u]`로 정정. 또한 연결선 `.fill(.quaternary)`→`Theme.line` 치환이 첫 패스에서 누락돼 첫 실측이 2로 나온 것을 그 자리 완성으로 해소했다(치환 후 잔여 0). |
+| 0.1.3 | 2026-09-20 | 교차검토 정정(run M4 — spec-amender 문서 렌즈, CONDITIONAL-PASS 발견 6건 반영). ① REQ-020·D-4 #8의 감쌈 범위 `:302-348`이 삭제 단추·다이얼로그까지 삼켰다 — AC-006 8·9행의 분할(값 행만 감쌈)이 규범이므로 범위를 `:302-310`으로 좁혔고, 이미 넓게 구현돼 있던 run 트리를 같은 날 수정했다(삭제 단추 카드 밖 복원). ② AC-008 Given·spec-compact의 "7줄"은 오기 — 실측·REQ-041과 같은 **8줄**로 정정. ③ GLM 협의를 "수행"으로 서술한 HISTORY 0.1.0·D-4 제목을 "시도(전부 실패)"로 정정(관측 안 된 검증을 수행이라 적지 않는다). ④ AC 매트릭스 AC-005(REQ-022 제외)·AC-009(포괄 화면 증거 채널 표기) 정정. ⑤ REQ-012 Unwanted 문면을 "shall not"형으로. ⑥ plan §2에 옵셔널 적응 주의(:476·:885 flatMap, :554·:168 `?? .departure`) 추가. |
 
 ## 0. 이 SPEC의 성격
 
@@ -136,11 +137,11 @@ t4 행이고, 범위는 t2a 분할 때 운영자가 확정한 그대로다 — �
 
 - **REQ-011 (Ubiquitous)**: Every pure mapping site shall route through the new accessors. 전환 8곳은 §1.3 표의 전환 행 — `AddEventView:325`·`:335`(→`prefix(for:)`), `:476`·`:531`·`:554`와 `EditCardView:168`(→`anchor(ofPrefix:)`), `AIAssistant:826`(→`prefix(for:)`)·`:885`(→`anchor(ofPrefix:)`). 전부 **제자리 한 줄 치환**이다. 유지 2곳(`EditCard:139` 라벨 조립, `AIAssistant:893` 인자 키)은 §1.3의 사유대로다. 기계적 신호: `grep -rn 'prefix == "arr:"\|prefix == "dep:"\|hasPrefix("arr:")' Shared/*.swift` = **2**(`:139`·`:893`뿐), `grep -rn '? "arr:" : "dep:"' Shared/*.swift` = **0**.
 
-- **REQ-012 (Unwanted)**: Neither the form nor the AI card shall observably change. 직렬화 결과("arr:"/“dep:” + ISO — `:325`·`:335`·`:826`), 칩 라벨(`:139`), 저장 anchor(`:554`), 툴 인자 키(`:893`)의 관측 가능한 값이 전부 동일하다. 드라이버 **단언을 추가하지 않고** 기존 단언(P 계열 — 시각 줄 왕복이 `parseDatetime`을 지난다)이 초록인 것이 증거다. 이 매핑 전환이 AI 카드의 어떤 화면 표면을 바꾸면 잘못된 것이다.
+- **REQ-012 (Unwanted)**: The form and the AI card shall not observably change. 직렬화 결과("arr:"/“dep:” + ISO — `:325`·`:335`·`:826`), 칩 라벨(`:139`), 저장 anchor(`:554`), 툴 인자 키(`:893`)의 관측 가능한 값이 전부 동일하다. 드라이버 **단언을 추가하지 않고** 기존 단언(P 계열 — 시각 줄 왕복이 `parseDatetime`을 지난다)이 초록인 것이 증거다. 이 매핑 전환이 AI 카드의 어떤 화면 표면을 바꾸면 잘못된 것이다.
 
 ### 2.3 크롬 통일 (020번대)
 
-- **REQ-020 (Ubiquitous)**: The screen's card containers shall speak the component language. 출발 카드(`:213-214`)와 대중교통 여정(`:249-250`)의 `.thinMaterial` + `cornerRadius: 14`가 `.background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))` + `.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))`(`EditCardView:63-64` 문법)로 바뀐다. 상세행 블록(`:302-348`, 현재 컨테이너 없음)도 같은 컨테이너로 감싼다(D-4). `.thinMaterial`은 이 화면에서 퇴장한다. 기계적 신호: `grep -c 'thinMaterial' Shared/EventDetailView.swift` = **0**.
+- **REQ-020 (Ubiquitous)**: The screen's card containers shall speak the component language. 출발 카드(`:213-214`)와 대중교통 여정(`:249-250`)의 `.thinMaterial` + `cornerRadius: 14`가 `.background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))` + `.overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))`(`EditCardView:63-64` 문법)로 바뀐다. 상세행 값 행 블록(`:302-310` — 이동 수단·버퍼·알림+반복 배지, 현재 컨테이너 없음)도 같은 컨테이너로 감싼다(D-4). 삭제 단추(`:311-322`)·다이얼로그(`:325-347`)는 카드 밖 그대로다(AC-006 8·9행의 분할이 규범 — 0.1.3 정정). `.thinMaterial`은 이 화면에서 퇴장한다. 기계적 신호: `grep -c 'thinMaterial' Shared/EventDetailView.swift` = **0**.
 
 - **REQ-021 (Ubiquitous)**: Every color on this screen shall go through a Theme token. `.secondary` 9건(§1.1 열거) → `Theme.muted`, `.tertiary`(`:246`) → `Theme.faint`, `.quaternary`(`:264`) → `Theme.line`, 출발 시각 큰 숫자 `isPast ? .red : .green`(`:203`) → `isPast ? Theme.nowLine : Theme.travel`, 등록됨 체크 `.green`(`:116`) → `Theme.travel`. 예외(D-4 변경 금지 목록): `.white` 노선 원 위 글리프(`:259`), `Color(hex:)` 노선색(`:261`), `Theme.bg` 배경(`:71`, 이미 토큰). 근거(실측): `EditCardView`는 `.secondary`/`.tertiary` **0건** — 본문 `Theme.ink`·캡션 `Theme.muted`·최흐림 `Theme.faint` 문법(`:46`·`:53`·`:96`·`:104`·`:311`·`:337`)이며, `nowLine`은 시간축의 '지난/현재' 적색(`ContentView:449`), `travel`은 '갈 일정' 녹색(`ContentView:303`·`:361`)이다. 기계적 신호(0.1.2 정정): `grep -cE '\.secondary|\.tertiary|\.quaternary|\.red[^u]|\.green' Shared/EventDetailView.swift` = **0** — 원래 패턴의 `\.red`는 원본부터 있던 `.reduce(0)`(stepStartTime 누적)에 오탐한다.
 
@@ -201,7 +202,7 @@ t4 행이고, 범위는 t2a 분할 때 운영자가 확정한 그대로다 — �
 - **기각한 형태**: `ScheduleAnchor`에 접두를 돌려주는 프로퍼티를 넣는다(`anchor.prefix`) — `Models.swift`는 데이터 모델 파일이고 시각 값의 문자열 문법은 `BesirTime`이 홀로 안다는 `EditCard.swift:10-12`의 선언을 깬다. `EditField` 쪽에 무엇을 더하는 것도 기각 — 매핑은 카드가 아니라 시각 값의 성질이다.
 - **반영**: REQ-010~011
 
-### D-4 — 크롬 매핑 — **해소됨(본 세션 실측 + GLM 교차협의 2026-09-20)**
+### D-4 — 크롬 매핑 — **해소됨(본 세션 실측 — GLM 교차협의는 3회 시도 전부 실패, §F.1)**
 
 - **결정 표**(REQ-020·021·023의 근거):
 
@@ -214,7 +215,7 @@ t4 행이고, 범위는 t2a 분할 때 운영자가 확정한 그대로다 — �
 | 5 | 출발 숫자 `isPast ? .red : .green` | `isPast ? Theme.nowLine : Theme.travel` | `nowLine`=시간축 '지난/현재' 적색(`ContentView:449`), `travel`='갈 일정'(`:303`·`:361`). "지났습니다" 캡션의 `Theme.warn`(`:207`)은 유지 — 이미 토큰이고 경고 문법 |
 | 6 | `.quaternary` 연결선(`:264`) | `Theme.line` | 같은 역할(흐린 구분선) |
 | 7 | `.white` 글리프(`:259`)·`Color(hex:)` 노선색 | **유지** | 노선색 위 대비는 의도된 것이고 노선색은 외부 데이터 — 토큰이 알 수 없다(`:367-377` 주석) |
-| 8 | 상세행 블록(`:302-348`) 컨테이너 없음 | 같은 카드 컨테이너로 감쌈 | 언어 통일(섹션이 카드인 화면에서 벌거벗은 블록은 예외적 모습). 정보·순서 불변 — 재디자인 아니다 |
+| 8 | 상세행 값 행(`:302-310`+반복 배지) 컨테이너 없음 | 같은 카드 컨테이너로 감쌈 — 삭제 단추(`:311-322`)·다이얼로그는 밖 그대로 | 언어 통일(섹션이 카드인 화면에서 벌거벗은 블록은 예외적 모습). 정보·순서 불변 — 재디자인 아니다. 범위는 AC-006 8·9행 분할을 따른다(0.1.3 정정) |
 | 9 | 38pt 고정(`:202`) | `@ScaledMetric` 상대화 | Dynamic Type 무시가 현재 결함(0건 실측). 크롬 패스의 순증 범주 |
 
 - **변경 금지**: 지도 클립 반경(2), `.white` 글리프·노선색(7), `Theme.bg` 배경, 섹션 순서(헤더→지도→출발→여정→캘린더→상세행), 캘린더 네 갈래 분기(REQ-022), 모든 문구.
