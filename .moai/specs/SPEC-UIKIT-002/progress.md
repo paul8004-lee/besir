@@ -260,7 +260,7 @@ run_complete_at: 2026-09-20
 
 sync_status: audit-ready — **sync 단계 종료(3-phase close, 단일 sync 커밋)**
 sync_complete_at: 2026-09-20
-sync_commit_sha: (이 커밋 뒤 백필 커밋에서 기입)
+sync_commit_sha: f38e444
 
 ### 게이트 — sync lane이 최종 트리에서 직접 재실측 (t1 sync 전례: 귀속 문제 예방)
 
