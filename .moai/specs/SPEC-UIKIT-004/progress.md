@@ -72,3 +72,73 @@ Unwanted 4), AC 9와 REQ↔AC 매트릭스 전수 커버, 세는 grep 신호 4�
 - plan_status: audit-ready — 단, 위 재감사 지시를 조건으로 한다(독립 감사 불능 특이사항)
 
 🗿 MoAI
+
+---
+
+## §Run-phase Record
+
+card: t4 · worktree `.claude/worktrees/t4` · branch `WT-ui-unify-2b`
+plan-phase 커밋: `ab1b090` (SPEC v0.1.0, Tier M, REQ 14 / AC 9)
+run-phase 세션: 리드 세션(2026-09-20 리드 디스패치 — t4 plan 세션이 워크트리 반납 후 인계, run은
+리드 세션이 직접 수행)
+Implementation Kickoff: 운영자 run 진입 승인(2026-09-20, 리드 디스패치로 전달) — 칸반
+no-question-delegation 규율(§F.1 이탈 기록 2와 같은 구도). Tier M(운영자 제공)·직렬 모드·PR 없음
+(칸반 카드 — master 통합·push는 리드/sync 소관).
+
+### Phase 1 — Plan Audit Gate (2026-09-20)
+
+- audit_verdict: INCONCLUSIVE → 운영자 승인 진행(inconclusive_acknowledged)
+- audit_report: .moai/reports/plan-audit/SPEC-UIKIT-004-review-1.md (SELF-AUDIT 판)
+- 일일 기록: .moai/reports/plan-audit/SPEC-UIKIT-004-2026-09-20.md — 채널 전멸 경위·대체 증거 사슬
+- audit_at: 2026-09-20T06:45:00Z
+- plan_artifact_hash: 60afc417e4e99206e31c2265a9d19ad4598aed74d4b31971e47c1254a83f43ca
+- 스킵 3조건 불성립(review-1은 SELF-AUDIT). 독립 채널 복구 시 재감사 조건은 유효.
+
+### Phase 4 — Mode Selection
+
+표준(직렬). 소스 5종·단일 도메인(SwiftUI 화면 + 중립 타입), M2→M3→M4 연속 의존이라 병렬 쓰기
+에이전트 없음. **이탈: 서브에이전트 스폰 결함(기계 공통, Phase 1 기록)으로 orchestrator-direct
+구현** — 검증 렌즈는 살아있는 팀원(SendMessage)으로: T-001·T-002 swift 렌즈(m3-swift-impl 사후
+검토), T-003 ui-design(m4-ui-design), T-004 code-safety(m4-code-safety). ai-tooling 미배정 —
+AIAssistant 변경은 순수 매핑 치환 2줄(툴 선언·루프 무변경)이라 드라이버+code-safety로 덮는다
+(plan §2 배정의 축소 사유). AC-009(시뮬레이터)는 리드 소관(standing 정책 2026-09-18) — run은
+기계 게이트까지만(t2a §E.1과 동일 이관).
+
+### Phase 6·7 — 과업 분해·AC 등록
+
+tasks.md(T-001~T-004) 생성, AC-001~009 전부 ⬜로 TaskList 등록. methodology: tdd(quality.yaml) —
+본 SPEC은 단언 추가를 금지(REQ-012·AC-004)하므로 드라이버 기존 205 단언이 특성화 네트로 동작,
+RED 신규 작성 없음(SPEC 계약이 우선하는 지점을 여기에 기록한다).
+
+## §E.2 Run-phase Evidence
+
+### M2 — BesirTime 확장·N2 매핑 전환 (REQ-001~003·010~012 / AC-002~004 ✅, AC-001 🟡) ✅
+
+구현: orchestrator-direct(스폰 결함, Phase 4 기록). 검증: 드라이버 2회(정예 전후)·swift 실측·grep 신호.
+
+- **정예 0.1.1 경위(AC-003.3 → 해소)**: 세는 grep `func prefix(for:`이 관용 Swift 서명과 공존할 수
+  없다(`for`는 키워드 — `prefix(for anchor:)`만 유효). SELF-AUDIT·리드 감사 모두 못 잡은 측정 결함을
+  구현 중 포착: 서명은 관용형 유지, 세는 명령을 접두 일치 `func prefix(for`로 정정(spec HISTORY 0.1.1·
+  acceptance AC-003.3). `anchor(ofPrefix:`는 단일 이름으로 원 grep 그대로 성립.
+- **변경**: `EditCard.swift` +39줄 — `BesirTime.full`("M월 d일 (E) a h시 mm분")·`clock`("a h시 mm분")
+  이사(패턴 불변), `anchor(ofPrefix:)`·`prefix(for:)` 신설(몸통 switch — 소유자 자신이 세는 신호를
+  깨뜨리지 않는다). N2 전환 8곳 제자리 치환: AddEventView 5줄(:325·:335 직렬화, :476·:531·:554 판정)·
+  EditCardView 1줄(:168)·AIAssistant 2줄(:826 직렬화, :885 여유 실림 방지 가드). 옵셔널 지점(:476·:885)은
+  flatMap으로 nil≠매칭 의미 보존, :554·:168은 `?? .departure`로 "arr: 외 전부 출발" 삼항 의미 보존,
+  :168은 통째 줄이라 parseDatetime을 먼저 거치게 했다(형식 지식의 호출부 유출 방지).
+- **Claim**: AC-002·AC-003·AC-004 성립. AC-001은 EC 쪽(포매터 5벌·패턴 바이트 일치)만 성립 — EV의
+  `DateFormatter()` 1건 잔여는 M3이 만든다(이사의 나머지 절반).
+- **Evidence** (run 세션 직접 실행, 2026-09-20):
+  1. 가드 드라이버 신선 컴파일 2회(정예 전후) — 모두 **205/205 통과**, exit=0,
+     `Tools/GuardDriver.swift` diff 무변경(단언 추가 0건, REQ-012). 경고는 LocationManager·
+     PlaceSearch·DirectionsService의 기존 툴체인 deprecation뿐(본 카드 무관).
+  2. 패딩 실측(앱 실제 객체 — `Tools/padmain.swift` @main 스크래치로 드라이버 집합 컴파일 뒤 측정·삭제):
+     `full: 9월 17일 (목) 오후 3시 05분` · `clock: 오후 3시 05분` · `when: 9월 17일 (목) 오후 3시 5분` ·
+     `compact: 9/17 (목) 오후 3시 05분` · `shortTimeFmt(패턴): 오후 3:05` — AC-002 기대 표와 전건 일치.
+  3. 세는 신호: 접두비교 grep **2**(AIAssistant:893 인자키·EditCard 라벨 조립 — 삽입로 :139→:178,
+     0.1.1 기록), 삼항 grep **0**, EC `DateFormatter()` **5**·EV **3**(M3 전), EC `stepTime|shortTime`
+     **0**, `^import SwiftUI` EC **0**, `func anchor(ofPrefix:` **1**·`func prefix(for` **1**(정정 명령).
+  4. `git diff --stat` — 소스 4종(EditCard +39·AddEventView 5줄·EditCardView 1줄·AIAssistant 2줄).
+     치환 3파일이 열거 8줄만 담는 것을 줄 수로 확인(REQ-041).
+- **Gaps**: 화면 호출부(:179·:201)가 `BesirTime.full`·`clock`을 가리키는 것은 M3이 바꾼 뒤 AC-001.3으로
+  닫는다. 화면 표기의 눈 확인은 AC-009(리드).

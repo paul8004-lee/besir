@@ -322,7 +322,7 @@ struct AddEventView: View {
         guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }),
               let chosen = c.fields[i].chosen,
               let parsed = BesirTime.parseDatetime(chosen) else { return }
-        c.fields[i].chosen = (basis == .arrival ? "arr:" : "dep:")
+        c.fields[i].chosen = BesirTime.prefix(for: basis)
             + BesirTime.isoFormatter.string(from: parsed.date)
         card = c
         syncFieldExtras()
@@ -332,7 +332,7 @@ struct AddEventView: View {
     @discardableResult
     private func chooseTime(field: UUID, basis: ScheduleAnchor, date: Date) -> Bool {
         guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return false }
-        c.fields[i].chosen = (basis == .arrival ? "arr:" : "dep:")
+        c.fields[i].chosen = BesirTime.prefix(for: basis)
             + BesirTime.isoFormatter.string(from: date)
         card = c
         syncFieldExtras()
@@ -473,7 +473,7 @@ struct AddEventView: View {
         }
         if let ti = c.fields.firstIndex(where: { $0.key == "arrival_iso" }) {
             let parsed = c.fields[ti].chosen.flatMap(BesirTime.parseDatetime)
-            let departureAnchored = parsed?.prefix == "dep:"
+            let departureAnchored = parsed.flatMap { BesirTime.anchor(ofPrefix: $0.prefix) } == .departure
             // 안내 문안 두 개는 옛 화면의 캡션 그대로 — 기준을 아직 안 골랐을 때는 도착 편 문안
             var note = departureAnchored
                 ? "출발 시각을 기준으로 도착 시각을 순산합니다(귀가처럼 출발이 우선일 때). 버퍼는 적용되지 않습니다."
@@ -528,7 +528,7 @@ struct AddEventView: View {
         else { return [] }
         let buffer = Double(field("buffer_minutes")?.chosen.flatMap { Int($0) } ?? 0) * 60
         let dep: Date, arr: Date
-        if parsed.prefix == "arr:" {
+        if BesirTime.anchor(ofPrefix: parsed.prefix) == .arrival {
             arr = parsed.date
             dep = parsed.date.addingTimeInterval(-secs - buffer)
         } else {
@@ -551,7 +551,7 @@ struct AddEventView: View {
         let title = field("title")?.chosen ?? ""
         // parsed가 "기준 시각"이다 — anchor == .arrival이면 도착 시각, .departure면 출발 시각이고
         // store의 arrivalDate 파라미터는 기준 시각을 받아 안에서 방향에 맞게 처리한다.
-        let anchor: ScheduleAnchor = parsed.prefix == "arr:" ? .arrival : .departure
+        let anchor: ScheduleAnchor = BesirTime.anchor(ofPrefix: parsed.prefix) ?? .departure
         let mode = field("mode")?.chosen.flatMap(TransportMode.init(rawValue:)) ?? .transit
         let bufferMinutes = field("buffer_minutes")?.chosen.flatMap { Int($0) } ?? 0
         // 알림 줄이 꺼져서 없으면 화면이 기억한 마지막 값을 쓴다(REQ-022(b))

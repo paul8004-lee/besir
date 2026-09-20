@@ -31,6 +31,24 @@ import Foundation
         return f
     }()
 
+    /// 상세 화면 헤더의 완전한 표기("9월 17일 (목) 오후 3시 05분"). `when`과 패딩만 다른
+    /// 쌍둥이인데 mm을 m으로 통일하면 "05분"의 0이 사라진다 — EventDetailView에서 이사해 온
+    /// 그대로이고 한 글자도 다시 쓰지 않는다(SPEC-UIKIT-004 REQ-001).
+    static let full: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M월 d일 (E) a h시 mm분"
+        return f
+    }()
+
+    /// 하루 안의 시각만("오후 3시 05분") — 출발 시각 큰 숫자가 쓴다. 이사 본체, 패턴 불변.
+    static let clock: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "a h시 mm분"
+        return f
+    }()
+
     /// 카드가 확정한 시각의 왕복 형식 — 쓰기(직렬화)와 읽기(accepts·재확정)가 같은 포매터를
     /// 쓴다. 형식 문자열이 두 벌이 되면 한쪽만 고쳐지는 날이 온다(렌더링·히트테스트가 어긋났던
     /// 그 모양). 실행부의 parseDate가 받는 형식이기도 하다.
@@ -51,6 +69,27 @@ import Foundation
             }
         }
         return nil
+    }
+
+    /// 접두("arr:"/"dep:")와 도착·출발 기준을 잇는 매핑의 유일한 집 — 폼·AI 카드·컴포넌트가
+    /// 제각각 삼항으로 알던 모양이 이 매핑의 계약 5 위반이었다. 몸통을 switch로 쓰는 것은
+    /// 소유자 자신이 세는 신호(잔여 비교·삼항 grep)를 깨뜨리지 않기 위해서고, 커밋된 줄을
+    /// 통째로 물어온 호출부는 parseDatetime을 먼저 거치게 한다(형식 지식이 호출부에 새는 것을
+    /// 막는다 — 잘못된 값은 nil로, 삼항 시절의 "나머지 전부 출발"이 아니라).
+    static func anchor(ofPrefix: String) -> ScheduleAnchor? {
+        switch ofPrefix {
+        case "arr:": return .arrival
+        case "dep:": return .departure
+        default: return nil
+        }
+    }
+
+    /// anchor(ofPrefix:)의 역방향 — 직렬화하는 세 곳(폼 두 곳·AI 보류 턴)이 공유한다.
+    static func prefix(for anchor: ScheduleAnchor) -> String {
+        switch anchor {
+        case .arrival: return "arr:"
+        case .departure: return "dep:"
+        }
     }
 }
 

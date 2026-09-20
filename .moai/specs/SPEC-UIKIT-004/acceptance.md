@@ -68,7 +68,9 @@
   2. `grep -rn '? "arr:" : "dep:"' Shared/*.swift` = **0** — 기준→접두 삼항이 전부
      `BesirTime.prefix(for:)`로 갔다.
   3. `BesirTime.anchor(ofPrefix:)`·`prefix(for:)`가 `EditCard.swift`에 정확히 한 벌씩 있고
-     `ScheduleAnchor`를 주고받는다 — `grep -c 'func anchor(ofPrefix:\|func prefix(for:' Shared/EditCard.swift` = 각 1.
+     `ScheduleAnchor`를 주고받는다 — `grep -c 'func anchor(ofPrefix:' Shared/EditCard.swift` = 1,
+     `grep -c 'func prefix(for' Shared/EditCard.swift` = 1. (0.1.1 정정: `for`는 키워드라
+     `func prefix(for:` 꼴은 관용 서명 `prefix(for anchor:)`과 공존할 수 없다 — 접두 일치로 잰다.)
   4. 치환 3개 파일(`AddEventView`·`EditCardView`·`AIAssistant`)의 diff가 **열거된 8줄만**
      담는다 — 줄 추가·삭제로 인접 인용이 밀리지 않았다(AC-008 2과 연결).
 

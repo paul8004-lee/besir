@@ -823,7 +823,7 @@ final class AIAssistant: ObservableObject {
     /// 시각은 확정되지 않으므로 확인 버튼이 그대로 잠긴다).
     @discardableResult
     func chooseTime(field: UUID, basis: ScheduleAnchor, date: Date) -> Bool {
-        submitCustom(field: field, text: (basis == .arrival ? "arr:" : "dep:")
+        submitCustom(field: field, text: BesirTime.prefix(for: basis)
             + Self.isoFormatter.string(from: date))
     }
 
@@ -882,7 +882,7 @@ final class AIAssistant: ObservableObject {
                 // 확인 버튼이 막히지 않게 한다(교착 방지).
                 if f.kind == .buffer,
                    let time = ask.fields.first(where: { $0.kind == .datetime })?.chosen,
-                   Self.parseDatetime(time)?.prefix == "dep:" { continue }
+                   Self.parseDatetime(time).flatMap({ BesirTime.anchor(ofPrefix: $0.prefix) }) == .departure { continue }
                 switch f.kind {
                 case .buffer, .notify, .weeks: args[f.key] = Int(chosen) ?? 0
                 case .place, .mode, .title, .toggle: args[f.key] = chosen

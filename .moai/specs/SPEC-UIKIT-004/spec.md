@@ -23,6 +23,7 @@ kanban_card: t4
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-20 | 최초 작성. 루트 `plan.md` §Phase 1.7의 t4 행을 GEARS로 정식화 — t2a(SPEC-UIKIT-002)가 2026-09-18 분할 때 예약해 둔 카드다. 인용 줄번호는 `9e4a374`(= `origin/master`, t2a 머지 직후) 실측. 작성 경위 특이: plan 세션의 Agent 스폰이 불가해(세션 팀 파일 오류, `progress.md` §F.1) manager-spec 위임 대신 orchestrator-direct로 작성했고, 설계 교차협의·독립 감사를 GLM(z.ai) 백엔드로 대체 수행했다. 리드 디스패치의 "접두↔기준 매핑 5곳"은 t2a 종료 시점 AddEventView 내 5곳 셈이고 본 SPEC은 현 트리 전수 **10곳**(§1.3)을 기준으로 삼는다 — 숫자 차이를 숨기지 않고 세는 명령과 함께 기록 |
+| 0.1.1 | 2026-09-20 | 측정 정정(run M2). AC-003.3의 세는 grep `func prefix(for:`은 관용 Swift 서명과 공존할 수 없다 — `for`는 키워드라 `prefix(for:)` 단일 이름 서술이 불가하고 실제 서명은 `prefix(for anchor:)`가 되므로, 접두 일치 `func prefix(for`로 정정한다. `anchor(ofPrefix:`는 단일 이름으로 원문 grep 그대로 성립. 또한 EditCard 신규 멤버 삽입로 유지 2곳 중 `EditCard.swift:139`(라벨 조립)는 **:178**로 밀렸다(§1.4 예고대로 — CHECKLIST 인용 2건은 sync가 바이트 대조로 수리). |
 
 ## 0. 이 SPEC의 성격
 

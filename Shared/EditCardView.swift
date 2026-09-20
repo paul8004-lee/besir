@@ -165,7 +165,7 @@ struct EditCardView: View {
     /// 시각 줄의 현재 기준. 커밋된 값이 있으면 그 접두가 정답이고, 없으면 사용자가 방금 탭한
     /// 임시값이다(처음엔 둘 다 없다 — 기준은 미리 골라두지 않는다).
     private func currentBasis(_ field: EditField) -> ScheduleAnchor? {
-        if let chosen = field.chosen { return chosen.hasPrefix("arr:") ? .arrival : .departure }
+        if let chosen = field.chosen { return BesirTime.parseDatetime(chosen).flatMap { BesirTime.anchor(ofPrefix: $0.prefix) } ?? .departure }
         return draftBasis[field.id]
     }
 
