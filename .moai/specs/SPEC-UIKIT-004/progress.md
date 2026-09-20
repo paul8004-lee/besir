@@ -301,7 +301,7 @@ acceptance.md 판정 칸은 sync에서 닫는다(t2a 전례 — 본 기록이 �
 
 sync_status: audit-ready — **sync 단계 종료(3-phase close, 단일 sync 커밋)**
 sync_complete_at: 2026-09-20
-sync_commit_sha: (본 커밋 — 백필 커밋으로 기입)
+sync_commit_sha: d6671ee
 
 ### 게이트 — sync lane이 HEAD에서 다시 실측 (t1·t2a sync 전례: 귀속 문제 예방)
 
