@@ -19,6 +19,18 @@ import Foundation
     }()
     static func when(_ d: Date) -> String { whenFormatter.string(from: d) }
 
+    /// 배너가 두 시각을 "~"로 잇는 데 쓰는 좁은 표기("9/17 (목) 오후 3시 05분"). `when`으로
+    /// 흡수하지 않는 이유는 폭이다 — 실측 결과 `when`("9월 17일 (목) 오후 3시 5분")은 이보다
+    /// 길어, ConflictBanner가 두 문자열을 이어 붙이면 줄바꿈이 깨진다(SPEC-UIKIT-002 REQ-023).
+    /// static let인 이유: 옛 AddEventView의 depFmt는 계산 프로퍼티라 접근할 때마다 포매터를
+    /// 새로 만들어 한 차례 재렌더에 최대 세 번 할당했다.
+    static let compact: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ko_KR")
+        f.dateFormat = "M/d (E) a h시 mm분"
+        return f
+    }()
+
     /// 카드가 확정한 시각의 왕복 형식 — 쓰기(직렬화)와 읽기(accepts·재확정)가 같은 포매터를
     /// 쓴다. 형식 문자열이 두 벌이 되면 한쪽만 고쳐지는 날이 온다(렌더링·히트테스트가 어긋났던
     /// 그 모양). 실행부의 parseDate가 받는 형식이기도 하다.
@@ -78,7 +90,10 @@ import Foundation
     let key: String
     let kind: Kind
     let label: String
-    let options: [Option]
+    /// 칩의 소요시간(detail)은 이동시간 계산이 돌아온 뒤 소유 화면이 채운다 — 그때 줄을 통째로
+    /// 새로 만들면 id가 바뀌어 줄 에디터의 지역 상태가 흩어지므로(REQ-021), 배열째 제자리에서
+    /// 고칠 수 있어야 한다.
+    var options: [Option]
     /// 칩만으로 모든 값을 열거할 수 없는 줄에만 붙인다. 이동수단은 세 칩이 곧 전체 집합이라
     /// 붙이지 않는다(승인된 카드 형태 그대로 — 직접입력이 없어도 못 고르는 값이 없다).
     let allowsCustom: Bool

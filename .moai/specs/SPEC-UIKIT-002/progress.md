@@ -4,6 +4,10 @@ card: t2 · worktree `.claude/worktrees/t2` · branch `WT-ui-unify-2`
 base: 로컬 master(t1 sync 직후) — plan 커밋 `bf28cdf` 시점 `Shared/`·`Tools/`가 인용 기준 `434610e`와
 무변경임을 run lane이 `git diff --stat 434610e..bf28cdf -- Shared/ Tools/`로 확인(출력 없음).
 plan-phase 커밋: `bf28cdf` (SPEC v0.1.0, Tier M, REQ 14 / AC 9)
+run-phase 커밋: `59efd0b` (M2·M3, 2026-09-20) — M4 에이전트가 2026-09-18 16:55 API 사용량
+한도(429)로 중단된 뒤 lead의 이어받기 디스패치(2026-09-20)로 재개하며, "다시 끊겨도 작업이
+사라지지 않게" 마일스톤별 커밋 규율이 들어왔다. M2·M3은 이미 한 트리로 검증돼 있어 한 커밋으로
+묶고 그 이유를 커밋 메시지에 적었다(게이트 증거 205/205·빌드가 정확히 이 조합 트리에 귀속).
 run-phase 세션: run lane (session f39b95e2), 2026-09-18 디스패치 (운영자 run 진입 승인 완료)
 
 ## §E.1 Plan-phase Audit-Ready Signal
@@ -84,3 +88,38 @@ M2 표면 → M3 정책 → M4 전환 본체 → M5 대조가 연속 의존이�
   `350_000_000` 대신 "350ms"를 써 grep 게이트 합계를 지킴.
 - **Gaps**: 350ms 체감·타이핑 손감은 기기 확인 영역(AC-009, 리드). 폼 화면의 두 번째 사용처는
   M4가 만들며, 그 때 비로소 "공용"이 실제로 둘을 괸다.
+
+### M4 — AddEventView 전환 (REQ-020~023 / AC-004·005) ✅
+
+구현: `swift-impl` 전문가(2026-09-18 429 중단 → 2026-09-20 이어받기, 수정 패치 1회).
+검증: 전문가 빌드·프록시 + run lane 전수 독검.
+
+- **변경**: `Shared/AddEventView.swift` 전면 전환(+448/−395) — `@State` 8개만 남김(`card`·
+  `confirmedPlaces`·`estimates`·`estimating`·`saving`·`lastNotifyLead`·`calendarDefault`·
+  `placeDebounce`), 폼 값 11개·`canSave`·`depFmt`·`didLoadEditing` 제거. `Shared/EditCard.swift` —
+  `BesirTime.compact`(static let, "M/d (E) a h시 mm분") + **`options` let→var(HISTORY 0.1.2 승인 이탈)**.
+  게이트 줄(시각·수단·여유·알림 토글·리드·캘린더)은 필드 멤버십으로 조건화, 편집 프리필은 이벤트
+  값으로 seed, 좌표는 탭 순간 확정, ConflictBanner는 화면 소유 유지+`.combine` 낭독, 재계산 컨트롤
+  글자 라벨 획득.
+- **Claim**: AC-004 다섯 조건 + AC-005 다섯 조건 성립.
+- **Evidence** (전문가 실행, 수정 패치 후 재실시 포함):
+  1. iOS·macOS `** BUILD SUCCEEDED **`, exit=0, 툴체인 필터 후 경고 0건.
+  2. `grep -c '@State'` = **8**(전부 화면 소유), `canSave` = **0**, `DateFormatter()` = **0**.
+  3. `EditCard(` 생성부 grep 1곳(`buildCard`) — `.task`의 `guard card == nil`로 정확히 한 번,
+     이후 제자리 수정·삽입/제거만. `AIAssistant`·`AIChatView`·`EditCardView`·`Tools/`는 HEAD(59efd0b)와
+     바이트 동일.
+  4. 프록시 `npm test` **7/7 통과**(REQ-040(c)).
+  5. REQ-021 (a)(b)(c)·REQ-022 (a)(b)(c)(d) 절 자기검토 **8/8 PASS** + run lane 전수 독검 일치.
+- **수정 패치(1회, run lane 지시)**: save() 조용한 no-op 창(≤5초) 제거 — 위치 없이 "현재 위치"
+  표식을 탭하면 chosen을 남기지 않아 `isReady` 잠금이 유지된다(원본이 제출 판정 식으로 잠그던
+  관측 계약 복원). 첫 패치에서 why-주석이 'canSave' 문자열을 담아 grep을 오염시킨 것을 전문가가
+  자가 포착해 문구를 고치고 전 검증을 재실행했다.
+- **판단 기록(run lane 승인, 리드 보고에 명시)**: ① `options` let→var — 제자리 `detail` 갱신의
+  유일한 경로(재구성은 `id = UUID()` 재발급으로 REQ-021(a) 위반) ② 편집 모드 startsOpen=false
+  (REQ-003 취지 — 값 있는 줄 아래 빈 입력칸 방지) ③ prefillOrigin 대기 중 재확인 1줄(원본의
+  덮어쓰기 버그 경로만 좋아짐 — 29절 #29에 기록) ④ 줄 라벨은 원본·AI 문구 혼합(ui-design 검토 대기).
+- **잔여 관측 차이(문서화, AC-006 대조에서 절별 판정)**: 시각 줄 note는 커밋된 기준만 따름
+  (draft 기준은 순수 값 뷰가 못 본다 — 휴면 계약의 반대편 제약). 출발지 검색이 상시 필드가 아닌
+  "장소 검색" 칩 뒤로(1탭 추가). 검색 ≥2글자 가드 소멸(공용 디바운서 정책에 글자수 가드 없음 —
+  AI 카드와의 통일). 시각 미확정 저장 불가(판정이 isReady로 — SPEC 승인).
+- **Gaps**: 렌더링·제스처·낭독은 AC-009(리드). `ui-design` 검토 통과 1회가 M5 전에 남아 있다.

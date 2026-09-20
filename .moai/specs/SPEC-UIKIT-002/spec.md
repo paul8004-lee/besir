@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-002
 title: "AddEventView를 편집 카드 컴포넌트로 전환 + 장소 검색 디바운서 단일화 (UI 통일 2a)"
-version: "0.1.1"
+version: "0.1.2"
 status: draft
 created: "2026-09-18"
 updated: "2026-09-18"
@@ -24,6 +24,7 @@ kanban_card: t2
 |---|---|---|
 | 0.1.0 | 2026-09-18 | 최초 작성. 루트 `plan.md` §Phase 1.7의 t2를 GEARS로 정식화. **범위는 카드 분할 뒤의 2a**다 — 운영자가 2026-09-18 A안(분할)을 확정해 `EventDetailView`는 카드 t4(`SPEC-UIKIT-003` 아님 — 별도 SPEC)로 빠졌고, 그 대신 장소 검색 디바운서 단일화가 본 SPEC에 들어왔다. 인용 줄번호는 `434610e`(= `origin/master`, t1 머지 직후) 실측. 작성 중단 후 이어받은 plan 세션이 같은 날 전수 재실측해 **5건 바로잡음** — `Kind` `:60→:59`, t1 별칭의 소유 파일(=`AIAssistant.swift:31-32`, 컴포넌트 아님), `parseDatetime` `:36-44→:35-42`, `setLookup` 인용(호출 `:769`·`:773`·`:782`, `:755`는 `maxPlaceSuggestions` 선언), 칩 경로 `:93-104→:88-104` |
 | 0.1.1 | 2026-09-18 | run(M2) 중 재실측 — `Kind`의 전수 switch가 세 곳이 아니라 **네 곳**(`AIAssistant.swift:890-900`, 보류 턴 인자 채우기 — swift-impl 전문가가 발견, 런 세션이 재검증)임을 정정. REQ-001에 네 번째 가지(`:892` 나열)를, REQ-041에 그 가지의 좁은 예외 절을 반영. D-3 해소 기록((i) 운영자 확정, lead 디스패치) 포함. 측정 오류 정정이지 요구사항 변화가 아니다 |
+| 0.1.2 | 2026-09-20 | run(M4) 중 이탈 1건 승인·기록 — `EditField.options`를 `let`→`var`로. REQ-021(a)의 "원소를 제자리에서 고친다"(모드 칩의 `Option.detail` 갱신)가 `let` 배열로는 컴파일 불가능하고, 유일한 대안인 `EditField` 재구성은 `id = UUID()`가 새로 생겨 카드 정체성 계약 자체를 깬다. 멤버와이즈 시그니처는 그대로라 기존 생성부 무변경(REQ-002 유지). run lane이 승인하고 lead 완료 보고에 띄운다 |
 
 ## 0. 이 SPEC의 성격
 
