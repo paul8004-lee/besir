@@ -14,14 +14,6 @@ struct EventDetailView: View {
         store.events.first { $0.id == passedEvent.id } ?? passedEvent
     }
 
-    private static let fullFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "M월 d일 (E) a h시 mm분"; return f
-    }()
-    private static let timeFmt: DateFormatter = {
-        let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR")
-        f.dateFormat = "a h시 mm분"; return f
-    }()
     /// 경로 안내 단계 옆에 붙는 짧은 시각("오후 3:05").
     private static let shortTimeFmt: DateFormatter = {
         let f = DateFormatter(); f.locale = Locale(identifier: "ko_KR")
@@ -36,6 +28,9 @@ struct EventDetailView: View {
     @State private var showingDeleteMenu = false
     @State private var showingDeleteConfirm = false
     @State private var addingToCalendar = false
+
+    /// 38pt 고정은 큰 글씨를 무시한다(D-4 9번) — 출발 숫자가 본문과 함께 자라게 한다.
+    @ScaledMetric(relativeTo: .largeTitle) private var departureTimeSize: CGFloat = 38
 
     private var destCoord: CLLocationCoordinate2D {
         CLLocationCoordinate2D(latitude: event.destination.latitude, longitude: event.destination.longitude)
@@ -56,7 +51,10 @@ struct EventDetailView: View {
 
                 mapView
                     .frame(height: 280)
+                    // 지도 클립은 크롬이 아니라 콘텐츠 경계다 — Theme.radius(3)를 얹으면 280pt
+                    // 이미지가 사각형과 구분되지 않는다(D-4 2번 유지 판정).
                     .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityLabel("\(event.destination.name) 지도")
 
                 departureCard
 
@@ -113,7 +111,7 @@ struct EventDetailView: View {
             if store.googleConnected {
                 if event.googleEventId != nil {
                     Label("구글 캘린더에 등록됨", systemImage: "checkmark.circle.fill")
-                        .font(.callout).foregroundStyle(.green)
+                        .font(.callout).foregroundStyle(Theme.travel)
                 } else if event.calendarUpload == .pending {
                     Label(CalendarUploadState.pending.title,
                           systemImage: CalendarUploadState.pending.systemImage)
@@ -174,10 +172,10 @@ struct EventDetailView: View {
             Label(event.destination.name, systemImage: "flag.fill")
                 .font(.title2).bold()
             if !event.destination.address.isEmpty {
-                Text(event.destination.address).foregroundStyle(.secondary)
+                Text(event.destination.address).foregroundStyle(Theme.muted)
             }
-            Label("도착 \(Self.fullFmt.string(from: event.arrivalDate))", systemImage: "clock")
-                .font(.callout).foregroundStyle(.secondary)
+            Label("도착 \(BesirTime.full.string(from: event.arrivalDate))", systemImage: "clock")
+                .font(.callout).foregroundStyle(Theme.muted)
         }
     }
 
@@ -194,24 +192,30 @@ struct EventDetailView: View {
                     Spacer()
                 }
                 Divider()
-                HStack(alignment: .firstTextBaseline) {
-                    Text("출발 시각")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(Self.timeFmt.string(from: dep))
-                        .font(.system(size: 38, weight: .bold, design: .rounded))
-                        .foregroundStyle(isPast ? .red : .green)
+                Group {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("출발 시각")
+                            .foregroundStyle(Theme.muted)
+                        Spacer()
+                        Text(BesirTime.clock.string(from: dep))
+                            .font(.system(size: departureTimeSize, weight: .bold, design: .rounded))
+                            .foregroundStyle(isPast ? Theme.nowLine : Theme.travel)
+                    }
+                    if isPast {
+                        Text("⚠️ 이미 출발 시각이 지났습니다.")
+                            .font(.caption).foregroundStyle(Theme.warn)
+                    } else {
+                        Text("출발까지 \(relativeText(to: dep)) 남음 · \(event.notifyLeadMinutes)분 전 알림 예약됨")
+                            .font(.caption).foregroundStyle(Theme.muted)
+                    }
                 }
-                if isPast {
-                    Text("⚠️ 이미 출발 시각이 지났습니다.")
-                        .font(.caption).foregroundStyle(Theme.warn)
-                } else {
-                    Text("출발까지 \(relativeText(to: dep)) 남음 · \(event.notifyLeadMinutes)분 전 알림 예약됨")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
+                // 시각과 상태 캡션을 한 덩어리로 낭독한다(REQ-023) — 따로 읽히면 "언제"와 "얼마나
+                // 남았는지"가 갈라져 한 번에 이해되지 않는다.
+                .accessibilityElement(children: .combine)
             }
             .padding(18)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
         } else {
             Label("이동시간을 계산하지 못했습니다. (출발지/대중교통 정보 확인)",
                   systemImage: "exclamationmark.triangle")
@@ -231,7 +235,7 @@ struct EventDetailView: View {
                     Spacer()
                     if event.departureDate != nil {
                         Text("예상 시각")
-                            .font(.caption).foregroundStyle(.secondary)
+                            .font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
                 .padding(.bottom, 6)
@@ -243,11 +247,12 @@ struct EventDetailView: View {
                 }
 
                 Text("ODsay 실시간 시간표가 아닌 평균 소요시간 기준 예상값입니다.")
-                    .font(.caption2).foregroundStyle(.tertiary)
+                    .font(.caption2).foregroundStyle(Theme.faint)
                     .padding(.top, 8)
             }
             .padding(18)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 14))
+            .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
+            .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
         }
     }
 
@@ -261,7 +266,7 @@ struct EventDetailView: View {
                     .background(Color(hex: step.color), in: Circle())
                 if !isLast {
                     Rectangle()
-                        .fill(.quaternary)
+                        .fill(Theme.line)
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
                 }
@@ -270,7 +275,7 @@ struct EventDetailView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(step.headline).font(.callout).bold()
-                Text(step.detail).font(.caption).foregroundStyle(.secondary)
+                Text(step.detail).font(.caption).foregroundStyle(Theme.muted)
             }
             .padding(.top, 3)
 
@@ -279,10 +284,13 @@ struct EventDetailView: View {
             if let time {
                 Text(Self.shortTimeFmt.string(from: time))
                     .font(.caption).monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Theme.muted)
                     .padding(.top, 5)
             }
         }
+        // 헤드라인과 예상 시각을 함께 읽는다(REQ-023) — 시각만 따로 읽히면 어느 단계의 시각인지
+        // 알 수 없다.
+        .accessibilityElement(children: .combine)
     }
 
     /// index번째 단계가 시작되는 예상 시각 = 출발 시각 + 앞선 단계들의 소요시간 합.
@@ -306,7 +314,7 @@ struct EventDetailView: View {
             row("알림", "출발 \(event.notifyLeadMinutes)분 전")
             if event.recurrenceId != nil {
                 Label("반복 일정", systemImage: "repeat")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Theme.muted)
             }
             HStack {
                 Spacer()
@@ -322,6 +330,11 @@ struct EventDetailView: View {
             }
             .padding(.top, 8)
         }
+        // 상세행 블록도 같은 카드 문법으로 감싼다(D-4 8번) — 섹션이 카드인 화면에서 벌거벗은
+        // 블록은 예외적 모습이다. 내용·순서는 무변경이다.
+        .padding(18)
+        .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
+        .overlay(RoundedRectangle(cornerRadius: Theme.radius).stroke(Theme.line))
         .confirmationDialog("반복 일정을 어떻게 삭제할까요?", isPresented: $showingDeleteMenu, titleVisibility: .visible) {
             Button(event.recurrenceId != nil ? "전체 반복 일정 삭제" : "같은 제목 일정 모두 삭제(\(sameTitleEvents.count)건)",
                    role: .destructive) {
@@ -349,7 +362,7 @@ struct EventDetailView: View {
 
     private func row(_ k: String, _ v: String) -> some View {
         HStack {
-            Text(k).foregroundStyle(.secondary)
+            Text(k).foregroundStyle(Theme.muted)
             Spacer()
             Text(v).bold()
         }

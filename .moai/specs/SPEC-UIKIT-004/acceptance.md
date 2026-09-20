@@ -88,8 +88,9 @@
 - **When** 크롬 패스가 끝나면
   1. `grep -c 'thinMaterial' Shared/EventDetailView.swift` = **0**; 컨테이너 3곳(출발 카드·
      여정·상세행 신규)이 `Theme.raised` + `Theme.radius` + `Theme.line` 스트로크 문법이다.
-  2. `grep -c '\.secondary\|\.tertiary\|\.quaternary\|\.red\|\.green' Shared/EventDetailView.swift`
+  2. `grep -cE '\.secondary|\.tertiary|\.quaternary|\.red[^u]|\.green' Shared/EventDetailView.swift`
      = **0** — 예외는 D-4 변경 금지 목록뿐(`.white` 글리프·`Color(hex:)` 노선색·`Theme.bg`).
+     (0.1.2 정정: `\.red`는 원본의 `.reduce(0)`에 오탐한다 — `[^u]`로 제외.)
   3. 지도 클립(`:59` 근방)은 `cornerRadius: 12` 유지 + 유지 사유 주석(D-4 표 2번).
   4. 출발 숫자가 `@ScaledMetric` 상대 크기(D-4 표 9번) — 큰 글씨에서 38pt 고정이 아니라
      함께 자란다(AC-009 시뮬레이터 10번).

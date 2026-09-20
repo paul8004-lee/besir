@@ -142,3 +142,38 @@ RED 신규 작성 없음(SPEC 계약이 우선하는 지점을 여기에 기록�
      치환 3파일이 열거 8줄만 담는 것을 줄 수로 확인(REQ-041).
 - **Gaps**: 화면 호출부(:179·:201)가 `BesirTime.full`·`clock`을 가리키는 것은 M3이 바꾼 뒤 AC-001.3으로
   닫는다. 화면 표기의 눈 확인은 AC-009(리드).
+
+### M3 — EventDetailView 크롬 패스 (REQ-001 나머지·REQ-020~023 / AC-001 ✅·AC-005 ✅·AC-007 ✅) ✅
+
+구현: orchestrator-direct. 검증: grep 신호 전종 + 최종 트리 양쪽 빌드 무경고.
+
+- **정예 0.1.2 경위(첫 색 실측 2 → 해소)**: 연결선 `.fill(.quaternary)`→`Theme.line` 치환이 첫 패스에
+  누락돼 첫 실측이 2로 나왔다 — 자리를 완성해 0으로 닫았고, 남은 1건은 원본부터 있던
+  `.reduce(0)`(stepStartTime)의 `\.red` 오탐이라 신호를 `\.red[^u]`로 정정했다(spec HISTORY 0.1.2·
+  REQ-021·AC-005.2). review-1이 주석으로 예고했던 오탐이다.
+- **변경**(`EventDetailView.swift` 377→390줄):
+  - 컨테이너 3곳(REQ-020): 출발 카드·대중교통 여정의 `.thinMaterial`/14 → `Theme.raised`+`Theme.radius`+
+    `Theme.line` 스트로크(EditCardView:63-64 문법 그대로, padding 18은 이 화면 값으로 유지), 상세행
+    블록을 같은 카드로 신규 감쌈(내용·순서 무변경, D-4 8번).
+  - 색 13곳(REQ-021): `.secondary` 9→`Theme.muted`, `.tertiary` 1(ODsay 주의문)→`Theme.faint`,
+    `.quaternary` 1(연결선)→`Theme.line`, 출발 숫자 `isPast ? .red : .green`→`Theme.nowLine`/`Theme.travel`,
+    구글 등록됨 체크 `.green`→`Theme.travel`. 예외 유지: `.white` 글리프·`Color(hex:)` 노선색·`Theme.bg`.
+  - 포매터(REQ-001 뒷절): `fullFmt`·`timeFmt` 블록 삭제, 호출부 `:179`→`BesirTime.full`·`:201`→
+    `BesirTime.clock`. `shortTimeFmt`는 주석 그대로 로컬 유지(REQ-002).
+  - 접근성 순증(REQ-023): 출발 시각+상태 캡션 `Group`+`.accessibilityElement(children: .combine)`,
+    stepRow 헤드라인+예상 시각 `.combine`, 지도 `.accessibilityLabel("\(목적지) 지도")`. 38pt 고정 →
+    `@ScaledMetric(relativeTo: .largeTitle)`(D-4 9번).
+  - 지도 클립 12 유지 + 유지 사유 주석(D-4 2번).
+- **Claim**: AC-001(전 3조건 — EV `DateFormatter()`=1·EC=5·호출부 BesirTime 지목)·AC-005(grep 4종)·
+  AC-007(편집 컨트롤 0·시트 위임 무변경) 성립.
+- **Evidence** (run 세션 직접 실행, 2026-09-20):
+  1. grep: `thinMaterial` **0**, 색 신호 **0**(0.1.2 정정 패턴), 컨테이너 문법 **3**, EV `DateFormatter()`
+     **1**·EC **5**, `accessibility|@ScaledMetric` **4**(0에서 순증), `TextField|Stepper|Toggle(|Picker(`
+     **0**, `BesirTime.full|clock` 호출부 **2**.
+  2. 빌드(최종 트리): iOS `** BUILD SUCCEEDED **` exit=0·macOS 동일 — 비-툴체인 warning **0건**
+     (`grep "warning:" | grep -v appintentsmetadataprocessor` 빈 출력). 1차 초록(치환 누락 수정 전) 후
+     정옐 0.1.2 수정이 들어가 최종 트리에서 재측정했다. 재측정 첫 회가 exit 66으로 실패한 것은 프록시
+     호출의 `cd` 오염으로 `proxy/`에서 빌드가 시작된 것(t2a sync 정정 ②와 같은 함정) — 각 명령이 자기
+     `cd`를 스스로 쓰는 형태로 재실행해 초록. 컴파일 오류는 아니었다.
+  3. 프록시 `npm test` **7/7**(M3은 프록시 무관 — 게이트만).
+- **Gaps**: 카드 질감·대비·큰 글씨 자람·낭독은 화면 증거 영역 — AC-009(리드, 시뮬레이터 스크립트).
