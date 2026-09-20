@@ -1,8 +1,8 @@
 ---
 id: SPEC-UIKIT-004
 title: "EventDetailView 크롬 통일 + 시각 포매터·기준 매핑의 BesirTime 단일화 (UI 통일 2b)"
-version: "0.1.0"
-status: draft
+version: "0.1.4"
+status: completed
 created: "2026-09-20"
 updated: "2026-09-20"
 author: "plan-lane t4 (manager-spec 대행)"
@@ -26,6 +26,7 @@ kanban_card: t4
 | 0.1.1 | 2026-09-20 | 측정 정정(run M2). AC-003.3의 세는 grep `func prefix(for:`은 관용 Swift 서명과 공존할 수 없다 — `for`는 키워드라 `prefix(for:)` 단일 이름 서술이 불가하고 실제 서명은 `prefix(for anchor:)`가 되므로, 접두 일치 `func prefix(for`로 정정한다. `anchor(ofPrefix:`는 단일 이름으로 원문 grep 그대로 성립. 또한 EditCard 신규 멤버 삽입로 유지 2곳 중 `EditCard.swift:139`(라벨 조립)는 **:178**로 밀렸다(§1.4 예고대로 — CHECKLIST 인용 2건은 sync가 바이트 대조로 수리). |
 | 0.1.2 | 2026-09-20 | 측정 정정(run M3). REQ-021·AC-005.2의 색 신호에서 `\.red`가 원본부터 있던 `.reduce(0)`(stepStartTime 누적)에 오탐한다(review-1이 이미 주석으로 예고했던 것) — `\.red[^u]`로 정정. 또한 연결선 `.fill(.quaternary)`→`Theme.line` 치환이 첫 패스에서 누락돼 첫 실측이 2로 나온 것을 그 자리 완성으로 해소했다(치환 후 잔여 0). |
 | 0.1.3 | 2026-09-20 | 교차검토 정정(run M4 — spec-amender 문서 렌즈, CONDITIONAL-PASS 발견 6건 반영). ① REQ-020·D-4 #8의 감쌈 범위 `:302-348`이 삭제 단추·다이얼로그까지 삼켰다 — AC-006 8·9행의 분할(값 행만 감쌈)이 규범이므로 범위를 `:302-310`으로 좁혔고, 이미 넓게 구현돼 있던 run 트리를 같은 날 수정했다(삭제 단추 카드 밖 복원). ② AC-008 Given·spec-compact의 "7줄"은 오기 — 실측·REQ-041과 같은 **8줄**로 정정. ③ GLM 협의를 "수행"으로 서술한 HISTORY 0.1.0·D-4 제목을 "시도(전부 실패)"로 정정(관측 안 된 검증을 수행이라 적지 않는다). ④ AC 매트릭스 AC-005(REQ-022 제외)·AC-009(포괄 화면 증거 채널 표기) 정정. ⑤ REQ-012 Unwanted 문면을 "shall not"형으로. ⑥ plan §2에 옵셔널 적응 주의(:476·:885 flatMap, :554·:168 `?? .departure`) 추가. |
+| 0.1.4 | 2026-09-20 | **sync 단계 종료 — 3-phase close(`completed`).** ① 기계 게이트 4종을 sync lane이 HEAD(`347105d`)에서 다시 실측(드라이버 205/205·프록시 7/7·iOS·macOS 무경고) — 마지막 소스 커밋 `497fca5` 뒤는 문서 커밋뿐임을 `git diff --name-only`로 확인하고 귀속을 명확히 했다. ② 독립 렌즈(code-safety, `--security --deep`) 지정이었으나 **스폰 결함(기계 공통 — §F.1과 같은 오류)이 sync 세션에서도 재현**돼 직접 기계 렌즈로 대체 수행: 초점 6종(보안·await 무효화·조용한 실패·외부 한도·복제 계산·죽은 코드) 전부 회전, 확정 결함 **0건**(패턴 바이트 일치·진리표 보존·비동기 경로 무변경·새 상태 `@ScaledMetric` 1개뿐). ③ 루트 `CHECKLIST.md` 코드 근거 수리 — 이 카드가 민 `EditCard`(+39)·`EventDetailView`(재작성) 좌표 4곳 재매핑, 치환 3파일 제자리성은 numstat·바이트 대조로 확인(판정 불변·세는 값 불변). ④ AC 매트릭스 종결 — 9건 전부 ✅(AC-009는 시뮬레이터 9/10 + S4 렌더 확인·실기기 전용의 Day 이월 기록). 근거·이월은 `progress.md` §E.4. (frontmatter version은 run 정예 0.1.1~0.1.3이 HISTORY만 갱신한 채 남겨둔 것을 이 판에서 0.1.4로 환원했다.) |
 
 ## 0. 이 SPEC의 성격
 

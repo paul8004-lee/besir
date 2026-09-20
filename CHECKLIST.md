@@ -21,6 +21,16 @@
 사유 주석(:1820)은 **이 카드 이전부터 틀어져 있던 인용**을 바로잡은 것이다. 판정은 한 칸도 건드리지
 않았다(✅ 102·⚠️ 8·❌ 2 — 옛판과 동일). 다른 파일(`Store.swift` 등) 인용은 보호했다.
 
+**줄번호 기준선 (2026-09-20, 카드 t4 / `SPEC-UIKIT-004`, sync).** `EventDetailView` 크롬 통일·`BesirTime`
+이사로 민 인용을 다시 맞췄다. `EditCard.swift`의 신규 멤버 삽입(+39 — 두 헝크, 옛 33·54 뒤)이 350ms 상수와
+같은 질의 스킵을 **:234→:273·:257→:296**으로 밀었고(P4 행과 재확인 블록), `EventDetailView.swift` 재작성이
+캘린더 블록·재시도를 **:110-146→:108-144·:148-153→:146-151**로 옮겼다(N2 행과 재확인 블록 — 헝크 지도로
+산출한 뒤 현재 트리에서 블록 경계를 줄번호 부여 실측). 치환 3파일(`AIAssistant`·`AddEventView`·
+`EditCardView`)은 제자리 줄 치환이라 그물이 0이다(numstat 2/2·5/5·1/1) — 바뀐 줄(:826·:885·:325·:335·
+:476·:531·:554·:168)이 이 문서가 인용하는 줄과 한 곳도 겹치지 않음을 대조로 확인했다. 판정은 한 칸도
+건드리지 않았고, 세는 명령 값도 불변이다(EventDetailView 1·EditCard 2·AIAssistant 6·EditCardView 6·
+AddEventView 0).
+
 **이 문서가 어제 판과 다른 점.** 2026-09-15 판은 가드 드라이버 88/88과 양쪽 빌드 초록을 근거로
 거의 모든 행에 ✅를 달았고, 다음 날 관찰이 그중 세 ✅를 반증했다(F1·G10·K9). 오늘 아침 판은
 165/165 초록을 근거로 닫았다가 저녁 전사에서 K·M·L이 깨졌다. 이 최종 판은 초록이 아니라
@@ -230,7 +240,7 @@ M절은 비었다 — 결함 M의 행은 L15에 있다.)*
 | # | 사용자 요구 | 상태 | 근거 |
 |---|---|---|---|
 | N1 | 일정 등록이 즉시 끝난다 (58건 반복도 기다리지 않음) | ✅ | 등록은 로컬에서 끝내 즉시 응답하고(`addEvent` 저장 뒤 반환 Store.swift:605-608), 업로드는 `enqueueCalendarUpload`가 **뒤에서 직렬**로 돈다(Store.swift:816-851 — 전용 Task가 앞 작업을 기다린다 :799·:844-850). 〔드:N절(간접) + **관찰(2026-09-16)** — 사용자: **"눈에 띄게 빨라졌어요"**〕 |
-| N2 | 올라가는 중·실패가 보이고 다시 시도할 수 있다 | ✅ | 상태가 보이는 자리 둘: 일정 상세 — pending 라벨·failed 문구 + "구글 캘린더에 추가" 버튼(EventDetailView.swift:110-146, 재시도 :148-153); 설정 — 대기·실패 합계 + "다시 시도"(SettingsView.swift:51-69, `retryFailedCalendarUploads` Store.swift:865-868). 등록 요약의 대기 문구 `calendarPendingNote`(AIAssistant.swift:1478-1482 — 판정의 단일 출처는 레코드의 pending 표시, 세 생성 경로에 붙임 :1372·:1525-1527·:1660-1662). 〔드:N절 N-3·P절 P-7. 화면 전환(올리는 중→등록됨) 목격은 개별 증거 없음 → 다음 Day 목록 10〕 |
+| N2 | 올라가는 중·실패가 보이고 다시 시도할 수 있다 | ✅ | 상태가 보이는 자리 둘: 일정 상세 — pending 라벨·failed 문구 + "구글 캘린더에 추가" 버튼(EventDetailView.swift:108-144, 재시도 :146-151); 설정 — 대기·실패 합계 + "다시 시도"(SettingsView.swift:51-69, `retryFailedCalendarUploads` Store.swift:865-868). 등록 요약의 대기 문구 `calendarPendingNote`(AIAssistant.swift:1478-1482 — 판정의 단일 출처는 레코드의 pending 표시, 세 생성 경로에 붙임 :1372·:1525-1527·:1660-1662). 〔드:N절 N-3·P절 P-7. 화면 전환(올리는 중→등록됨) 목격은 개별 증거 없음 → 다음 Day 목록 10〕 |
 | N3 | 계정이 연결돼 있지 않으면 쓰기를 시도하지 않음 | ✅ | 모든 쓰기 경로가 `googleConnected`(Store.swift:493 = `hasGoogleCalendar && gcal.isConnected`)로 막힌다: enqueue :817·push :879·:914·수정 :776·:975. 예전엔 `hasGoogleCalendar`(= 클라이언트 ID 유무, 항상 참)만 봐서 미연결 기기에서 건마다 로그인 시도 + 조용한 실패였다(push 주석 :876-878). 연결 진입점·상세의 수동 추가 버튼·설정 UI는 의도적으로 제외(사용자 동작 경로 — 자동 쓰기 경로와 달리 사용자가 결과를 직접 본다). 〔드:N절 N-1. 단 "ID는 있는데 계정만 없다" 반쪽은 드라이버가 clientID 비움으로만 시험하므로 기기 확인 영역〕 |
 | N4 | 상태의 진실 — 성공은 어디에 기록되나 | ✅ | `CalendarUploadState`는 **pending·failed 두 case뿐**(Models.swift:132-151), 성공의 단일 출처는 `googleEventId`다(계약 5 — 성공 시 상태를 nil로 되돌림 Store.swift:891·:924). 필드는 Optional이라 **calendarUpload 키가 없는 옛 JSON이 그대로 읽힌다**(Models.swift:180-183 — 비-Optional 기본값이면 옛 파일이 통째로 디코딩 실패해 일정이 사라진다). pending은 디스크에 먼저 남는다(Store.swift:828 — 여기서 죽어도 "안 올라감"이 보인다). 〔드:N절 N-3·N-4(사용자 시뮬레이터에 실제로 저장돼 있던 레코드 키 구성으로 검증)〕 |
 
@@ -262,7 +272,7 @@ M절은 비었다 — 결함 M의 행은 L15에 있다.)*
 | P1 | 장소를 검색해서 고른다 | ✅ | 칩 이름이 장소 줄에서 `[장소 검색]`으로(EditCardView.swift:122-125), 입력마다 후보가 그 줄에만 얹힌다(placeSearchEditor EditCardView.swift:297-325, 후보 행 EditCardView.swift:328-349 — 이름+주소, 탭하면 확정). 후보 5건 상한(`maxPlaceSuggestions` :755 — 카드가 화면 밖으로 길어지지 않게). 〔드:P절 P-1 + **관찰(2026-09-16)** — 후보가 떠서 '가산3차 SK V1센터'를 골랐다〕 |
 | P2 | 일반명사 거절과 검색은 다르다 — 기준은 좌표의 유무 | ✅ | 자유 텍스트로 일반명사를 확정하는 건 거절(submitCustom :812-815 — 거절된 자리에 캡션 붙음), 검색 결과에서 고른 같은 이름(진짜 상호, 좌표 있음)은 통과(`choose(field:place:)` :747-750 → `confirmedPlaces`). `사무실` 타이핑은 검색되고, 자유 텍스트 확정은 거절되고, 후보 탭은 통과한다. 〔드:P절 P-2 + **관찰(2026-09-16)** — 검색과 거절 둘 다 확인됨〕 |
 | P3 | 고른 지점이 그대로 등록된다 (이름이 재검색되지 않음) | ✅ | **이름은 인자에, 좌표는 옆 표에**(`confirmedPlaces` :49-52) — 이름만 보내면 실행부가 다시 검색해 모호한 이름이 다른 지점으로 풀린다('회사'→농업회사법인 화조원, K와 같은 부류). 실행부는 고른 좌표 그대로 쓴다(resolveOrigin :2322·resolveDestination :2393). 즐겨찾기와 이름이 겹치면 즐겨찾기가 이긴다(오래 사는 설정 쪽 — "집이라고 했는데 어제 고른 카페" 방지). 〔드:P절 P-1·P-3〕 |
-| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 입력이 멈춘 뒤 한 번만 부른다 — **350ms 묶음**(searchPlaces :762-783, 지연 상수 EditCard.swift:234 — 한글 조합이 한 글자를 완성하는 간격보다 길어 "가→강→강남"이 한 번으로 묶인다) + 같은 질의 재호출 차단(EditCard.swift:257, 지우고 다시 친 경우). 카카오 일일 할당량 보호(외부 한도로 이미 데인 이 프로젝트의 상수 원칙). 검색 중에도 카드의 다른 줄은 조작 가능(확인 잠금은 chosen만 본다). 〔드:P절 P-4·P-5〕 |
+| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 입력이 멈춘 뒤 한 번만 부른다 — **350ms 묶음**(searchPlaces :762-783, 지연 상수 EditCard.swift:273 — 한글 조합이 한 글자를 완성하는 간격보다 길어 "가→강→강남"이 한 번으로 묶인다) + 같은 질의 재호출 차단(EditCard.swift:296, 지우고 다시 친 경우). 카카오 일일 할당량 보호(외부 한도로 이미 데인 이 프로젝트의 상수 원칙). 검색 중에도 카드의 다른 줄은 조작 가능(확인 잠금은 chosen만 본다). 〔드:P절 P-4·P-5〕 |
 | P5 | 카드가 사라진 뒤 돌아온 결과·0건 처리 | ✅ | 결과는 돌아온 뒤 **줄 id로 자리를 다시 찾아** 없으면 조용히 버린다(setLookup :789-793 — H1 부류: await 앞뒤로 자리를 믿지 않는다. 줄 id는 카드마다 새로 만들어져 늦은 결과가 다른 카드에 앉을 수 없다). 0건·오프라인은 "후보를 찾지 못했어요. 다른 이름이나 주소로 적어보세요(인터넷이 끊겨 있을 때도 이렇게 보여요)"(EditCardView.swift:313-318 — PlaceSearch가 둘 다 빈 배열로 돌려주어 구분 못 하는 것을 구분한 척하지 않고 함께 말함). 〔드:P절 P-6·P-4의 빈 문구〕 |
 
 ---
@@ -371,8 +381,8 @@ G15(① 도달 — 프롬프트 전용, 수용된 갭), G17 한계(스냅숏 불
 - 근거 심볼·줄번호 전수 재확인(Read·grep) — N·O·P 수정으로 AIAssistant·AIChatView·Store·
   Models·EventDetailView·SettingsView·GuardDriver가 전부 움직였기 때문. 핵심 새 좌표:
   `enqueueCalendarUpload` Store.swift:816·`googleConnected` :493·상세 버튼 EventDetailView.swift:
-  110-146·설정 블록 SettingsView.swift:51-69·`CalendarUploadState` Models.swift:132-151·
-  `unknownPlace` AIAssistant.swift:568-571·캡션 :2378-2380·`searchPlaces` :762-783(지연 상수 EditCard.swift:234)·
+  108-144·설정 블록 SettingsView.swift:51-69·`CalendarUploadState` Models.swift:132-151·
+  `unknownPlace` AIAssistant.swift:568-571·캡션 :2378-2380·`searchPlaces` :762-783(지연 상수 EditCard.swift:273)·
   `confirmedPlaces` :49·`choose(field:place:)` :747-750·`[장소 검색]` 칩 EditCardView.swift:122-125.
   기존 행의 좌표도 전부 현재 트리로 다시 맞췄다(각 행 참조).
 - GuardDriver N·Z·P절(:1248-1621) 열람 — N-1~N-4·O-1~O-8·P-1~P-7 단언 확인.

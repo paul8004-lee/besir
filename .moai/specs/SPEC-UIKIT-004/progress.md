@@ -294,3 +294,88 @@ run_complete_at: 2026-09-20
 
 실기기 전용(VoiceOver 낭독 3종·카드 질감 감각)과 S4는 리드의 Day 닫기 이월 목록으로 간다.
 acceptance.md 판정 칸은 sync에서 닫는다(t2a 전례 — 본 기록이 그 근거).
+
+---
+
+## §E.4 Sync-phase Audit-Ready Signal
+
+sync_status: audit-ready — **sync 단계 종료(3-phase close, 단일 sync 커밋)**
+sync_complete_at: 2026-09-20
+sync_commit_sha: (본 커밋 — 백필 커밋으로 기입)
+
+### 게이트 — sync lane이 HEAD에서 다시 실측 (t1·t2a sync 전례: 귀속 문제 예방)
+
+귀속 근거: 마지막 소스 커밋 `497fca5`(교차검토 정정 0.1.3 — 삭제 단추 밖 복원) 뒤에는 문서 커밋만
+있었다(`git diff --name-only 497fca5..HEAD -- Shared/ Tools/ ShareExtension/ proxy/` 빈 출력).
+네 게이트 전부 `347105d`(당시 HEAD)에서 측정했다.
+
+| 게이트 | 결과 | 관측 |
+|---|---|---|
+| 가드 드라이버 | ✅ **205/205**, exit=0 | 신선 컴파일, 비-툴체인 경고 0건. `Tools/GuardDriver.swift` 무변경(단언 추가 0건, REQ-012·AC-004) |
+| iOS 빌드 | ✅ `** BUILD SUCCEEDED **`, exit=0 | 비-툴체인 warning **0건**, 로그 신규 작성(`build-ios.log`) |
+| macOS 빌드 | ✅ `** BUILD SUCCEEDED **`, exit=0 | 비-툴체인 warning **0건**, 로그 신규 작성(`build-mac.log`) |
+| 프록시 npm test | ✅ **7/7**, exit=0 | 본 카드는 프록시 무변경 — Swift와 무관이라 측정 유효 |
+| diff 범위 | ✅ 신규 .swift **0건** | `9e4a374...HEAD` 소스 5종(EditCard +39·EV 55/40·치환 3파일 2/2·5/5·1/1) — xcodegen 불필요·Team 재선택 없음(REQ-040(d)) |
+
+각 명령은 자기 `cd`를 스스로 쓰는 형태로 순차 실행했다(t2a sync 정정 ②·t4 run M3가 밟은
+병렬 `cd` 오염 함정 재발 방지).
+
+### 독립 렌즈 (code-safety, `--security --deep` — 스폰 결함으로 직접 기계 렌즈 대체)
+
+**채널 사정**: 리드 디스패치가 지정한 렌즈다. sync 세션에서 `hns-besir-app-code-safety-specialist`
+스폰을 시도했으나 §F.1·run Phase 4와 같은 기계 공통 결함(`team file for session-… not found`)이
+재현됐다(1회). 서브에이전트 채널은 이 기계에서 오늘 하루 종일 불능이었고(아래 감사 채널 사정 참조),
+살아있는 팀원이 이 세션에 없으므로 **sync lane이 렌즈 초점 6종을 직접 실측**했다 — 독립 아님을
+명시하고, run M4의 동일 렌즈 판정(확정 결함 0건·노트 4건) 위에서 반증을 시도했다.
+
+| 초점 | 방법 | 결과 |
+|---|---|---|
+| 보안(--security) | diff가 새로 만든 문자열 보간 6줄 전수 열람 + 키·비밀·네트워크 어휘 grep | **0건** — 보간 전부 화면에 이미 있던 같은 데이터의 재배치(접근성 라벨·포맷 호출), 새 노출 경로 없음 |
+| await 자리 무효화 | `git diff`에서 `Task {`·`await` 줄 증감 실측 + EV 잔여 비동기 경로 6곳 열람 | **0건** — 비동기 줄 한 줄도 안 건드림(빈 출력), 경로 원본 그대로 |
+| 조용히 묻히는 실패 | flatMap 치환 3곳(:476·:885·:168) 진리표 산술 대조 + `anchor(ofPrefix:)`·`prefix(for:)` 몸통 전수 | **0건** — nil≠`.departure`/`.arrival` 보존, switch 2-case 전수·default nil; :168 발산 입자는 M4 도달 불가 실증 그대로 |
+| 외부 한도·상태 증가 | diff의 새 상태 선언 grep | **0건** — 새 상태는 `@ScaledMetric` 1개(측정값, 증가 안 함), 알림·API 호출 수 무변경 |
+| 복제 계산 | 옛 EV 포매터 패턴 vs 새 `BesirTime.full`·`clock` 바이트 대조 | **0건** — "M월 d일 (E) a h시 mm분"·"a h시 mm분" 바이트 일치, EditCard 5벌 상이(when m·compact·full·clock·iso), EV 잔여 1벌은 REQ-002 계약 |
+| 죽은 코드·간결성 | `fullFmt`·`timeFmt` 참조 전수 grep | **0건** — 이사 완결, 잔여 참조 없음 |
+
+**확정 결함 0건** — t2 sync가 이 자리에서 F1을 잡은 것과 달리 이번엔 나오지 않았다(차이의 사정:
+t2는 컴포넌트 전환으로 새 경로가 열렸고, t4는 크롬 치환+소유권 이사라 열리는 경로 자체가 없다).
+기존 노트 4건(빌드 귀속·:168 주석·@ScaledMetric 줄바꿈·삭제 루프 save)은 §E.3 후속 표 그대로.
+
+### CHECKLIST.md 코드 근거 수리 (디스패치 범위 메모 ①)
+
+이 카드가 만든 드리프트다. 옮겨진 좌표 4곳: `EditCard.swift` **:234→:273**(350ms 상수)·
+**:257→:296**(같은 질의 스킵) — 신규 멤버 삽입 +39(헝크 옛 33·54 뒤); `EventDetailView.swift`
+캘린더 블록 **:110-146→:108-144**·재시도 **:148-153→:146-151**(N2 행·재확인 블록) — 헝크 지도로
+산출한 뒤 현재 트리에서 블록 경계를 줄번호 부여 실측했다. 치환 3파일(`AIAssistant`·`AddEventView`·
+`EditCardView`)은 제자리 치환이라 그물 0(numstat 2/2·5/5·1/1) — 바뀐 줄 8곳이 CHECKLIST가 인용하는
+줄과 한 곳도 겹치지 않음을 대조로 확인, 파일명 인용 15행(AIAssistant 6·EditCardView 6·EditCard 2·
+EventDetailView 1)과 붙임 참조 전부 바이트 단위로 불변 확인했다. **판정은 한 칸도 바꾸지 않았고**
+세는 명령 값도 불변(EventDetailView 1·EditCard 2·AIAssistant 6·EditCardView 6·AddEventView 0).
+CHECKLIST 머리에 t4 기준선 문단을 추가했다(t1·t2a 전례 양식).
+
+### §E.3 후속 표는 그대로 산다 (디스패치 범위 메모 ④)
+
+§E.3의 후속 표(INV·H5-삭제·MX-DT)와 이월 사항은 **한 줄도 바꾸지 않고 그대로 유효**하다. AC-009의
+S4(단계 옆 "오후 3:05" 렌더)·실기기 전용(VoiceOver 3종·카드 질감)은 리드의 Day 닫기 이월 목록에
+그대로 실려 있다(§E.3 AC-009 기록).
+
+### 감사 채널 사정 (디스패치 범위 메모 ⑤ — 기록)
+
+독립 감사 채널은 이 카드의 전 생애 동안 전멸이었다 — plan 세션(§F.1: plan-auditor 스폰 2회·
+codex·GLM 3회 전부 실패), run 세션(Phase 1·4 기록: 스폰 결함으로 orchestrator-direct, 검증 렌즈는
+살아있는 팀원 SendMessage로 대체), sync 세션(위 렌즈 절: 스폰 1회 재현). 전체 경위와 대체 증거 사슬은
+`.moai/reports/plan-audit/SPEC-UIKIT-004-2026-09-20.md`에 있다 — 리드 세션 기계 감사(세는 명령 전종
+재실측 일치·판정 2건 확정)와 spec-amender 교차검토(CONDITIONAL-PASS 발견 6건 → run M4 전부 처리,
+정정 0.1.1~0.1.3)가 독립 채널을 대신했다. **독립 채널 복구 시 재감사 조건은 유효하다**(Phase 1 기록).
+
+### 종결 상태
+
+- **AC 매트릭스 9건 전부 ✅** — AC-009는 시뮬레이터 9/10 + S4·실기기 전용 Day 이월 기록(acceptance
+  판정 블록, §E.3 AC-009가 근거).
+- SPEC 4종 frontmatter/상태 전이: spec `completed`(v0.1.4 — frontmatter가 run 정예 동안 HISTORY만
+  갱신하고 0.1.0에 머물러 있던 것을 이 판에서 환원), plan 마일스톤 M1~M4 전부 🟢, acceptance 매트릭스·
+  AC-006 절별 표·절 제목 전부 ✅.
+- 루트 `plan.md` 분할표 t4 행 → done(기록 갱신).
+- **master 통합·push는 리드 소관** — 본 sync 커밋+백필까지가 카드 t4의 몫이다.
+
+🗿 MoAI
