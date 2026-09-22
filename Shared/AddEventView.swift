@@ -13,10 +13,17 @@ struct AddEventView: View {
     // 들고 있는 것은 카드가 가질 수 없는 것뿐: 좌표 사전, 이동시간 캐시, 진행 깃발, 그리고 줄이
     // 배열에서 빠져 있는 동안 그 값을 기억하는 상태들.
     @State private var card: EditCard?
-    /// 칩·후보를 탭한 순간 좌표까지 확정된 장소(이름 → 장소). chosen은 이름만 담으므로 여기서
-    /// 되찾는다 — AIAssistant.confirmedPlaces와 같은 형태고, 지연 해석 함수는 만들지 않는다
+    /// 칩·후보를 탭한 순간 좌표까지 확정된 장소. 열쇠는 이름이 아니라 **줄 신원**(EditField.id)이다.
+    /// 이름으로 걸면 같은 상호의 다른 지점을 출발지·목적지 두 줄에서 고를 때(Place 주석이 말하는 그
+    /// 겹침) 나중 쓰기가 앞 줄의 좌표까지 덮어 이동 0분짜리 일정이 되고, 출발 알람이 도착 시각으로
+    /// 잡히는데 화면엔 이름만 보여 어긋난 걸 알 길이 없다. 줄 신원은 생성 때 한 번 찍히므로 두 줄이
+    /// 겹칠 수가 없다. chosen은 이름만 담으므로 여기서 되찾고, 지연 해석 함수는 만들지 않는다
     /// (REQ-020: 만들면 resolvePlace의 두 번째 구현이 된다).
-    @State private var confirmedPlaces: [String: Place] = [:]
+    @State private var confirmedPlaces: [UUID: Place] = [:]
+    /// 즐겨찾기 칩의 라벨 → 장소. 칩 탭은 Place를 들고 오지 않고 라벨만 준다 — 그 라벨을 좌표로
+    /// 푸는 씨앗이다. 줄 신원 사전과 합치지 않는 이유: 라벨은 줄이 아니라 즐겨찾기 목록의 것이고,
+    /// 출발지 줄과 목적지 줄이 같은 칩을 고른다.
+    @State private var favoritePlaces: [String: Place] = [:]
     @State private var estimates: [TransportMode: TravelEstimate] = [:]
     @State private var estimating = false
     @State private var saving = false
@@ -146,7 +153,7 @@ struct AddEventView: View {
 
     private func buildCard() -> EditCard {
         // 즐겨찾기는 칩을 만드는 시점에 좌표까지 확정해 둔다(REQ-020) — 탭 순간에 되찾기만 한다.
-        for fav in store.favorites { confirmedPlaces[fav.label] = fav.place }
+        for fav in store.favorites { favoritePlaces[fav.label] = fav.place }
         var originOptions = store.favorites.map { EditField.Option(label: $0.label, value: $0.label) }
         originOptions.append(.init(label: "현재 위치", value: Self.hereMarker))
         // 편집 모드는 값이 이미 있으니 에디터를 열어두지 않는다 — startsOpen은 "새 일정마다
@@ -162,11 +169,13 @@ struct AddEventView: View {
                   allowsCustom: true, chosen: editing?.destination.name, startsOpen: fresh),
         ]
         if let e = editing {
-            confirmedPlaces[e.destination.name] = e.destination
+            // 편집 씨앗도 줄 신원으로 건다 — 이 자리의 fields는 바로 위에서 만든
+            // [title, origin_query, destination_query] 순 지역 배열이라 인덱스가 곧 줄을 가리킨다.
+            confirmedPlaces[fields[2].id] = e.destination
             // 옛 일정은 출발지가 nil일 수 있다 — 그러면 시각 줄 이하는 출발지가 정해진 뒤에
             // 생긴다(ensureGatedRows). 그때도 이벤트의 값으로 seed한다.
             if let o = e.origin {
-                confirmedPlaces[o.name] = o
+                confirmedPlaces[fields[1].id] = o
                 fields.append(contentsOf: gatedRows(
                     datetime: editingDatetime(e), mode: e.mode.rawValue,
                     buffer: String(e.bufferMinutes), notifyOn: String(e.wantsNotification),
@@ -253,10 +262,18 @@ struct AddEventView: View {
     // MARK: - 칩 · 후보 · 직접입력
 
     /// 칩을 탭했을 때. 값은 줄에 적고, 키에 따라 딸린 일(조건부 줄·재계산·현재 위치 확정)이 따른다.
-    private func choose(field: UUID, value: String) {
+    /// `place`는 검색 후보를 탭해 지점까지 특정된 경우에만 실려 온다(choosePlace) — 칩 탭은 nil로
+    /// 들어와 라벨을 즐겨찾기 씨앗에서 푼다.
+    private func choose(field: UUID, value: String, place: Place? = nil) {
         guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return }
         let key = c.fields[i].key
         c.fields[i].chosen = value
+        // 좌표는 값을 적은 그 줄 자리에 건다. 실려 온 place가 즐겨찾기 씨앗을 이기는 순서인 이유:
+        // 검색 후보는 지점까지 특정된 값이고 즐겨찾기 라벨은 우연히 같을 수 있는 이름일 뿐이라,
+        // 반대로 두면 검색해서 고른 "스타벅스" 홍대점이 즐겨찾기 "스타벅스"의 좌표로 조용히 바뀐다.
+        // 둘 다 없으면 nil이 들어가 옛 좌표가 지워진다 — 이름이 열쇠이던 시절엔 열쇠가 바뀌며 저절로
+        // 풀리던 자리라, 이제 명시로 갚는다.
+        if c.fields[i].kind == .place { confirmedPlaces[field] = place ?? favoritePlaces[value] }
         switch key {
         case "notify_enabled":
             if value == "false" {
@@ -300,10 +317,11 @@ struct AddEventView: View {
         }
     }
 
-    /// 검색 후보를 탭했을 때 — 이름은 chosen에, 좌표는 이 순간 확정한다(REQ-020).
+    /// 검색 후보를 탭했을 때 — 좌표 확정은 choose의 쓰기 자리에 맡긴다(REQ-020). 여기서 따로
+    /// 쓰면 좌표 쓰기가 두 자리가 되어, 검색 결과가 즐겨찾기 씨앗을 이기는 순서가 호출 순서에
+    /// 기대게 된다.
     private func choosePlace(field: UUID, place: Place) {
-        confirmedPlaces[place.name] = place
-        choose(field: field, value: place.name)
+        choose(field: field, value: place.name, place: place)
     }
 
     /// 직접입력. 범위 밖은 받지 않는다 — 거절 표시는 카드 뷰가 띄운다.
@@ -422,9 +440,12 @@ struct AddEventView: View {
         // "현재 위치" 칩 자체가 선택된 상태일 때만 확정한다
         guard field("origin_query")?.chosen == nil || field("origin_query")?.chosen == Self.hereMarker
         else { return }
-        confirmedPlaces[Self.hereMarker] = Place(name: location.currentPlaceName ?? "현재 위치",
-                                                 address: "", latitude: c.latitude, longitude: c.longitude)
         if var c2 = card, let i = c2.fields.firstIndex(where: { $0.key == "origin_query" }) {
+            // 좌표를 chosen과 같은 블록에서 줄 신원으로 쓴다 — 밖에서 먼저 쓰면 카드가 없을 때
+            // 좌표만 있고 chosen 없는 반쪽 확정이 생긴다. 실측상 두 호출 경로 모두 카드가 있어
+            // 관측 변화는 없지만, 반쪽 상태를 만들지 않는 쪽이 fail-closed 읽기와 같은 길이다.
+            confirmedPlaces[c2.fields[i].id] = Place(name: location.currentPlaceName ?? "현재 위치",
+                                                     address: "", latitude: c.latitude, longitude: c.longitude)
             c2.fields[i].chosen = Self.hereMarker
             // GPS가 내가 생각한 곳으로 풀렸는지 보는 유일한 확인 수단이다 — 원본 확정 카드가 지명을
             // 보여줬던 것의 계승. 칩 글자에 지명을 얹고, 못 얻었으면 "현재 위치" 그대로 둔다.
@@ -507,9 +528,14 @@ struct AddEventView: View {
         card?.fields.first { $0.key == key }
     }
 
-    /// 줄의 chosen 이름으로 확정된 장소를 되찾는다.
+    /// 줄에 걸린 좌표를 되찾는다 — 열쇠는 chosen 이름이 아니라 줄 신원이다.
+    /// `chosen == nil`을 먼저 거르는 이유는 실패 방향을 닫아두기 위해서다. 열쇠가 이름이던 시절엔
+    /// 이름 없는 줄이 사전을 못 찾아 저절로 nil이 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은
+    /// 없는 줄"이 생기면 그 좌표가 조용히 실려 나간다 — 지금은 쓰기 자리들이 이름과 좌표를 늘 함께
+    /// 적어 도달 불가하지만, 그 불변식을 강제하는 것은 코드가 아니라 규율뿐이라 한 절로 갚아 둔다
+    /// (잘못된 장소보다 없는 장소가 낫다).
     private func confirmedPlace(_ key: String) -> Place? {
-        field(key)?.chosen.flatMap { confirmedPlaces[$0] }
+        field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
     }
 
     private var originCoord: CLLocationCoordinate2D? {
