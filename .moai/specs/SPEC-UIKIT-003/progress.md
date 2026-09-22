@@ -43,9 +43,31 @@
 미검증(M5/AC-010 이월): 카드 렌더링·제스처·낭독은 가드 밖 — AC-001 (6) 시뮬레이터 확인, AC-002 (3)(4)(5), AC-003 (2)(3)의 기기 관측.
 M3 인계 감시(ui-design 검수 지목, LOW): `AddActivityView`가 진짜 true를 돌려주는 `chooseTimePlain`을 넘기는지 — 깜빡하면 확인 버튼이 조용히 죽는다(REQ-001 (d)의 실패 모양).
 
-### M3 — AddActivityView 전환 (REQ-010~014)
+### M3 — AddActivityView 전환 (REQ-010~014) 🟢
 
-⬜ 대기 (M2 완료 후 — REQ-014는 REQ-003을 요구)
+구현: `hns-besir-app-swift-impl-specialist`(spawn m3-swift-impl) · 설계 검수: `hns-besir-app-ui-design-specialist`(spawn m3-ui-design, 판정 **GO** — 7렌즈 통과·줄 순서 6경로 추적 무결·범위 내 수정 0건).
+
+변경: `Shared/AddActivityView.swift` 하나(+392/−104) — 폼 @State 12개 → `card` 하나, 다리·알림·여유 줄 멤버십, 캡션 삭제, PlaceField 색 3건 수리.
+- REQ-010: `canSave` 삭제·잠금 `!(card?.isReady ?? false)`, save()는 카드에서 값 읽음
+- REQ-011: 다리 `.toggle` 줄(만들기/안 만들기) + 멤버십(장소가 실제 장소일 때만 다리 줄 생성, "장소 없음"·미선택 시 제거), 꺼진 동안 기억값(출발지·수단·여유·복귀·알림), 안내 문구는 장소 줄 note로
+- REQ-012: 알림 리드 줄(본보기와 같은 넷 + 직접입력, seed 30), off 시 lastNotifyLead 기억
+- REQ-014: **"가는 편 도착 여유"** 줄(0/10/20/30 + 직접입력, seed 10, 가는 편 on일 때만), 캡션 통째 삭제, 복귀 버퍼 0은 Store 무변경
+- REQ-013: 카드 `.task` 1회 생성·고정 위치·크롬 off, header/footer/프레임 유지
+- REQ-042(c): PlaceField `.secondary`→`Theme.muted` 2건·`.quaternary`→`Theme.raised` 1건
+
+구현자의 추가 방어(리드 승인): 시작을 종료 뒤로 재확정하면 확정된 종료를 미선택으로 되돌림 — 확정 시점 거절만으로는 **반대편 줄이 나중에 바뀌는 경로**(종료 5시 확정 후 시작 6시 → 종료≤시작인 채 isReady 풀림)를 못 막으므로 옛 `endDate > startDate` 저장 잠금의 계승이다(REQ-030 어포던스 손실 0 근거).
+
+리드 재실측(관측된 출력):
+- `canSave` **0** · `defaultNotify|defaultBuffer` **0** · `.secondary|.quaternary` **0** · `onChange` **0** · `^struct PlaceField` **1** · `PlaceSearchDebouncer` **1**(카드용) · `@State` **15**(화면 12 + PlaceField 3)
+- 다리 줄 코드 전부 choose()·빌더·save() 안(렌더 경로 밖 — 줄번호 전수 확인) = 멤버십 not 숨김
+- 드라이버: compile-exit **0**, **205/205 통과**(단언 추가 없음)
+- iOS·macOS 빌드: 양쪽 exit **0** · BUILD SUCCEEDED · 툴체인 경고 제외 **0건**
+- `git diff --stat`: AddActivityView.swift 1파일
+
+AC 정정 필요 1건(구현자 보고·리드 확인): AC-009 (7)(b)의 `grep -c "PlaceSearchDebouncer" Shared/AddActivityView.swift` = 0은 카드 검색 디바운서(본보기와 같은 화면 소유 인스턴스)와 어긋나 실측 **1** — REQ-042(b)의 의도(PlaceField 자체에 부착 금지)에 맞게 문구를 정정한다(manager-spec).
+
+미검증(M5/AC-010 이월): 멤버십 런타임(가는 이동 켜고 끄기·되살림), 여유 줄 미흐림(AC-010 (6)), 캡션 부재(8), 저장값 반영(10).
+후속(범위 밖, sync에서 루트 plan.md에): PlaceField cornerRadius 8→Theme.radius, PlaceField 돋보기 버튼 라벨 없음(:518), ConflictBanner 잔여(:601·:604·radius).
 
 ### M4 — ActivityDetailView 전환 (REQ-020~021)
 
