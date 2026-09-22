@@ -183,11 +183,15 @@ struct AddActivityView: View {
             card = c
         case "outbound_enabled":
             if value == "true" {
-                let at = c.fields.firstIndex(where: { $0.key == "outbound_enabled" }).map { $0 + 1 }
-                    ?? c.fields.count
-                c.fields.insert(contentsOf: outboundRows(origin: rememberedOutboundOrigin,
-                                                         mode: rememberedOutboundMode,
-                                                         buffer: rememberedBuffer), at: at)
+                // 칩은 선택 상태를 스스로 가리지 않고 매 탭마다 불린다 — 이미 켠 다리를 다시
+                // 탭해도 줄이 겹치면 field()가 첫 줄을 읽어 저장값이 씨앗값으로 굳는다.
+                if !c.fields.contains(where: { $0.key == "origin_query" }) {
+                    let at = c.fields.firstIndex(where: { $0.key == "outbound_enabled" }).map { $0 + 1 }
+                        ?? c.fields.count
+                    c.fields.insert(contentsOf: outboundRows(origin: rememberedOutboundOrigin,
+                                                             mode: rememberedOutboundMode,
+                                                             buffer: rememberedBuffer), at: at)
+                }
                 ensureNotifyRows(&c)
             } else {
                 if let o = chosenIn("origin_query", c) { rememberedOutboundOrigin = o }
@@ -200,10 +204,13 @@ struct AddActivityView: View {
             card = c
         case "return_enabled":
             if value == "true" {
-                let at = c.fields.firstIndex(where: { $0.key == "return_enabled" }).map { $0 + 1 }
-                    ?? c.fields.count
-                c.fields.insert(contentsOf: returnRows(to: rememberedReturnTo,
-                                                       mode: rememberedReturnMode), at: at)
+                // 위와 같은 이유 — 켜진 오는 편을 다시 탭해도 줄이 겹쳐 들어가지 않게 멤버십이 가드한다.
+                if !c.fields.contains(where: { $0.key == "return_query" }) {
+                    let at = c.fields.firstIndex(where: { $0.key == "return_enabled" }).map { $0 + 1 }
+                        ?? c.fields.count
+                    c.fields.insert(contentsOf: returnRows(to: rememberedReturnTo,
+                                                           mode: rememberedReturnMode), at: at)
+                }
                 ensureNotifyRows(&c)
             } else {
                 if let r = chosenIn("return_query", c) { rememberedReturnTo = r }
@@ -231,11 +238,12 @@ struct AddActivityView: View {
 
     /// 장소가 사라질 때(장소 없음 칩) 다리 줄 전부의 값을 기억해 둔다 — 다시 실제 장소를 고르면
     /// 토글은 문서화된 기본값(끔)으로 돌아오지만, 토글을 켜면 고르던 값들이 되살아난다.
+    /// 장소 줄은 다리를 끈 뒤엔 이미 없다 — 칩이 nil을 돌려도 무조건 넣으면 끌 때 기억한 값까지 지운다.
     private func rememberTravelValues(_ c: EditCard) {
-        rememberedOutboundOrigin = chosenIn("origin_query", c)
+        if let o = chosenIn("origin_query", c) { rememberedOutboundOrigin = o }
         if let m = chosenIn("outbound_mode", c) { rememberedOutboundMode = m }
         if let b = chosenIn("buffer_minutes", c) { rememberedBuffer = b }
-        rememberedReturnTo = chosenIn("return_query", c)
+        if let r = chosenIn("return_query", c) { rememberedReturnTo = r }
         if let m = chosenIn("return_mode", c) { rememberedReturnMode = m }
         if let l = chosenIn("notify_lead_minutes", c) { lastNotifyLead = l }
         if let n = chosenIn("notify_enabled", c) { lastNotifyOn = n == "true" }
