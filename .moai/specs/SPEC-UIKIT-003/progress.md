@@ -69,9 +69,24 @@ AC 정정 필요 1건(구현자 보고·리드 확인): AC-009 (7)(b)의 `grep -
 미검증(M5/AC-010 이월): 멤버십 런타임(가는 이동 켜고 끄기·되살림), 여유 줄 미흐림(AC-010 (6)), 캡션 부재(8), 저장값 반영(10).
 후속(범위 밖, sync에서 루트 plan.md에): PlaceField cornerRadius 8→Theme.radius, PlaceField 돋보기 버튼 라벨 없음(:518), ConflictBanner 잔여(:601·:604·radius).
 
-### M4 — ActivityDetailView 전환 (REQ-020~021)
+### M4 — ActivityDetailView 전환 (REQ-020~021) 🟢
 
-⬜ 대기
+구현: `hns-besir-app-swift-impl-specialist`(spawn m4-swift-impl) · 설계 검수: `hns-besir-app-ui-design-specialist`(spawn m4-ui-design, 판정 **GO** — 7렌즈 통과·차단 0·마이너 2건 연기 판정).
+
+변경: `Shared/ActivityDetailView.swift` 하나(+226/−55).
+- REQ-020: @State 5개 + load() → card 하나(.task 1회, 편집 모드 전 줄 chosen 시드), Form/Section → ScrollView+Theme.bg, 화면 소유 유지(툴바·반복 안내·주변 섹션·삭제+대화상자 2), 저장 disabled = !isReady, 시각 거절은 M3와 동일(note + 시작 재확정 무효화)
+- REQ-021: newPlace = confirmedPlace("location_query")(좌표가 값과 함께), `?? 0` 구문 삭제, 장소 변경(≠재탭) 시 nearby·nearbyLoaded 비움, "장소 없음" 칩으로 장소 제거 가능(→ nil), 주변 섹션 내부 줄 바이트 불변(문서화 잔여 5건 보존)
+- 판단 1건(기록): 반복 회차 안내 Text를 새 레이아웃에 맞게 다시 쓰며 `.secondary` → `Theme.muted`(계약 6 — 소유 파일에 새 위반을 만들지 않기 위해; 주변 섹션의 문서화 잔여와 대비됨)
+
+리드 재실측(관측된 출력):
+- `?? 0` **0** · `Form {` **0** · `modifyActivity` **2**(호출+주석)·직접 `store.updateActivity` 호출 **0** · `.secondary|.tertiary` **5**(전부 주변 섹션 문서화 잔여) · `@State` **9**(명단: card·confirmedPlaces·placeDebounce·showingDeleteMenu·showingDeleteConfirm·nearby·nearbyCategory·loadingNearby·nearbyLoaded) · 생성부 여전히 AddEventView **1** + AIAssistant **1**
+- 드라이버: compile-exit **0**, **205/205 통과**(단언 추가 없음)
+- iOS·macOS 빌드: 양쪽 exit **0** · BUILD SUCCEEDED · 툴체인 경고 제외 **0건**
+- `git diff --stat`: ActivityDetailView.swift 1파일
+
+검수 연기 판정(기록): 삭제 단추 정렬은 EventDetailView 문법과 어긋나나 AC-007 "32절 그대로" 계약을 지키기 위해 현행 유지 — sync에서 루트 plan.md 후속 항목으로. 편집 중 "장소 없음"에서 주변 섹션이 옛 저장 장소 기준으로 보이는 것은 설계된 경계(placeCoord=store 기준) — 실기기 확인 목록에.
+
+미검증(M5/AC-010 이월): 장소 재선택 후 추천 비움(AC-006 (5)), 카드 문법으로 열리는 모습(11), 홍대 재검색(12).
 
 ### M5 — 보존 대조·접근성·게이트 (REQ-030~031, 040~042)
 
