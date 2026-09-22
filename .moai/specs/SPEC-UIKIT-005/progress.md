@@ -127,6 +127,18 @@ plan 레인이 SPEC의 인용을 트리에 대고 독립 재측정했고, **한 
 - **사람 전용 증거 이월**(AC-009가 덮는다): AC-003 (4) 즐겨찾기 칩→이동시간 계산(가장 조용한 실패 지점), AC-004 (3) 현재 위치 프리필, AC-009 전체.
 - **후속 등록 1건(REQ-021 계약)**: 직접입력(`submitCustom`)이 장소 줄의 옛 좌표를 지우지 않는다 — 줄 신원 키가 연 실패 모양(옛 좌표가 새 이름에 실려 저장 통과). `AddActivityView`도 같은 구조(오케스트레이터가 `:423-429` 직접 확인). 루트 `plan.md` 후속 **14번**으로 등록, M4 code-safety 렌즈가 재판정한다.
 
+### M3 — AIAssistant B안 단사성 (2026-09-22, 구현 ai-tooling · 코드 `84328e3`)
+
+- 구현 주체는 plan.md §4 배정표대로 `ai-tooling` 전문가. 오케스트레이터가 diff 전문 대조·드라이버 직접 재실행·신호 재측정 뒤 수용했다.
+- 변경: `Shared/AIAssistant.swift` 하나(+41/−4). ① `choose(field:place:)`가 신규 `private static confirmedPlaceKey(for:in:)`로 열쇠를 고른다 — 후보 ①이름 ②이름·주소(주소 비면 건너뜀) ③이름·좌표(`%.4f`), 결정적(카운터·시각·랜덤 금지). 다른 좌표에 점유된 후보는 건너뛰고 같은 지점(`isSamePlace` 50m)이면 기존 열쇠를 재사용한다(재선택이 열쇠를 늘리지 않는다). 폴백 `candidates.last ?? place.name`(강제 언래핑 없음). ② `chosen`에도 같은 문자열. ③ 선언 주석 갱신("조회 열쇠 → 좌표, 값은 원래 Place").
+- REQ-012 확인(전문가 조사·보고): 사전 값은 원래 `Place`, 해석부 반환은 사전 값 그 자체(재생성 없음), 성공 요약 문구는 전부 해석된 `Place.name`(create_schedule·반복·활동·check·수정 경로 전부), `isSamePlace` 거절 문구도 `origin.name`. 실패 경로 문구는 모델의 원시 질의를 되울러서 찍는데, 정확한 echo면 사전 조회가 먼저 성공하므로 구분 문자열이 도달할 수 없다.
+- 기계 신호(오케스트레이터 재측): AC-005 (2) `git diff c5396b3 -- Shared/AIAssistant.swift | grep -c "resolveDestination(_ query\|resolveOrigin(_ query\|unresolvedGenericPlace(_ raw"` = **0**(작업트리 포함). diff hunk가 선언 주석·choose 영역 둘뿐이라 무변경이 구조적으로도 증명된다. `confirmedPlaces[` 첨자 자리 = 쓰기 1 + 읽기 3.
+- 드라이버: **205/205 통과** — 오케스트레이터가 이 트리에서 직접 재실행(exit 0). 인자 거동 무변 → `Tools/GuardDriver.swift` 무수정(AC-007 (5) 일치 — 드라이버의 choose 호출 셋이 전부 fresh() 새 인스턴스·고유 이름이라 열쇠=이름 경로만 돈다).
+- 결정성 자기점검(전문가 스크래치 8/8, 실행 뒤 삭제·잔여 없음 오케스트레이터 확인): 빈 사전→이름 / 이름 충돌→주소 후보 / 같은 지점 재확정→기존 열쇠 재사용 / 주소까지 같은 다른 지점→좌표 후보 / 주소 비면 좌표로 바로 / 같은 입력 반복→같은 열쇠 / 후보 점유 시 좌표 후보의 같은 지점 재사용. 후보 순서는 (이름, 주소, 좌표)에서만 파생 — 사전 상태와 무관한 순수함수.
+- 빌드(전문가 실행): iOS·macOS `BUILD SUCCEEDED`, swift 경고 0/0(로그 `build-ios-m3.log`·`build-macos-m3.log`). 호스트 swiftc의 macOS 26 사용중단 경고는 드라이버 컴파일 환경 것·범위 밖 파일이며 xcodebuild 게이트와 무관.
+- **M4 안건 1건(전문가 발견, 보고만)**: 확정 거품 요약 줄(`chosenLine`)이 `chosenLabel`을 그대로 찍으므로 겹칠 때 구분 문자열이 **칩과 함께 이 줄에도** 보인다. REQ-022가 "확정 칩"으로만 적은 것보다 표면이 하나 더 있다 — ui-design 렌즈가 판정하고 스펙 문구를 그 판정에 맞춰 정정한다(현행 줄번호도 렌즈에서 재실측). Store·도구 반환 요약에는 닿지 않는다.
+- 사람 전용 증거 이월: AC-005 (4)·AC-006·AC-009 7~14번(시뮬레이터).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 ## §E.4 Sync-phase Audit-Ready Signal
