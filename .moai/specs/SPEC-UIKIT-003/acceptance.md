@@ -227,9 +227,13 @@ sed -n '/^`AddActivityView` (22절)/,/^\*\*형태가 바뀌는/p' acceptance.md 
   6. `git diff --name-only origin/master...HEAD -- 'Shared/*.swift'`가 **정확히 네 파일**:
      `AddActivityView.swift` · `ActivityDetailView.swift` · `EditCard.swift` · `EditCardView.swift`.
   7. **`PlaceField` 3절**(REQ-042): (a) 타입이 `Shared/AddActivityView.swift`에 **그대로 있다** —
-     `grep -c "^struct PlaceField" Shared/AddActivityView.swift`가 **1**. (b) 디바운서가
-     **붙지 않았다** — `grep -c "PlaceSearchDebouncer" Shared/AddActivityView.swift`가 **0**이고
-     `onChange`도 여전히 **0**이다. (c) 계약 6 위반 3건이 고쳐져
+     `grep -c "^struct PlaceField" Shared/AddActivityView.swift`가 **1**. (b) `PlaceField`에
+     디바운서가 붙지 않았다 — 전환 후 화면이 카드 장소 검색을 소유하므로 파일에는
+     `PlaceSearchDebouncer` 인스턴스가 **1건 있는 것이 맞다**(본보기 `AddEventView`와 같은
+     형태. 0.2.0이 적었던 파일 전체 계수 0은 전환 전 기준이었다). REQ-042 (b)가 금지하는
+     것은 **타입 본문**에 붙는 것이므로 거기만 잰다. 세는 명령:
+     `sed -n '/^struct PlaceField/,/^}$/p' Shared/AddActivityView.swift | grep -c "PlaceSearchDebouncer\|onChange"`가
+     **0**이다. (c) 계약 6 위반 3건이 고쳐져
      `grep -c "\.secondary\|\.quaternary" Shared/AddActivityView.swift`가 **0**이다(전환 후
      파일에 남는 위반은 PlaceField 것뿐이라 구간 경계 없이 파일 전체로 잰다).
   8. `FullSirView`의 `PlaceField` 호출 3곳(`:107`·`:366`·`:379`)이 **무변경**이고 그 화면이
