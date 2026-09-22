@@ -42,7 +42,10 @@ final class AIAssistant: ObservableObject {
 
     /// 대화 히스토리(툴 라운드트립 포함). role: user/model/function. (Gemini generateContent 형식)
     private var contents: [[String: Any]] = []
-    /// 카드에서 **후보를 탭해 확정한 장소**(이름 → 좌표). 인자에는 이름만 실어 보내고 좌표는 여기서
+    /// 카드에서 **후보를 탭해 확정한 장소**(조회 열쇠 → 좌표). 열쇠는 보통 이름이되, 같은 이름이
+    /// 이미 다른 좌표에 묶여 있으면 구분 열쇠(이름 · 주소, 그다음 이름 · 좌표)로 갈린다 —
+    /// 판정은 choose(field:place:)가 한다. **값은 언제나 사용자가 고른 원래 Place**라 구분 문자열이
+    /// 저장 데이터로는 새지 않는다. 인자에는 열쇠 문자열만 실어 보내고 좌표는 여기서
     /// 되찾는다 — 내부 토큰을 인자에 실으면 모델·요약 문구로 그대로 새어 나간 전례가 두 번 있고
     /// (현재 위치·가는 편 없음), 이름만 실으면 실행부가 같은 이름을 **다시 검색**해 다른 지점이
     /// 잡힌다('회사' → 농업회사법인 화조원). 대화가 끝날 때까지 산다(resetConversation이 지운다).
@@ -740,13 +743,47 @@ final class AIAssistant: ObservableObject {
         bubbles[b].ask?.fields[f].chosen = value
     }
 
-    /// 검색 후보를 탭했을 때. 이름을 `chosen`에 넣고 **좌표는 confirmedPlaces에 따로** 기록한다.
+    /// 검색 후보를 탭했을 때. 조회 열쇠를 `chosen`에 넣고 **좌표는 confirmedPlaces에 따로** 기록한다.
     /// 이 순간부터 그 이름은 "앱이 못 푸는 값"이 아니다 — 일반명사 거절(unresolvedGenericPlace)과
     /// 검색이 여기서 갈린다: 자유 텍스트로 '사무실'을 확정하는 건 여전히 거절이고, 검색 결과에서
     /// 고른 '사무실'(진짜 상호, 좌표 있음)은 통과한다.
+    ///
+    /// 열쇠는 이름이 **처음**일 때만 이름이다. 장소 줄이 둘 이상인 툴(create_schedule 2줄·
+    /// create_recurring_schedule 2줄·create_activity 3줄)에서 같은 상호의 다른 지점을 고르면,
+    /// 두 번째 확정이 이름 열쇠로 첫 좌표를 덮어 두 줄이 한 지점으로 무너진다(이동 0분). 그래서
+    /// 이름이 이미 다른 좌표에 묶여 있으면 구분 열쇠로 저장하고 `chosen`에도 **같은 문자열**을
+    /// 세운다 — 모델이 확인 때 그 문자열을 인자로 되돌려주면 사전이 그대로 걸리므로, 앞 카드에서
+    /// 확정한 좌표가 뒤 카드의 같은 이름에 붙는 경로(대화 범위 오염)도 추가 가드 없이 구조적으로
+    /// 닫힌다. 모델이 이 문자열을 말을 바꿔(paraphrase) 돌려주면 조회가 빗나가 새 검색으로
+    /// 떨어지는데, 그때의 동작은 이 처리 이전의 모호한 검색 동작이지 잘못된 확정 좌표가 아니다 —
+    /// 열화의 방향이 안전한 쪽이다. 칩 글자가 구분 문자열로 길어지는 것이 이 변경의 유일한
+    /// 보임새 변화다.
     func choose(field: UUID, place: Place) {
-        confirmedPlaces[place.name] = place
-        choose(field: field, value: place.name)
+        let key = Self.confirmedPlaceKey(for: place, in: confirmedPlaces)
+        confirmedPlaces[key] = place
+        choose(field: field, value: key)
+    }
+
+    /// 확정 장소의 사전 열쇠를 고른다. 후보가 사전에 **다른 좌표**에 점유돼 있으면 다음 후보로
+    /// 가고, **같은 지점**이면 그 열쇠를 그대로 쓴다 — 같은 지점 재확정은 충돌이 아니므로
+    /// (isSamePlace 50m) 되선택이 열쇠를 늘리지 않는다. 비어 있는 자리면 그대로 쓴다.
+    ///
+    /// 후보는 결정적이어야 한다 — 카운터·확정 시각·랜덤은 쓰지 않는다. 열쇠가 확정 순서에
+    /// 달리면, 같은 장소를 같은 순서로 골라도 회차마다 다른 열쇠가 만들어져 모델이 되돌려준
+    /// 문자열과 사전이 어긋난다. 순서가 ① 이름 ② 이름 · 주소 ③ 이름 · 좌표인 이유: 이름만
+    /// 겹치면 주소에서 갈리고, 주소까지 같은 다른 지점은 좌표에서 갈린다. 좌표는 4소수점으로
+    /// 반올림하는데(≈11m) 같은 문자열로 찍히는 두 지점은 최대 십수 미터라 50m의 isSamePlace
+    /// 기준 안에서 같은 지점이 된다 — 즉 ③까지 다른 좌표에 점유되는 경우는 원리상 없고,
+    /// 마지막 폴백은 컴파일 전체성을 위한 죽은 지점이다(강제 언래핑 대신 `?? place.name`).
+    private static func confirmedPlaceKey(for place: Place, in confirmed: [String: Place]) -> String {
+        var candidates = [place.name]
+        if !place.address.isEmpty { candidates.append("\(place.name) · \(place.address)") }
+        candidates.append("\(place.name) · \(String(format: "%.4f, %.4f", place.latitude, place.longitude))")
+        for key in candidates {
+            if let taken = confirmed[key], !isSamePlace(taken, place) { continue }
+            return key
+        }
+        return candidates.last ?? place.name
     }
 
     /// 후보 개수 상한. 카카오는 10건까지 주지만 카드가 그만큼 길어지면 아래 줄들이 화면 밖으로
