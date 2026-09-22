@@ -24,6 +24,7 @@ kanban_card: t6
 |---|---|---|
 | 0.1.0 | 2026-09-22 | 최초 작성. 칸반 카드 t6 본문과 루트 `plan.md` 후속 8번(t3 sync의 `--deep` 렌즈가 올린 계통 회귀)을 GEARS로 정식화. **인용 줄번호는 전부 이 워크트리(`t6`)의 베이스 `c5396b3`에서 명령을 돌려 얻었고, 세는 명령을 각 자리에 함께 적었다** — SPEC-UIKIT-001 HISTORY 0.1.1이 어림 인용 27건으로 run 단계를 없는 코드로 보낸 것이 이 관례가 생긴 이유다. 카드 본문의 "**화면마다 같은 4줄 수정**"은 실측으로 **깨졌다**: `AddEventView`는 t3보다 **작은** 수정이고(§1.4), `AIAssistant`는 t3의 수정을 **받을 수 없다**(§1.5). 둘 다 근거를 명령과 함께 적었다. `AIAssistant` 쪽 기법은 미해소 — §4 D-1에 두 안을 기록하고 B안을 권고하되, 착수 승인 게이트용 미해소 표식은 `plan.md` §2에만 둔다(`spec.md`·`acceptance.md`에는 두지 않는 관례). **인용 정정 1건**: §4 D-1 A안의 "같은 조회를 이미 하는 자리"를 `:740-741`로 적었으나 실측은 **`:738-739`**다(`:740`은 `chosen` 대입, `:741`은 닫는 괄호) — plan 레인의 독립 재측정이 잡아 §4 본문을 고치고 세는 명령(`grep -n "bubbles\[b\].ask?.fields.firstIndex" Shared/AIAssistant.swift`)을 붙였다. 이 SPEC에서 명령 출력이 아니라 읽은 코드에서 눈으로 센 유일한 줄번호였고, **정확히 그 하나가 틀렸다.** 나머지 인용은 레인의 재측정과 전부 일치했다 |
 | 0.1.1 | 2026-09-22 | D-1 해소 — 운영자가 B안(확정 시점 이름 구분) 채택. §4 D-1 머리말·서두를 해소 문구로 바꾸고 frontmatter `status`를 draft → in-progress로(run 단계 전이). 인용 줄번호 변동 없음 — 코드는 아직 한 줄도 안 바뀌었다. 게이트 기록·AC-005 정리 경위는 progress.md §E.1에 있다 |
+| 0.1.2 | 2026-09-22 | M2(AddEventView) 구현 중 계수 신호 자기모순 정정 — REQ-001·AC-001의 "`\[String: Place\]`"=0은 REQ-002·AC-002가 요구하는 `favoritePlaces` 선언(=1)과 양립 불가(실측: 총수 1 = 전부 favoritePlaces, `confirmedPlaces: [String: Place]` = 0). 신호 범위를 confirmedPlaces 선언으로 좁혔다. 문서 정정이므로 그 자리에서 반영 |
 
 ## 0. 이 SPEC의 성격과 예산
 
@@ -153,7 +154,7 @@ $ grep -c "confirmedPlaces\[" Shared/AddEventView.swift
 
 ### 2.1 `AddEventView` (001번대)
 
-- **REQ-001 (Ubiquitous)**: The screen's confirmed-place dictionary shall be keyed by row identity, and its read shall be fail-closed. `@State private var confirmedPlaces: [String: Place]`(`:19`)를 `[UUID: Place]`로 바꾸고, `confirmedPlace(_:)`(`:511-512`)의 `field(key)?.chosen.flatMap { confirmedPlaces[$0] }`를 t3와 같은 fail-closed 형태 `field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }`로 바꾼다(본보기: `AddActivityView:493-494`). 근거: §1.1·§1.4. 기계적 신호: `grep -c "\[UUID: Place\]" Shared/AddEventView.swift`가 **1**, `grep -c "\[String: Place\]" Shared/AddEventView.swift`가 **0**.
+- **REQ-001 (Ubiquitous)**: The screen's confirmed-place dictionary shall be keyed by row identity, and its read shall be fail-closed. `@State private var confirmedPlaces: [String: Place]`(`:19`)를 `[UUID: Place]`로 바꾸고, `confirmedPlace(_:)`(`:511-512`)의 `field(key)?.chosen.flatMap { confirmedPlaces[$0] }`를 t3와 같은 fail-closed 형태 `field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }`로 바꾼다(본보기: `AddActivityView:493-494`). 근거: §1.1·§1.4. 기계적 신호: `grep -c "\[UUID: Place\]" Shared/AddEventView.swift`가 **1**, `grep -c "confirmedPlaces: \[String: Place\]" Shared/AddEventView.swift`가 **0**(2026-09-22 M2 정정 — 총수 계수 `\[String: Place\]`는 REQ-002의 `favoritePlaces` 선언까지 세어 AC-002 (3)과 양립 불가했다).
   - **fail-closed가 선택이 아닌 이유.** 이름이 열쇠이던 동안에는 `chosen`이 nil인 줄이 사전에 **자연히** 걸리지 않았다(열쇠가 없으니까). 신원이 열쇠가 되면 줄은 언제나 열쇠를 갖고 있으므로, `chosen`을 지운 줄이 **옛 좌표를 계속 들고 있게 된다.** t3가 렌즈 권고로 이 절을 복원한 자리이며(SPEC-UIKIT-003 §HISTORY 0.2.1 ⑥), 빠뜨리면 같은 결함이 형태만 바꿔 살아난다.
   - 읽기 소비자 넷이 이 함수를 통과하므로 자리는 하나다 — `:406`(`prefillOrigin` 가드) · `:444-445`(`recomputeEstimates`) · `:516`(`originCoord`) · `:547-548`(`save()`). 세는 명령: `grep -n "confirmedPlace(" Shared/AddEventView.swift`.
 

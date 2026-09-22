@@ -116,6 +116,17 @@ plan 레인이 SPEC의 인용을 트리에 대고 독립 재측정했고, **한 
 
 ## §E.2 Run-phase Evidence
 
+### M2 — AddEventView 재키잉 (2026-09-22, 구현 swift-impl · 코드 `02481c6`)
+
+- 구현 주체는 plan.md §4 배정표대로 `swift-impl` 전문가. 오케스트레이터가 diff 전문을 대조하고 핵심 신호를 다시 잰 뒤 수용했다.
+- 변경: `Shared/AddEventView.swift` 하나(40 삽입·14 삭제). REQ-001~004 + 편집 씨앗 `fields[2].id`/`fields[1].id`(§1.4 (라)). 다른 파일·새 파일 0(REQ-021 — `git status --porcelain`로 확인, xcodegen 불필요).
+- 기계 신호 13종(AC-001~004): **12종 초록, 1종은 스펙 자기모순** — AC-001 (1)의 총수 계수(`[String: Place]`=0)가 AC-002 (3)의 `favoritePlaces: [String: Place]`=1과 양립 불가(실측: 총수 1 = 전부 favoritePlaces 선언, `confirmedPlaces: [String: Place]` = **0**). REQ-001·AC-001의 신호를 confirmedPlaces 선언으로 좁혀 정정(spec.md HISTORY 0.1.2).
+- 오케스트레이터 재실측(전문가 보고만 믿지 않고): `confirmedPlaces[` = **5** · `confirmedPlaces: [String: Place]` = **0** · `favoritePlaces` = **3** · `confirmedPlace(` 선언 1+호출 6(새 자리 없음) · `confirmedPlaces[Self.hereMarker]` = **0** · `hereMarker` = **8** · `reseed|forgetPlaces` = **0**.
+- 빌드(swift-impl이 실행, 로그 `build-ios.log` 142,290B·`build-macos.log` 76,676B — 워크트리 루트 미추적): iOS·macOS 모두 `BUILD SUCCEEDED`. swift 경고 수는 오케스트레이터가 로그에서 다시 잼 — **0 / 0**. 로그에 `AddEventView.swift` 컴파일 단계가 이번 실행분으로 확인됐다.
+- 드라이버·프록시는 M4에서 통째로 돌린다 — 이 단계에서 그 컴파일 집합 파일들은 무변경이라 결과가 베이스라인과 결정적으로 같다(REQ-030 (b)).
+- **사람 전용 증거 이월**(AC-009가 덮는다): AC-003 (4) 즐겨찾기 칩→이동시간 계산(가장 조용한 실패 지점), AC-004 (3) 현재 위치 프리필, AC-009 전체.
+- **후속 등록 1건(REQ-021 계약)**: 직접입력(`submitCustom`)이 장소 줄의 옛 좌표를 지우지 않는다 — 줄 신원 키가 연 실패 모양(옛 좌표가 새 이름에 실려 저장 통과). `AddActivityView`도 같은 구조(오케스트레이터가 `:423-429` 직접 확인). 루트 `plan.md` 후속 **14번**으로 등록, M4 code-safety 렌즈가 재판정한다.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 ## §E.4 Sync-phase Audit-Ready Signal

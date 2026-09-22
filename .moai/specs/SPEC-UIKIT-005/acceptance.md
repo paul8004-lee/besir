@@ -51,7 +51,8 @@
 - **When** 열쇠가 `[UUID: Place]`가 되고 읽기가 t3와 같은 fail-closed 형태로 바뀌면
 - **Then** 넷이 동시에 성립한다:
   1. `grep -c "\[UUID: Place\]" Shared/AddEventView.swift`가 **1**이고
-     `grep -c "\[String: Place\]" Shared/AddEventView.swift`가 **0**이다.
+     `grep -c "confirmedPlaces: \[String: Place\]" Shared/AddEventView.swift`가 **0**이다.
+     (2026-09-22 M2 정정 — 원문의 총수 계수는 REQ-002가 요구하는 `favoritePlaces: [String: Place]` 선언까지 세어 AC-002 (3)의 **1**과 양립 불가했다. 실측: 총수 1 = 전부 favoritePlaces, `confirmedPlaces: [String: Place]` = 0. 본보기 `AddActivityView`도 같은 모양이다.)
   2. `confirmedPlace(_:)`의 본문이 `field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }`
      형태다 — `$0.chosen == nil ? nil :` 절이 **있다**. 세는 명령:
      `grep -c "chosen == nil ? nil : confirmedPlaces" Shared/AddEventView.swift`가 **1**.
