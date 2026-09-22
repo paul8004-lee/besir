@@ -25,6 +25,7 @@ kanban_card: t6
 | 0.1.0 | 2026-09-22 | 최초 작성. 칸반 카드 t6 본문과 루트 `plan.md` 후속 8번(t3 sync의 `--deep` 렌즈가 올린 계통 회귀)을 GEARS로 정식화. **인용 줄번호는 전부 이 워크트리(`t6`)의 베이스 `c5396b3`에서 명령을 돌려 얻었고, 세는 명령을 각 자리에 함께 적었다** — SPEC-UIKIT-001 HISTORY 0.1.1이 어림 인용 27건으로 run 단계를 없는 코드로 보낸 것이 이 관례가 생긴 이유다. 카드 본문의 "**화면마다 같은 4줄 수정**"은 실측으로 **깨졌다**: `AddEventView`는 t3보다 **작은** 수정이고(§1.4), `AIAssistant`는 t3의 수정을 **받을 수 없다**(§1.5). 둘 다 근거를 명령과 함께 적었다. `AIAssistant` 쪽 기법은 미해소 — §4 D-1에 두 안을 기록하고 B안을 권고하되, 착수 승인 게이트용 미해소 표식은 `plan.md` §2에만 둔다(`spec.md`·`acceptance.md`에는 두지 않는 관례). **인용 정정 1건**: §4 D-1 A안의 "같은 조회를 이미 하는 자리"를 `:740-741`로 적었으나 실측은 **`:738-739`**다(`:740`은 `chosen` 대입, `:741`은 닫는 괄호) — plan 레인의 독립 재측정이 잡아 §4 본문을 고치고 세는 명령(`grep -n "bubbles\[b\].ask?.fields.firstIndex" Shared/AIAssistant.swift`)을 붙였다. 이 SPEC에서 명령 출력이 아니라 읽은 코드에서 눈으로 센 유일한 줄번호였고, **정확히 그 하나가 틀렸다.** 나머지 인용은 레인의 재측정과 전부 일치했다 |
 | 0.1.1 | 2026-09-22 | D-1 해소 — 운영자가 B안(확정 시점 이름 구분) 채택. §4 D-1 머리말·서두를 해소 문구로 바꾸고 frontmatter `status`를 draft → in-progress로(run 단계 전이). 인용 줄번호 변동 없음 — 코드는 아직 한 줄도 안 바뀌었다. 게이트 기록·AC-005 정리 경위는 progress.md §E.1에 있다 |
 | 0.1.2 | 2026-09-22 | M2(AddEventView) 구현 중 계수 신호 자기모순 정정 — REQ-001·AC-001의 "`\[String: Place\]`"=0은 REQ-002·AC-002가 요구하는 `favoritePlaces` 선언(=1)과 양립 불가(실측: 총수 1 = 전부 favoritePlaces, `confirmedPlaces: [String: Place]` = 0). 신호 범위를 confirmedPlaces 선언으로 좁혔다. 문서 정정이므로 그 자리에서 반영 |
+| 0.1.3 | 2026-09-22 | M4 ui-design 렌즈 정정 — REQ-022의 "확정 칩" 예외를 chosen이 그대로 흐르는 표면 전부(칩·확정 거품 줄 `chosenLine`·재탭 검색창 씨앗 `openCustom`)로 확정. 한 표면만 숨기면 칩과 거품이 다른 말을 하게 되고 `EditCard`·`EditCardView`는 REQ-021로 못 고쳐 숨김이 구조적으로 절반만 된다. AC-007 (6)·AC-009 (12)(13) 같은 정정. 표시 규칙 자체는 무변경 — 세 표면 모두 이 카드 이전부터 chosen을 그대로 심었다 |
 
 ## 0. 이 SPEC의 성격과 예산
 
@@ -190,7 +191,7 @@ $ grep -c "confirmedPlaces\[" Shared/AddEventView.swift
   - **새 소스 파일을 만들지 않는다** — 따라서 `xcodegen generate`가 필요 없고 **서명 계정 리셋도, `besir-iOS`·`besirShare` 두 타깃의 Team 재선택 요청도 없다.** 기계적 신호: `git diff --name-only --diff-filter=A <base>...HEAD -- 'Shared/*.swift'`가 **0건**. (`Tools/`는 빌드 대상이 아니므로 그 파일이 바뀌어도 `xcodegen`과 무관하다 — 이 워크트리 `CLAUDE.md` § 빌드 · 배포.)
   - 수정 중 눈에 띈 개선은 코드가 아니라 루트 `plan.md`의 후속 항목으로 적는다.
 
-- **REQ-022 (Ubiquitous)**: Nothing user-visible shall change except what the chosen `AIAssistant` design forces. 이 카드는 좌표의 정확성을 고치는 것이지 보임새를 바꾸는 것이 아니다. 화면 배치·칩 문법·줄 구성·문구는 그대로다. **유일한 예외**: §4 D-1에서 **B안이 채택될 경우** 같은 이름이 겹치는 순간에 한해 확정 칩의 글자가 구분용 문자열로 바뀐다. 그 변화는 결함의 최악 성질("화면엔 이름만 보여 알아챌 신호가 없다")을 **의도적으로** 되갚는 것이므로 손실이 아니라 순증이며, 그때에만 `ui-design` 렌즈가 run 단계 명단에 든다(`plan.md` §4).
+- **REQ-022 (Ubiquitous)**: Nothing user-visible shall change except what the chosen `AIAssistant` design forces. 이 카드는 좌표의 정확성을 고치는 것이지 보임새를 바꾸는 것이 아니다. 화면 배치·칩 문법·줄 구성·문구는 그대로다. **유일한 예외**: §4 D-1에서 **B안이 채택될 경우** 같은 이름이 겹치는 순간에 한해, 확정된 `chosen` 문자열이 그대로 보이는 표면 전부의 글자가 구분용 문자열로 바뀐다 — 확정 칩(`EditCardView`의 `typedLabel`), 확인 시 사용자 거품으로 바뀌는 확정 요약 줄(`AIAssistant`의 `chosenLine`), 칩 재탭으로 에디터를 열 때 검색창에 뿌리는 씨앗(`EditCardView`의 `openCustom`). 세 표면 모두 이 카드 이전부터 `chosen`을 그대로 심었으므로 표시 규칙은 무변경이다(2026-09-22 M4 정정 — 한 표면만 숨기면 칩과 거품이 다른 말을 하게 되고, `EditCard`·`EditCardView`는 REQ-021로 못 고치므로 숨기는 것이 구조적으로 절반만 된다). 그 변화는 결함의 최악 성질("화면엔 이름만 보여 알아챌 신호가 없다")을 **의도적으로** 되갚는 것이므로 손실이 아니라 순증이며, 그때에만 `ui-design` 렌즈가 run 단계 명단에 든다(`plan.md` §4).
   - A안이 채택되면 보이는 변화는 **0건**이고, 그 사실 자체가 AC-007의 판정 대상이다.
 
 ### 2.4 게이트 (030번대)

@@ -524,14 +524,9 @@ run 인계 11건 중 하나(§Phase 1.7 t3 행 갱신)는 이 sync에서 처리�
     요구한다). **게이트 약화는 확정, 도달 불가는 추정** — AI 활동 생성 경로(`executeCreateActivity`
     계열)는 읽지 않았으므로 그쪽을 확인할 때 함께 판정한다.
 
-14. **직접입력(submitCustom)이 장소 줄의 옛 좌표를 지우지 않는다.** 장소 줄은 `allowsCustom:
-    true`라 검색 후보를 고른 뒤 다른 이름을 직접 입력할 수 있는데 `submitCustom`은 `chosen`만
-    바꾼다. 이름-키 시절엔 다른 이름이 사전에 걸리지 않아 이동시간 계산·저장이 **안전하게
-    멈췄**지만, 줄 신원 키에서는 옛 좌표가 그대로 남아 새 이름에 실려 **저장까지 통과**한다 —
-    좌표 사전 재키잉(t3·t6)이 깨운 휴면 위해다. t6 M2 구현(swift-impl)이 밝히고(2026-09-22)
-    오케스트레이터가 `AddActivityView:423-429`에서 같은 구조임을 확인했다(t3가 수용한 형태).
-    t6 REQ-021("눈에 띈 개선은 코드가 아니라 후속으로")에 따라 카드 밖에 둔다. 고칠 때는 두
-    화면을 함께 — 한쪽만 고치면 같은 입력에 두 화면의 해석이 갈라진다(계약 5).
+14. **직접입력(submitCustom)이 장소 줄의 옛 좌표를 지우지 않는다 — 기본 흐름에서 오저장까지 간다(격상).** 장소 줄은 `allowsCustom: true`라 `submitCustom`이 `chosen`만 바꾸는데, 좌표 사전 재키잉(t3·t6)이 이 경로의 실패 방향을 바꿨다. t6 M2(swift-impl)가 발견, M4 code-safety가 회귀 방향을 정밀화(2026-09-22): (i) 위치 권한을 켠 새 일정은 `prefillOrigin`이 출발지 줄에 현재 위치 좌표를 심는다 — 여기에 "회사"를 직접입력하면 현재 위치가 "회사"란 이름으로 조용히 저장된다(**기본 흐름 도달**, 예외 경로가 아니다). (ii) 즐겨찾기 라벨을 타이핑하면 재키잉 이전엔 이름-키 읽기가 즐겨찾기 좌표로 정확히 풀렸는데 이제 옛 줄 좌표가 이긴다(정확→부정확). (iii) 모르는 이름은 이전엔 조용한 무동작(안전), 이제 조용한 오저장(오염). 쌍둥이가 `AddActivityView:423-429`에 있다(t6 REQ-021이 그 파일을 금지해 카드 밖 판정 확정 — 한 화면만 고치면 계약 5 위반 모양, AC-003 (1) 계수 신호 재작성도 선행돼야 한다). **Day 닫기·실기기 확인 전에 처리할 것.** 수리 모양: `submitCustom`에서 `choose`의 쓰기 줄을 미러링 — `if c.fields[i].kind == .place { confirmedPlaces[field] = favoritePlaces[value] }`(직접입력엔 검색 후보가 없어 place 항 없음). 수리할 때 `AddEventView:276`↔`AddActivityView:179` 쓰기 줄 lockstep과 `%.4f`↔50m 짝 판정 주석도 함께 못박는다.
+15. **장소 확정 칩이 감기지 않는다 — B안 구분 문자열이 길이 문제를 다시 연다.** t6 M4 ui-design 렌즈의 정적 실측(2026-09-22): 시각 줄 확정 칩은 `.lineLimit(nil).fixedSize(horizontal: false, vertical: true)`로 감기게 돼 있는데(`EditCardView:206-208`) 장소 줄 확정 칩에는 같은 처리가 없고 ChipFlow가 칩을 이상적 폭으로 재니 긴 문자열이 오른쪽으로 넘친다 — 기본 크기에서도, 최대 텍스트에서는 확정적으로. t6 B안의 구분 문자열("이름 · 주소")이 정확히 이 길이대다. 수정은 `EditCardView.swift`라 t6 카드 밖(REQ-021) — 시각 줄과 같은 modifier를 장소 확정 칩에. 시뮬레이터 AC-009 (14)에서 실측 확인 뒤 우선순위 확정.
+16. **기존 Theme 위반 2자리(t6가 만든 것 아님 — M4 ui-design 부기).** `AIChatView:114`의 `.foregroundStyle(.white)`/`.primary`(계약 6 — Theme.bg·Theme.ink가 정답), `AddActivityView:575`의 `cornerRadius: 8`(Theme.radius). t6 diff는 문자열 로직만이라 무관(추가 줄 색·폰트 grep 0건 확인). 후속 3~5의 PlaceField·ConflictBanner 정리와 한묶음으로 본다.
 
 ## 7. 리스크 / 열린 질문
 

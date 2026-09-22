@@ -139,7 +139,26 @@ plan 레인이 SPEC의 인용을 트리에 대고 독립 재측정했고, **한 
 - **M4 안건 1건(전문가 발견, 보고만)**: 확정 거품 요약 줄(`chosenLine`)이 `chosenLabel`을 그대로 찍으므로 겹칠 때 구분 문자열이 **칩과 함께 이 줄에도** 보인다. REQ-022가 "확정 칩"으로만 적은 것보다 표면이 하나 더 있다 — ui-design 렌즈가 판정하고 스펙 문구를 그 판정에 맞춰 정정한다(현행 줄번호도 렌즈에서 재실측). Store·도구 반환 요약에는 닿지 않는다.
 - 사람 전용 증거 이월: AC-005 (4)·AC-006·AC-009 7~14번(시뮬레이터).
 
+### M4 — 대조·게이트·렌즈 (2026-09-22, code-safety + ui-design — 둘 다 읽기 전용)
+
+- **게이트(전부 run 레인 직접 실측)**: 드라이버 **205/205**(M3 항 — 최종 트리에서 재실행) · 프록시 **7/7**(`cd proxy && npm test`, 오케스트레이터 실행) · iOS·macOS `BUILD SUCCEEDED`·swift 경고 **0/0**(최종 트리 = `84328e3` 코드 상태 그대로 — 이후 커밋은 문서뿐이므로 `build-ios-m3.log`·`build-macos-m3.log`가 최종 트리 측정이다).
+- **범위(AC-007, 커밋 범위 실측)**: `git diff --name-only c5396b3...HEAD -- 'Shared/*.swift'` = **AddEventView·AIAssistant 정확히 둘** · `--diff-filter=A` **0건**(xcodegen 불필요·Team 재선택 요청 없음) · `reseed|forgetPlaces` **0** · GuardDriver diff **공백**(인자 거동 무변과 일치 — AC-007 (5)) · 보이는 변화 = B안이 강제하는 **세 표면**뿅(ui-design 전수 목록 8항 중 표면 1·2·3만 변화, 나머지 무변경 확인).
+- **ui-design 판정 4건**: ① chosenLine 표면 — **(a) 채택**: 칩·거품 줄·재탭 검색창 씨앗 세 표면이 모두 chosen을 그대로 심는 자리다. 한 표면만 숨기면 칩과 거품이 다른 말을 하고 `EditCard`·`EditCardView`는 REQ-021로 못 고쳐 숨김이 구조적으로 절반만 된다. REQ-022·AC-007 (6)·AC-009 (12)(13) 정정 반영(spec HISTORY 0.1.3). ② 보이는 변화 전수 — 세 표면 외 0건. ③ 칩 길이 — **장소 확정 칩은 감기지 않는다**(ChipFlow가 이상적 폭으로 재고 lineLimit·fixedSize 없음; 시각 줄 칩만 감김 modifier 보유). 정적으로 넘침 실재 → **후속 15번** 등록, AC-009 (14)가 실측 지점. ④ Theme 토큰 — diff 추가 줄에서 색·폰트 직접 지정 **0건** 준수(기존 위반 2자리는 후속 16번).
+- **code-safety(hazard_coverage 10/10 회전)**: 4대 부류(인덱스 재사용·조용한 실패·외부 한도·복제 계산) **0건**. **should-fix 1건 = 직접입력 옛 좌표(후속 14번) — 유지·격상**: 회귀 방향이 등록 문구보다 심하다(위치 권한 켠 새 일정의 프리필 출발지에 직접입력하면 현재 위치가 그 이름으로 저장 — **기본 흐름 도달**, 즐겨찾기 라벨 타이핑은 정확→부정확, 모르는 이름은 무동작→오저장). 카드 밖 판정 근거 삼중: 쌍둥이가 REQ-021 금지 파일에 있다, AC-003 (1) 계수 신호 재작성이 선행돼야 한다, 수리엔 시뮬레이터 증거가 붙어야 한다. note 4건 — 죽은 폴백(기각, 후보 ③이 원리상 항상 반환 — %.4f↔50m 수학은 구현 검증으로 확인), 마법 인덱스(기각 — §1.4 (라) 의도적·주석 충분), paraphrase↔`ConflictAsk` 반향 비교(관측 메모 — 그릇된 좌표 경로 없음), 쓰기 줄 lockstep(`AddEventView:276`↔`AddActivityView:179` — 후속 14번 수리 때 판정 주석으로 못박는다).
+- **후속 등록·갱신(루트 plan.md)**: **14번 격상**(기본 흐름 도달·"Day 닫기·실기기 확인 전 처리" 명기) · **15번 신규**(장소 확정 칩 감김 — `EditCardView` 소관) · **16번 신규**(기존 Theme 위반 2자리 — `AIChatView:114`·`AddActivityView:575`).
+- **AC 상태 갱신(acceptance.md 매트릭스)**: AC-001·002·007·008 ✅ · AC-003·004·005 🟡(사람 몫은 AC-009가 덮는다) · AC-006·009 ⬜(시뮬레이터·실기기 실행 대기).
+- **줄번호 드리프트 앵커(sync 인용 재정렬용 실측 — 스펙 인용은 전부 `c5396b3` 기준임을 문서가 밝힌다)**: AddEventView `confirmedPlaces` 선언 `:22` · `favoritePlaces` `:26` · choose 쓰기 `:276` · 현재 위치 쓰기 `:447` · `confirmedPlace(_:)` `:537`. AIAssistant `confirmedPlaces` `:52` · `choose(field:place:)` `:761` · `confirmedPlaceKey` `:778` · `isSamePlace` `:2316` · `resolveOrigin` `:2346` · `unresolvedGenericPlace` `:2403` · `resolveDestination` `:2425`.
+
 ## §E.3 Run-phase Audit-Ready Signal
+
+- **run_status: audit-ready-for-personal-evidence** — 기계 몫은 전부 통과했고, 카드를 닫는 나머지는 **사람 몫**(AC-006·AC-009)뿐이다. "기계 초록 = 완료"가 아니다(드라이버 초록 다음 날 실기기 결함 7건의 이력 — 이 SPEC §0도 그 문장으로 시작한다).
+- run_complete_at: 2026-09-22T17:05+09:00 (M1~M4)
+- 커밋: `ebd841c`(M1 게이트) · `02481c6`(M2 코드) · `27d35a5`(M2 문서) · `84328e3`(M3 코드) · `1727585`(M3 문서) · 본 커밋(M4 문서 — 스펙 정정 0.1.3·AC 갱신·후속 3건·이 블록).
+- 코드 범위: 두 파일 정확히(REQ-021) · 새 파일 0. 게이트: 드라이버 205/205 · iOS·macOS 무경고 0/0 · 프록시 7/7 — 전부 이 레인 실측.
+- 렌즈: code-safety **10/10** · ui-design **4/4**(B안 확정으로 명단 포함 — plan.md §4).
+- **운영자 실행 대기**: AC-009 시뮬레이터 14단계(초기화: 설정 → "일정 모두 삭제" 직후 · 즐겨찾기 `집` 1건 등록) + 실기기 4건. AC-006은 그 11번 단계 안에서 함께 돈다. 결과는 이 파일 §E.2에 추가 기록한다.
+- **Day 닫기 인계(ux-check)**: t6 사람 증거 + 후속 14번(격상 — **Day 닫기 전 처리**) + 칩 감김 실측(AC-009 (14)·후속 15번)을 UI통일 Day 이월 목록에 합친다.
+- **sync 인계**: `CHECKLIST.md` 본문 바이트 대조 수리(드리프트를 만든 카드가 수리 — t1 이후 관례) · 루트 `plan.md` §Phase 1.7 t6 행 갱신 · 스펙 인용 재정렬(§E.2 M4의 드리프트 앵커) · AC-006·009 관측 결과 반영 후 상태 승격.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
