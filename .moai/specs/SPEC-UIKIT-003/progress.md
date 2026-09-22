@@ -88,9 +88,52 @@ AC 정정 필요 1건(구현자 보고·리드 확인): AC-009 (7)(b)의 `grep -
 
 미검증(M5/AC-010 이월): 장소 재선택 후 추천 비움(AC-006 (5)), 카드 문법으로 열리는 모습(11), 홍대 재검색(12).
 
-### M5 — 보존 대조·접근성·게이트 (REQ-030~031, 040~042)
+### M5 — 보존 대조·접근성·게이트 (REQ-030~031, 040~042) 🟢
 
-⬜ 대기
+검사: `hns-besir-app-code-safety-specialist`(spawn m5-code-safety, **FIX-FIRST → 수정 완료**) · `hns-besir-app-ux-check-specialist`(spawn m5-ux-check, 36절 개별 대조·AC-008 인벤토리·AC-010 스크립트). 수정: `hns-besir-app-swift-impl-specialist`(spawn m5-fix).
+
+**AC-007 (36절 개별 대조, ux-check)**: ✅ **34** · ⚠️ 2(4절·24절) · ❌ 0. 세기 명령 실측 34(+접두 2)=36. ⚠️ 둘과 5절은 **후시 선언 (e)(f)(g)**으로 acceptance에 선언 목록에 편입(문서 델타) — 계획이 빠뜨린 변경을 대조에서 덮어 숨기지 않고 적었다.
+
+**AC-008 (접근성)**: 순증 8건(줄 그룹 낭독·3중 선택 표현·.isSelected·@ScaledMetric 칩 높이 등 — 원본 두 화면 접근성 호출 실측 0/0) · 상실 선언 3종에 후시 1종(F-3 그룹 머리글 — 줄 이름 낭독 유지로 기능 손실 없음) 추가. 미선언 상실은 F-3 하나뿐이었고 선언으로 편입.
+
+**code-safety (4중 위험 렌즈 전 가동)**:
+- **MAJOR-1 수정** — 이미 켠 "만들기" 칩 재탭이 다리 줄을 중복 삽입해 `field()` 첫 줄 읽기로 저장값이 씨앗값으로 굳는 경로. 멤버십 가드 2곳(`!contains(origin_query/return_query)`)으로 폐쇄(본보기 AddEventView:268 관용구).
+- **MINOR-1 수정** — `rememberTravelValues`의 무조건 대입이 다리 끈 뒤 "장소 없음" 선택 시 기억 장소를 nil로 지우던 것. `if let` 2줄로 폐쇄.
+- **MINOR-2 기록** — 같은 이름 즐겨찾기/저장 장소 좌표 경계(bootstrap이 저장 좌표로 덮음): 반대로 뒤집으면 무손상 편집이 조용히 장소를 옮기므로 현행 유지 — plan.md 후속.
+- **MINOR-3 기록** — `chooseTimePlain` 시작/종료 교차검증이 두 화면에 바이트 동일 중복(본보기에 없던 새 계산 — 계약 5 노출). 5번째 파일 필요라 이 카드 밖 — plan.md 후속(D-2 A안 곁에).
+- 렌즈 0건 통과 기록: H1 await 인덱스 0 · H2 조용한 실패 0(SPEC 명명 함정 — chooseTimePlain 양 화면 배선 확인) · H3 외부 한도 0(묶음·상한·순서 정상) · 강제 언래핑 0 · 카드 신원 0 · 데드 코드 0.
+
+**게이트 (리드 재실측, 최종 트리 기준)**:
+- 드라이버: compile-exit **0**, **205/205 통과**(단언 추가 없음). **비결정성 기록(잔여 위험)**: 같은 바이너리 4회에 205→203→196→(실패 상세)로 도는 것을 관측 — 전 실패가 "이 환경에서 이동시간 조회가 된다" 전제(`seconds=nil`, 살아 있는 ODay 조회)에서 파생하는 C1/C2/C3·J 시나리오. 이 카드는 드라이버 커버리지 파일(뷰 제외)을 안 건드렸으므로(REQ-041 실측) 회귀가 아니라 환경 요동이고, 205/205는 M2·M3·M4 체크포인트와 최종 트리에서 각 1회씩 관측됐다.
+- iOS·macOS 빌드: 양쪽 exit **0** · BUILD SUCCEEDED · 툴체인 경고 제외 **0건**(M5 수정 후 재실측)
+- 프록시: **7/7 통과**
+- 범위: 추가 `Shared/*.swift` **0건**(xcodegen·Team 재선택 없음) · 변경 `.moai/` 밖 **정확히 4 파일**(REQ-041) · `AddEventView`·`AIAssistant`·`AIChatView`·`Store`·`FullSirView` 무변경
+
+**AC-010 (대체 불가능 증거 — 운영자 실행 대기)**: 초기화(설정→"일정 모두 삭제") 후 15단계 + VoiceOver 16단계 스크립트와 실기기 전용 4건을 ux-check가 작성·전달(완료 보고서 첨부). 이 프로젝트의 검증 관례대로 입력 문구·기대 결과를 정확히 준 형태이며, UI 조작은 사용자가 시뮬레이터에서 실행한다(테스트 타깃 부재로 자동화 불가 — "정말 못 하는 것만 넘긴다" 경계).
+
+**sync 인계 — 루트 plan.md 후속 항목 목록**(REQ-041: 전환 중 눈에 띈 개선은 plan.md에):
+1. PlaceSearchDebouncer 최소 글자수 게이트(F-6(ii), 컴포넌트 — 무변경 계약의 두 화면이 함께 바뀜)
+2. `chooseTimePlain` 교차검증 단일 출처화(MINOR-3, D-2 A안과 함께 검토 — 5번째 파일)
+3. PlaceField cornerRadius 8→Theme.radius(:501 계열)
+4. PlaceField 돋보기 버튼 접근성 라벨(:518)
+5. ConflictBanner 잔여 계약 6 위반·radius(AddEventView:601·:604)
+6. ActivityDetailView 삭제 단추 정렬(EventDetailView 문법과 — AC-007 "그대로" 계약 유지를 위해 이번엔 못 고침)
+7. 고른 장소 주소 상시 표시 원하면(후시 선언 (g) 참조)
+8. 같은 이름 즐겨찾기/저장 장소 좌표 경계(MINOR-2)
+9. "주변" 섹션 헤더 .isHeader 특성(AC-008 후속 — Form 랜드마크 낭독 부분 회복)
+10. 토글 문구 "맞춰 도착"과 여유 분의 긴장(문구 정리 때)
+11. 루트 plan.md §Phase 1.7 t3 행 갱신: 카드 본문에 없던 차이(기준 없는 시각 줄)가 새로 판단됐음을 반영
+
+## §E.3 Run-phase Audit-Ready Signal
+
+- run_status: **audit-ready**
+- run_complete_at: 2026-09-22T12:00+09:00 (M5 커밋 시점)
+- 마일스톤 커밋: M2 `d0465e3` · M3 `e341da1` · (AC 정정 `8cbc47a`) · M4 `707b371` · M5 (이번 커밋 — 수정+문서 델타)
+- 게이트 요약(전부 리드 직접 관측): 드라이버 205/205(비결정성 기록 위 참조) · iOS·macOS 무경고 · 프록시 7/7 · diff 4 파일·추가 0
+- Phase 1 게이트: plan-audit iteration 1 FAIL → 델타 수정 → iteration 2 **PASS**(aggregate 약 0.93)
+- 하네스 로스터 실행: swift-impl 4회(M2·M3·M4·M5-fix) · ui-design 3회(M2·M3·M4 검수 전 GO) · code-safety 1회(FIX-FIRST 1+1 → 수정·재검증) · ux-check 1회(36절 대조·AC-008·AC-010 스크립트) — plan.md §2 배정표 전부 이행
+- **Gaps(명시)**: AC-010 시뮬레이터 15+1단계·실기기 4건은 운영자 실행 대기(빌드로 검증 불가). 드라이버 비결정성(환경 요동)은 AC 기록에 남은 잔여 위험.
+- **Residual-risk**: 라이브 이동시간 조회 의존 드라이버 시나리오의 환경 요동 · F-1~F-6 후시 선언의 운영자 승인 여부(완료 보고서에 표시 — sync에서 재확인) · 같은 이름 장소 좌표 경계(MINOR-2, 저빈도).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
