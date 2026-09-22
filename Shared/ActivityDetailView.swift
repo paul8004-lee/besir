@@ -12,10 +12,16 @@ struct ActivityDetailView: View {
     // 저장 버튼의 판정이 카드 생성 한 번으로 대체된다(REQ-020). 화면이 들고 있는 것은 카드가
     // 가질 수 없는 것뿐: 좌표 사전, 검색 묶음, 주변 맛집, 삭제 대화상자.
     @State private var card: EditCard?
-    /// 칩·후보를 탭한 순간 좌표까지 확정된 장소(이름 → 장소). chosen은 이름만 담으므로 여기서
-    /// 되찾는다 — AddEventView.confirmedPlaces와 같은 형태고, 지연 해석 함수는 만들지 않는다
-    /// (계약 5: 만들면 resolvePlace의 세 번째 구현이 된다).
-    @State private var confirmedPlaces: [String: Place] = [:]
+    /// 후보를 탭한 순간 좌표까지 확정된 장소. 열쇠는 이름이 아니라 **줄 신원**(EditField.id)이다.
+    /// 이름으로 걸면 저장된 장소와 같은 이름의 즐겨찾기가 서로를 덮어, 어느 좌표가 살아남는지가
+    /// 씨앗을 뿌린 순서로 정해진다 — 이름이 겹칠 수 있다는 것은 Place 주석이 이미 말한 사실이다
+    /// (같은 상호의 다른 지점). 줄 신원은 생성 때 한 번 찍혀 겹칠 수가 없다. 지연 해석 함수는
+    /// 여전히 만들지 않는다(계약 5: 만들면 resolvePlace의 세 번째 구현이 된다).
+    @State private var confirmedPlaces: [UUID: Place] = [:]
+    /// 즐겨찾기 칩의 라벨 → 장소. 칩 탭은 Place를 들고 오지 않고 라벨만 준다(placeOptions가
+    /// value에 라벨을 싣는다) — 그 라벨을 좌표로 푸는 씨앗이다. 줄 신원 사전과 합치지 않는
+    /// 이유: 라벨은 줄이 아니라 즐겨찾기 목록의 것이다.
+    @State private var favoritePlaces: [String: Place] = [:]
     /// 카드 검색 에디터의 묶음(350ms 지연·취소·같은 질의 스킵). 지연 상수는 이 타입이 단독으로
     /// 소유한다 — 화면이 들고 있으면 카카오 할당량 정책이 두 벌이 된다.
     @State private var placeDebounce = PlaceSearchDebouncer()
@@ -129,13 +135,17 @@ struct ActivityDetailView: View {
     private func bootstrap() {
         guard card == nil, let a = activity else { return }
         // 즐겨찾기는 칩을 만드는 시점에 좌표까지 확정해 둔다 — 탭 순간에 되찾기만 한다.
-        for fav in store.favorites { confirmedPlaces[fav.label] = fav.place }
-        if let loc = a.location { confirmedPlaces[loc.name] = loc }
+        for fav in store.favorites { favoritePlaces[fav.label] = fav.place }
+        // 저장된 장소는 줄을 먼저 만든 뒤 그 줄 신원에 건다 — 이름으로 걸면 같은 이름의 즐겨찾기와
+        // 서로를 덮어, 칩을 탭한 사용자가 고르지 않은 좌표를 받는다.
+        let locationRow = EditField(key: "location_query", kind: .place, label: "장소",
+                                    options: placeOptions, allowsCustom: true,
+                                    chosen: a.location?.name ?? Self.noPlaceMarker)
+        if let loc = a.location { confirmedPlaces[locationRow.id] = loc }
         card = EditCard(fields: [
             .init(key: "title", kind: .title, label: "제목", options: [], allowsCustom: true,
                   chosen: a.title),
-            .init(key: "location_query", kind: .place, label: "장소", options: placeOptions,
-                  allowsCustom: true, chosen: a.location?.name ?? Self.noPlaceMarker),
+            locationRow,
             // 활동의 시작·종료는 도착/출발 기준을 갖지 않는 시각이다(REQ-020) — 접두 없는 ISO로
             // seed하고 기준 칩도 생기지 않는다.
             .init(key: "start_iso", kind: .datetime, label: "시작", options: [], allowsCustom: false,
@@ -153,13 +163,20 @@ struct ActivityDetailView: View {
 
     // MARK: - 칩 선택 · 확정
 
-    /// 칩을 탭했을 때. 이 카드에는 딸린 줄이 없어 값만 적으며, 장소가 바뀌면 주변 맛집 결과를
-    /// 낡은 채로 두지 않는다.
-    private func choose(field: UUID, value: String) {
+    /// 칩을 탭했을 때. 이 카드에는 딸린 줄이 없어 값과 좌표만 적으며, 장소가 바뀌면 주변 맛집
+    /// 결과를 낡은 채로 두지 않는다. `place`는 검색 후보를 탭해 지점까지 특정된 경우에만 실려
+    /// 온다(choosePlace) — 칩 탭은 nil로 들어와 라벨을 즐겨찾기 씨앗에서 푼다.
+    private func choose(field: UUID, value: String, place: Place? = nil) {
         guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return }
         let key = c.fields[i].key
         let previous = c.fields[i].chosen
         c.fields[i].chosen = value
+        // 좌표는 값을 적은 그 줄 자리에 건다. 실려 온 place가 즐겨찾기 씨앗을 이기는 순서인 이유:
+        // 검색 후보는 지점까지 특정된 값이고 즐겨찾기 라벨은 우연히 같을 수 있는 이름일 뿐이라,
+        // 반대로 두면 검색해서 고른 지점이 같은 이름 즐겨찾기의 좌표로 조용히 바뀐다. 씨앗에도
+        // 없으면("장소 없음" 칩) nil이 들어가 옛 좌표가 지워진다 — 이름이 열쇠이던 시절엔 열쇠가
+        // 바뀌며 저절로 풀리던 자리라, 이제 명시로 갚는다.
+        if c.fields[i].kind == .place { confirmedPlaces[field] = place ?? favoritePlaces[value] }
         if key == "location_query", previous != value {
             // 좌표가 달라질 장소를 골랐다는 뜻이다 — 비우지 않으면 저장 뒤 새 장소 이름 아래
             // 옛 장소의 식당이 남는다(§1.2의 결함이 형태만 바꿔 살아남는 경로, REQ-021).
@@ -172,8 +189,7 @@ struct ActivityDetailView: View {
     /// 검색 후보를 탭했을 때 — 이름은 chosen에, 좌표는 이 순간 확정한다(REQ-021). 옛 폼은 이름만
     /// 고르고 좌표는 옛 장소 것을 그대로 써서 "집"을 "회사"로 고치면 이름만 회사였다.
     private func choosePlace(field: UUID, place: Place) {
-        confirmedPlaces[place.name] = place
-        choose(field: field, value: place.name)
+        choose(field: field, value: place.name, place: place)
     }
 
     /// 직접입력(제목). 범위 밖은 받지 않는다 — 거절 표시는 카드 뷰가 띄운다. 장소 줄은 검색
@@ -189,7 +205,8 @@ struct ActivityDetailView: View {
 
     /// 기준 없는 시각 줄의 확인. 종료 줄은 시작보다 뒤여야 한다 — 옛 DatePicker의 in: startDate...
     /// 예방이 카드 문법에서는 확인 시점의 거절로 바뀐다(REQ-030(a)). 거절 문구에 유효 범위를
-    /// 나열하지 않는 것은 프로젝트 규칙이다. false를 돌려주면 카드 뷰가 거절 문법을 띄운다.
+    /// 나열하지 않는 것은 프로젝트 규칙이다. false를 돌려주면 여기서 얹은 note가 그 줄에 남아
+    /// 이유를 말한다 — 카드 뷰의 rejected 표시는 직접입력 줄 전용이라 시각 줄엔 오지 않는다.
     @discardableResult
     private func chooseTimePlain(field: UUID, date: Date) -> Bool {
         guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return false }
@@ -272,9 +289,15 @@ struct ActivityDetailView: View {
         c.fields.first(where: { $0.key == key })?.chosen
     }
 
-    /// 줄의 chosen 이름으로 확정된 장소를 되찾는다 — "장소 없음" 칩은 좌표 사전에 없는 값이라 nil.
+    /// 줄에 걸린 좌표를 되찾는다 — 열쇠는 chosen 이름이 아니라 줄 신원이다. "장소 없음" 칩은
+    /// 고르는 순간 그 줄의 좌표가 지워지므로(choose) 여기서 nil이 나온다.
+    /// `chosen == nil`을 먼저 거르는 이유는 지금 막히는 경로가 있어서가 아니라 **실패 방향을
+    /// 닫아두기 위해서다.** 열쇠가 이름이던 시절엔 이름 없는 줄이 사전을 못 찾아 저절로 nil이
+    /// 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은 없는 줄"이 생기면 그 좌표가 조용히 실려
+    /// 나간다 — 지금은 쓰기 세 자리가 이름과 좌표를 늘 함께 적어 도달 불가지만, 그 불변식을
+    /// 강제하는 것은 코드가 아니라 규율뿐이라 한 절로 갚아 둔다(잘못된 장소보다 없는 장소가 낫다).
     private func confirmedPlace(_ key: String) -> Place? {
-        field(key)?.chosen.flatMap { confirmedPlaces[$0] }
+        field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
     }
 
     // MARK: - 저장 · 삭제

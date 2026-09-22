@@ -425,7 +425,7 @@ t2는 plan 단계에서 한 번 더 쪼개졌다 — 장소 검색 디바운스�
 | t1 | 편집 카드 컴포넌트를 `Shared/`로 추출 + **AI 카드만** 그것을 쓰도록 전환 | `SPEC-UIKIT-001` | done — 2026-09-18 plan·run·sync 완료 |
 | t2 | UI 통일 2a — `AddEventView` 전환 + 장소 검색 디바운서 단일화(4파일) (t1 done 이후) | `SPEC-UIKIT-002` | done — 2026-09-20 run·sync 완료 |
 | t4 | UI 통일 2b — `EventDetailView` 크롬 통일 + 시각 포매터·기준 매핑 단일화(본체 2파일 + N2 치환 8줄) (t2 done 이후) | `SPEC-UIKIT-004` | done — 2026-09-20(run·sync 종결, 3-phase close. Phase 1 감사는 INCONCLUSIVE→운영자 승인 진행 — 채널 전멸 경위·재감사 조건은 plan-audit 일일 기록) |
-| t3 | `AddActivityView` · `ActivityDetailView` 전환 (t4 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | 대기 |
+| t3 | `AddActivityView` · `ActivityDetailView` 전환 (t4 done 이후) — 이동 다리(leg)를 컴포넌트 옵션으로 흡수 | `SPEC-UIKIT-003` | done — 2026-09-22(run·sync 종결, 3-phase close. 카드 본문에 없던 차이 1건이 plan 단계에서 새로 판단됐다 — **기준 없는 시각 줄**: 활동의 시작·종료는 도착/출발 기준이 성립하지 않아 기준 칩 줄을 통째로 없앴다(REQ-001~003). Phase 1 감사 iteration 1 FAIL→델타 수정→iteration 2 PASS) |
 
 **t1이 AI 카드까지 전환하는 이유**: 추출한 컴포넌트를 아무도 쓰지 않으면 옳게 추출됐는지 알
 방법이 없다. 추출 원본인 AI 카드가 그것을 쓰고도 동작이 그대로인 것이 정확성의 유일한 증거다.
@@ -442,6 +442,87 @@ SPEC를 쓰고 ui-design + swift-impl을 붙여 진행한다.
 - 가드 드라이버가 `AskField`/`PendingAsk`를 20곳에서 쓰고, 드라이버 컴파일 집합에는 `import
   SwiftUI`가 한 건도 없다. 그래서 꺼낸 **모델 파일은 SwiftUI를 몰라야** 하고, 모델과 뷰는 반드시
   다른 파일이다. CLAUDE.md의 드라이버 `swiftc` 인자 목록도 함께 갱신해야 한다.
+
+**t3가 남긴 후속 항목 13건** (2026-09-22 sync). 둘로 나뉜다 — run이 인계한 11건
+(`SPEC-UIKIT-003` progress.md §E.2 M5 말미)과 sync의 `--deep` 렌즈가 새로 올린 3건(11~13)이다.
+REQ-041이 "전환 중 눈에 띈 개선은 코드가 아니라 루트 `plan.md`의 후속 항목으로"라고 정했기
+때문에 여기로 온다 — 카드 안에서 고쳤다면 4파일 경계와 한 Day 3~4파일 제한이 함께 무너진다.
+
+run 인계 11건 중 하나(§Phase 1.7 t3 행 갱신)는 이 sync에서 처리했고, 2번과 8번은 렌즈 실측으로
+**범위가 넓어졌다**(2번은 26줄 → 81줄, 8번은 즐겨찾기 경계 → 이름-키 부류 전체). 카드 안에서
+닫은 것은 여기 없다 — MAJOR-A(이름-키 좌표 충돌)와 MINOR-C(틀린 주석)는 t3가 직접 고쳤다.
+
+*공유 컴포넌트를 열어야 하는 것* — 고치면 AI 카드·`AddEventView`·활동 두 화면이 함께 바뀐다:
+
+1. `PlaceSearchDebouncer`에 최소 글자수 게이트가 없다(F-6(ii)) — 한 글자에도 카카오를 부른다.
+   외부 한도로 이미 데인 프로젝트라 상수 하나가 곧 비용 방어다.
+2. `AddActivityView` ↔ `ActivityDetailView`에 **바이트 동일한 코드가 123줄** 있다.
+   run 단계는 이것을 `chooseTimePlain` 26줄 하나로 기록했으나(MINOR-3), sync에서 두 번 반증됐다.
+   `--deep` 렌즈가 이름 붙은 함수 블록을 세어 **8블록 87줄**을 냈고, sync 종결 트리에서 리드가
+   **바이트 동일한 최대 연속 구간**으로 다시 재어 **7구간 123줄**을 얻었다(4줄 이상, 괄호·빈 줄만인
+   구간 제외). 두 값이 다른 것은 세는 단위가 달라서다 — 리드 쪽은 인접 함수가 한 구간으로 합쳐지고
+   (`searchPlaces`+`finishPlaceSearch` 31줄, `setLookup`+`field`/`chosenIn`/`confirmedPlace`+
+   `choosePlace` 27줄), 렌즈가 세지 않은 `.task { bootstrap() }` 10줄과 `actions` 10줄도 들어온다.
+   **세는 방법을 적지 않은 수치는 다시 재도 같은 값이 안 나온다** — 위 두 값은 방법과 함께 적었다.
+   재현 명령: `difflib.SequenceMatcher`로 두 파일의 `get_matching_blocks()` 중 4줄 이상.
+   MAJOR-A·MINOR-C 수정이 중복을 늘렸다(주석 정정 +4, `confirmedPlace` fail-closed 주석 +5 —
+   양쪽 동일). **로직 중복은 안 늘었다** — 새 기계장치(`forgetPlaces`·`reseed`·기억 헬퍼 둘)는
+   `AddActivityView`에만 산다. 통합은 5번째 파일이 필요해 카드 밖이고 D-2 A안과 함께 본다.
+   본보기에 없던 새 계산이라 계약 5가 새로 노출된 자리다. 단일 출처화는 5번째 파일을 열어야
+   해 이 카드 밖이고 D-2 A안과 함께 검토하는데, **규모가 3배라 우선순위 판단이 달라진다.**
+   깨지는 시점은 지금이 아니라 다음 수정 때다 — 한쪽만 고치면 두 화면의 해석이 갈라지고
+   그 갈라짐을 알려줄 빌드도 드라이버도 없다(렌더링과 히트테스트가 갈라졌던 그 모양).
+
+*`PlaceField`·`ConflictBanner` 잔여* — REQ-042가 "거처는 그대로 두고 색만"으로 경계를 그어 남은 것:
+
+3. `PlaceField` cornerRadius 8 → `Theme.radius`(:501 계열).
+4. `PlaceField` 돋보기 버튼에 접근성 라벨이 없다(:518) — VoiceOver에 이름 없는 버튼으로 읽힌다.
+5. `ConflictBanner` 잔여 계약 6 위반과 radius(`AddEventView`:601·:604).
+
+*"그대로" 계약 때문에 이번에 일부러 안 고친 것*:
+
+6. `ActivityDetailView` 삭제 단추 정렬이 `EventDetailView` 문법과 어긋난다. AC-007의 36절
+   "그대로" 계약을 지키려 현행 유지했다 — 보존 대조 중에 형태를 바꾸면 무엇을 보존했는지
+   말할 수 없게 된다.
+7. 고른 장소의 주소 상시 표시(후시 선언 (g), 2026-09-22 운영자 승인). 확정 칩은 공유 문법이라
+   화면 하나만 주소를 붙이면 문법이 둘이 된다 — 되살린다면 화면이 아니라 컴포넌트에서다.
+8. **장소 좌표를 이름으로 키잉하는 부류가 두 화면에 남아 있다.** 원래 MINOR-2("bootstrap이
+   저장 좌표로 즐겨찾기를 덮는다")로 좁게 적혀 있던 항목인데, sync의 `--deep` 렌즈가 더 위험한
+   갈래를 찾아 범위를 넓힌다 — 한 화면의 **장소 줄 여럿이 같은 이름-키 사전을 공유**해, 같은
+   상호의 다른 지점을 두 줄에 고르면 나중 쓰기가 앞 좌표를 덮고 두 줄이 같은 좌표를 되읽는다.
+   t3가 `AddActivityView`(줄 3)·`ActivityDetailView`(줄 1)를 줄 신원 키로 바꿔 닫았고,
+   **`AddEventView`(줄 2, 카드 t2가 독립 바인딩을 버린 자리)와 `AIAssistant`(줄 5, 원래 형태)는
+   아직 이름-키다.** 통일이 화면마다 좌표 안전성을 하나씩 버려온 계통적 회귀이므로 남은 둘을
+   한 카드로 묶는다 — **운영자 승인으로 카드 t6에 등록됐다**(2026-09-22, t3 병합 후 · t5 앞).
+   t3의 줄 신원 키 수정이 본보기다. 다만 t6는 화면마다 같은 4줄이 아니다 — t3에서 실측된 대로
+   줄이 배열에서 들고 나는 화면은 재생성된 줄에 좌표를 다시 걸어야 한다(아래 주의).
+
+*접근성·문구*:
+
+9. "주변" 섹션 헤더에 `.isHeader` 특성 — `Form`을 버리며 잃은 랜드마크 낭독을 부분 회복한다
+   (AC-008 상실 선언의 후속).
+10. 토글 문구 "맞춰 도착"과 여유 분(分)의 긴장 — 문구를 정리할 때 함께 본다.
+
+*sync `--deep` 렌즈가 새로 올린 것* (2026-09-22):
+
+11. `EditCard.chooseTimePlain`의 기본값이 **소리 없는 `false`**다(`:263` `{ _, _ in false }`).
+    지금은 무해하다 — `anchored: false` 생성은 정확히 넷(`ActivityDetailView:142`·`:144` ·
+    `AddActivityView:128`·`:130`)이고 두 화면 다 배선한다(`:116`·`:102`). 잔여 위험은 앞날에
+    있다: 누가 `anchored: false` 줄을 더하며 배선을 빼면 **컴파일이 통과하고 확인 버튼이 무신호로
+    죽는다.** 드라이버는 뷰를 보지 않는다. `EditCardView:234-236` 주석이 정확히 그 실패를
+    경고해 두고 기본값이 그 문을 열어 둔 형국이라, D-2와 묶어 기본값 제거를 판단한다.
+12. `ActivityDetailView:339`의 `.onChange(of: nearbyCategory) { Task { await loadNearby() } }`가
+    **취소도 태깅도 하지 않는다** — 종류를 빠르게 두 번 바꾸면 먼저 쏜 요청이 나중에 도착해
+    화면의 종류와 다른 목록이 남는다(`loadNearby:386-392`가 `nearby`를 무조건 덮는다).
+    **t3의 것이 아니다** — 이 diff는 그 기계장치를 한 줄도 건드리지 않았고 `nearbySection`
+    호출부가 `Form Section` → `VStack`으로 옮겨간 두 줄이 전부다(확인: diff에 `nearbyCategory`·
+    `loadNearby` 등장 0건). 카카오 할당량도 함께 태우므로 후속 값은 된다.
+13. `ActivityDetailView`의 저장 게이트가 `.disabled(title.trimmed.isEmpty)`에서
+    `.disabled(!(card?.isReady ?? false))`로 바뀌며 **약해졌다** — `isReady`는 `chosen != nil`만
+    보므로(`EditCard.swift:240`) 저장된 제목이 빈 문자열이면 통과한다. 옛 게이트는 막았다.
+    렌즈는 도달 불가로 봤다(`accepts()`가 빈 입력을 거절하고 `AddActivityView`도 제목 `chosen`을
+    요구한다). **게이트 약화는 확정, 도달 불가는 추정** — AI 활동 생성 경로(`executeCreateActivity`
+    계열)는 읽지 않았으므로 그쪽을 확인할 때 함께 판정한다.
 
 ## 7. 리스크 / 열린 질문
 
