@@ -162,7 +162,7 @@ AC 정정 필요 1건(구현자 보고·리드 확인): AC-009 (7)(b)의 `grep -
 
 sync_status: audit-ready — **sync 단계 종료(3-phase close, 단일 sync 커밋)**
 sync_complete_at: 2026-09-22
-sync_commit_sha: (이 커밋)
+sync_commit_sha: d5203cb
 
 **이 sync는 문서만 만지고 끝나지 않았다.** 독립 렌즈가 확정 결함 하나를 냈고 카드가 run으로
 되돌아갔다가 돌아왔다 — 경위는 아래 §독립 렌즈에 있다. 그래서 이 커밋에는 `Shared/` 두 파일의
