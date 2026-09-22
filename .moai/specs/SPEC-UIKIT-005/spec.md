@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-005
 title: "장소 좌표 사전의 이름-키 충돌 수리 — `AddEventView`·`AIAssistant` (잔여 두 화면)"
 version: "0.1.0"
-status: draft
+status: in-progress
 created: "2026-09-22"
 updated: "2026-09-22"
 author: "manager-spec"
@@ -23,6 +23,7 @@ kanban_card: t6
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-22 | 최초 작성. 칸반 카드 t6 본문과 루트 `plan.md` 후속 8번(t3 sync의 `--deep` 렌즈가 올린 계통 회귀)을 GEARS로 정식화. **인용 줄번호는 전부 이 워크트리(`t6`)의 베이스 `c5396b3`에서 명령을 돌려 얻었고, 세는 명령을 각 자리에 함께 적었다** — SPEC-UIKIT-001 HISTORY 0.1.1이 어림 인용 27건으로 run 단계를 없는 코드로 보낸 것이 이 관례가 생긴 이유다. 카드 본문의 "**화면마다 같은 4줄 수정**"은 실측으로 **깨졌다**: `AddEventView`는 t3보다 **작은** 수정이고(§1.4), `AIAssistant`는 t3의 수정을 **받을 수 없다**(§1.5). 둘 다 근거를 명령과 함께 적었다. `AIAssistant` 쪽 기법은 미해소 — §4 D-1에 두 안을 기록하고 B안을 권고하되, 착수 승인 게이트용 미해소 표식은 `plan.md` §2에만 둔다(`spec.md`·`acceptance.md`에는 두지 않는 관례). **인용 정정 1건**: §4 D-1 A안의 "같은 조회를 이미 하는 자리"를 `:740-741`로 적었으나 실측은 **`:738-739`**다(`:740`은 `chosen` 대입, `:741`은 닫는 괄호) — plan 레인의 독립 재측정이 잡아 §4 본문을 고치고 세는 명령(`grep -n "bubbles\[b\].ask?.fields.firstIndex" Shared/AIAssistant.swift`)을 붙였다. 이 SPEC에서 명령 출력이 아니라 읽은 코드에서 눈으로 센 유일한 줄번호였고, **정확히 그 하나가 틀렸다.** 나머지 인용은 레인의 재측정과 전부 일치했다 |
+| 0.1.1 | 2026-09-22 | D-1 해소 — 운영자가 B안(확정 시점 이름 구분) 채택. §4 D-1 머리말·서두를 해소 문구로 바꾸고 frontmatter `status`를 draft → in-progress로(run 단계 전이). 인용 줄번호 변동 없음 — 코드는 아직 한 줄도 안 바뀌었다. 게이트 기록·AC-005 정리 경위는 progress.md §E.1에 있다 |
 
 ## 0. 이 SPEC의 성격과 예산
 
@@ -237,9 +238,9 @@ $ grep -c "confirmedPlaces\[" Shared/AddEventView.swift
 
 ## 4. 결정 기록
 
-### D-1 — `AIAssistant`에서 단사성을 어떻게 세울 것인가 — **미해소**
+### D-1 — `AIAssistant`에서 단사성을 어떻게 세울 것인가 — **해소: B안 채택 (2026-09-22 운영자 확정)**
 
-§1.5가 보인 대로 t3의 열쇠(`EditField.id`)는 여기 쓸 수 없다. 두 안이 있고 **어느 쪽도 자명하지 않다.** 착수 승인 게이트에서 운영자가 고르며, 그 게이트의 미해소 표식은 `plan.md` §2에 있다.
+§1.5가 보인 대로 t3의 열쇠(`EditField.id`)는 여기 쓸 수 없다. 두 안이 있었고 **어느 쪽도 자명하지 않아** 착수 승인 게이트로 올라갔으며, 운영자가 **B안**을 골랐다(2026-09-22 — 리드 디스패치로 run 레인에 전달, 경위는 progress.md §E.1). 아래 두 안의 분석은 결정 기록으로 남긴다.
 
 **A안 — 인자 슬롯을 열쇠로.** `AskField.key`(= `EditField.key`, `typealias`는 `:31`)로 건다. 쓰기 자리(`:748`)에서는 `bubbles[b].ask?.fields[f].key`로 손에 넣을 수 있고(같은 조회를 `:738-739`가 이미 한다 — `grep -n "bubbles\[b\].ask?.fields.firstIndex" Shared/AIAssistant.swift`), 읽는 자리에서는 각 생성 경로가 슬롯 이름을 **리터럴로 알고 있다**(`input["origin_query"]`·`input["destination_query"]` 등).
 
