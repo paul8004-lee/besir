@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-003
 title: "활동 두 화면을 편집 카드 컴포넌트로 전환 + 시각 줄 배치 정리 (UI 통일 3/3)"
-version: "0.1.0"
+version: "0.2.0"
 status: draft
 created: "2026-09-22"
 updated: "2026-09-22"
@@ -43,7 +43,7 @@ kanban_card: t3
 
 네 편집 화면 중 셋이 카드 문법을 쓰는데 활동 둘만 옛 문법이다. 옛 문법의 내용물:
 
-- `AddActivityView`(267줄) — `TextField`(`:78`) · `PlaceField` 3곳(`:50`·`:102`·`:110`) · `DatePicker` 2개(`:86-87`) · `Toggle` 4개(`:99`·`:107`·`:141`·`:144`) · 세그먼트 `Picker`(`:126-132`). 폼 값이 `@State` **9개**(`:14-29`)에 흩어져 있고 제출 판정은 별도 계산 프로퍼티 `canSave`(`:35-41`)다.
+- `AddActivityView`(267줄) — `TextField`(`:78`) · `PlaceField` 3곳(`:50`·`:102`·`:110`) · `DatePicker` 2개(`:86-87`) · `Toggle` 4개(`:99`·`:107`·`:141`·`:144`) · 세그먼트 `Picker`(`:126-132`). 폼 값이 `@State` **12개**(`:14-29`, 진행 깃발 `saving` 포함 13개)에 흩어져 있고 제출 판정은 별도 계산 프로퍼티 `canSave`(`:35-41`)다.
 - `ActivityDetailView`(222줄) — `Form`/`Section`(`:37-78`) · `TextField` 2개(`:39`·`:42`) · 즐겨찾기 `Menu`(`:44-53`) · `DatePicker` 2개(`:57-58`). 편집값이 `@State` **5개**(`:11-15`)에 있고 `load()`(`:106-113`)가 채우고 `save()`(`:115-129`)가 되읽는다.
 
 계약 6(색은 전부 `Theme` 토큰) 위반은 두 파일에서 **10건**이다 — `AddActivityView` 4건(`:125`·`:206`·`:213`·`:245`), `ActivityDetailView` 6건(`:63`·`:172`·`:180`·`:194`·`:197`·`:201`). 세는 명령: `grep -c "\.secondary\|\.tertiary\|\.quaternary" Shared/AddActivityView.swift Shared/ActivityDetailView.swift`.
@@ -81,7 +81,7 @@ SPEC-UIKIT-002 §3이 `PlaceField`의 계약 6 위반과 디바운스 부재를 
   - (b) **기준 매핑** — `BesirTime.anchor(ofPrefix:)`(`:79-86`)는 **고치지 않는다**. `default: return nil`이 이미 `""`를 "기준 없음"으로 답한다.
   - (c) **글자** — `customLabel`의 `.datetime` 가지(`:172-177`)에 남아 있는 삼항 `$0.prefix == "arr:" ? "도착 " : "출발 "`을 `BesirTime.anchor(ofPrefix:)` 경유로 바꾼다(nil이면 접두어 없이 시각만). 그 삼항이 남아 있는 한 접두 해석이 두 곳이고, `""`가 들어오면 **"출발"이라고 거짓말한다.** 기계적 신호: `grep -c '"arr:" ?' Shared/EditCard.swift`가 **0**.
   - (d) **확정** — `EditCardActions`(`:239-247`)에 `var chooseTimePlain: @MainActor (UUID, Date) -> Bool = { _, _ in false }`를 기본값과 함께 더하고, `datetimeEditor`(`EditCardView:208-233`)의 확인 버튼이 `field.anchored`로 갈라 부른다. `chooseTime`(`:242`)의 `ScheduleAnchor`를 옵셔널로 바꾸지 않는 근거는 §4 D-2에 있다. 기본값이 있으므로 기존 두 생성부(`AIAssistant`·`AddEventView`)는 무변경이다.
-  - **`currentBasis`(`EditCardView:167-170`)는 기준 없는 줄에서 nil을 돌려주는 것이 정답이므로 고치지 않는다.** 확인이 `guard let basis = currentBasis(field) else { return }`(`:216`)에서 조용히 멎던 것이 (d)로 갈라지는 이유다 — 갈라지 않으면 활동의 시각 줄은 **확인을 눌러도 아무 일도 일어나지 않는다.**
+  - **`currentBasis`(`EditCardView:167-170`)는 기준 없는 줄에서 nil을 돌려주는 것이 정답이므로 고치지 않는다.** 확인이 `guard let basis = currentBasis(field) else { return }`(`:219`)에서 조용히 멎던 것이 (d)로 갈라지는 이유다 — 갈라지 않으면 활동의 시각 줄은 **확인을 눌러도 아무 일도 일어나지 않는다.**
 
 - **REQ-002 (Ubiquitous)**: The datetime row shall place its basis chips on their own line, ordered departure-then-arrival, with the time chip on a new line below. `datetimeRow`(`EditCardView:181-203`)의 단일 `ChipFlow`를 둘로 나눠 기준 칩 한 줄, 그 아래 시각 칩 한 줄로 둔다. 기준 칩 순서는 `ForEach([ScheduleAnchor.arrival, .departure])`(`:184`)를 `[.departure, .arrival]`로 바꿔 **출발 기준 → 도착 기준**이다. 근거: 2026-09-20 사용자 확인 중 요청 ③. 지금은 셋이 한 `ChipFlow`에 있어 폭에 따라 시각 칩이 기준 칩 옆에 붙었다 아래로 내려갔다 하고, 큰 글씨 설정에서는 줄바꿈 위치가 또 달라진다 — **배치가 폭의 함수인 것이 요청의 실제 내용**이다. `anchored == false`면 첫 줄이 통째로 없다(REQ-001). 이 함수는 공유 컴포넌트라 **AI 카드와 `AddEventView`가 함께 바뀐다** — 요청 ③의 "공유 컴포넌트라 일정 폼·AI 카드에 함께 적용"이 이것이며, 두 화면에 손을 대서 얻는 것이 아니다.
 
@@ -97,7 +97,7 @@ SPEC-UIKIT-002 §3이 `PlaceField`의 계약 6 위반과 디바운스 부재를 
   - 꺼진 동안의 값은 화면이 기억했다 다시 켜질 때 되심는다(`AddEventView`의 `lastNotifyLead` 형태). 되심지 않으면 토글을 껐다 켠 사용자가 방금 고른 출발지를 잃는다.
   - 장소가 아직 없으면(`:95` `locationPlace == nil`) 다리 줄 자체가 생기지 않는다 — 지금의 "장소를 정하면 이동도 함께 만들 수 있어요"(`:96`)는 **없는 줄을 설명하는 말**이므로 장소 줄의 `note`로 내려간다.
 
-- **REQ-012 (Ubiquitous)**: The travel legs' notification lead shall be a card row, not a constant. `defaultNotify = 30`(`:33`)을 없애고 `notify_lead_minutes` 줄(`kind: .notify`)을 `notify_enabled`가 켜져 있을 때만 배열에 둔다. 옵션은 `AddEventView.notifyLeadRow`(`:246-252`)와 **같은 넷**(출발 시각·10분 전·30분 전·1시간 전)에 직접입력 허용이다 — 두 폼이 다른 보기를 내면 같은 값을 두 문법으로 배우게 된다. 근거: 요청 ②("그 화면에서 알림 세부설정 가능하게 — 현재 불가"). `Store.addActivityWithTravel`은 `notifyLeadMinutes: Int`를 **이미 받고 있으므로**(`Store.swift:213`) Store 쪽 변경은 없다 — 값이 없던 게 아니라 화면이 묻지 않았을 뿐이다.
+- **REQ-012 (Ubiquitous)**: The travel legs' notification lead shall be a card row, not a constant. `defaultNotify = 30`(`:33`)을 없애고 `notify_lead_minutes` 줄(`kind: .notify`)을 `notify_enabled`가 켜져 있을 때만 배열에 둔다. 옵션은 `AddEventView.notifyLeadRow`(`:246-252`)와 **같은 넷**(출발 시각·10분 전·30분 전·1시간 전)에 직접입력 허용이다 — 두 폼이 다른 보기를 내면 같은 값을 두 문법으로 배우게 된다. 근거: 요청 ②("그 화면에서 알림 세부설정 가능하게 — 현재 불가"). `Store.addActivityWithTravel`은 `notifyLeadMinutes: Int`를 **이미 받고 있으므로**(`Store.swift:212`) Store 쪽 변경은 없다 — 값이 없던 게 아니라 화면이 묻지 않았을 뿐이다.
   - 캡션 `"여유 \(defaultBuffer)분 · 알림 \(defaultNotify)분 전"`(`:116`)은 **통째로 사라진다** — D-3 해소로 두 값이 모두 줄이 되므로 캡션에 남길 것이 없다(REQ-014). 줄로 물어놓고 캡션으로 또 말하면 둘이 어긋날 자리가 생긴다. 정보 손실 0: 캡션이 보여주던 두 값이 이제 보이고 **고칠 수도 있다**.
 
 - **REQ-014 (Ubiquitous)**: The outbound leg's arrival buffer shall be a card row, named for the leg it actually applies to. `defaultBuffer = 10`(`:32`)을 없애고 `buffer_minutes` 줄(`kind: .buffer`)을 다리 줄과 같은 동적 멤버십으로 둔다 — `outbound_enabled`가 켜져 있을 때만 배열에 있다. 옵션은 `AddEventView`의 여유 줄(`:223-226`)과 **같은 넷**(0·10·20·30분)에 직접입력 허용이다. 근거: 2026-09-22 운영자 D-3 확정("올림"). 알림만 줄이 되면 캡션에 여유만 남아 **하나는 고칠 수 있고 하나는 못 고치는** 모양이 된다.
@@ -128,7 +128,7 @@ SPEC-UIKIT-002 §3이 `PlaceField`의 계약 6 위반과 디바운스 부재를 
   - (c) **즐겨찾기 `Menu`가 칩이 된다**(REQ-021). 목록이 길면 메뉴는 스크롤하고 칩은 감긴다 — 도달성은 같고 탭이 하나 준다.
   - 사라지지 않는 것으로 특히 확인할 것: 활동 장소가 **선택**이라는 성질(`:50` "장소 (선택)"). 장소 줄이 `isReady`에 걸리면 장소 없는 활동을 만들 수 없게 된다 — `isReady`는 `chosen != nil`을 전수로 보므로(`EditCard.swift:224`) 장소 줄은 **비어 있어도 되는 줄**로 다뤄야 한다. 이 SPEC은 그 방법을 "장소를 고르지 않으면 줄을 만들지 않는다"가 아니라 **"'장소 없음' 칩을 옵션으로 둔다"**로 정한다 — 줄이 없으면 장소를 나중에 더할 길이 화면에서 사라진다.
 
-- **REQ-031 (Ubiquitous)**: The converted screens shall carry the component's accessibility contract and name what they lose. 근거(실측): 두 화면의 접근성 호출과 `@ScaledMetric`은 각각 **0건**이므로(`grep -c "accessibility\|ScaledMetric"`) 컴포넌트가 가진 것(줄 단위 그룹 낭독 `EditCardView:128-130`, 선택 상태 3중 표현, `.isSelected` 특성 `:273`, 칩 높이 iOS 44/macOS 28 `:29-33`)은 전부 순증이다.
+- **REQ-031 (Ubiquitous)**: The converted screens shall carry the component's accessibility contract and name what they lose. 근거(실측): 두 화면의 접근성 호출과 `@ScaledMetric`은 각각 **0건**이므로(`grep -c "accessibility\|ScaledMetric"`) 컴포넌트가 가진 것(줄 단위 그룹 낭독 `EditCardView:151-153`, 선택 상태 3중 표현, `.isSelected` 특성 `:269`, 칩 높이 iOS 44/macOS 28 `:29-33`)은 전부 순증이다.
   - **잃는 것을 숨기지 않는다**: 세그먼트 `Picker`의 "조정 가능" 특성과 좌우 스와이프 선택, `Toggle` 넷의 스위치 특성, `Form`의 섹션 헤더 랜드마크 낭독이 사라진다. 대체 경로는 전부 칩 탭이며 도달 가능한 값은 같다.
 
 ### 2.5 검증과 범위 경계 (040번대)

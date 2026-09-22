@@ -38,8 +38,10 @@
 - **When** `var anchored: Bool = true`가 기본값과 함께 추가되고 해석·매핑·글자·확정 네 경로가
   갈라지면
 - **Then** 여섯이 동시에 성립한다:
-  1. `grep -rc "kind: .datetime" Shared/`의 합이 여전히 **2**이고, 그 두 줄에 `anchored:`가
-     **없다** — 기본값이 있으므로 기존 생성부가 바뀔 이유가 없다.
+  1. `grep -c "kind: .datetime" Shared/AddEventView.swift Shared/AIAssistant.swift`의 합이
+     여전히 **2**(각 1)이고, 그 두 줄에 `anchored:`가 **없다** — 기본값이 있으므로 기존 생성부가
+     바뀔 이유가 없다. 전환으로 새로 생기는 활동의 시각 줄은 다른 파일에 있으므로 이 계수에
+     들지 않는다.
   2. `git diff origin/master...HEAD -- Shared/AIAssistant.swift Shared/AddEventView.swift`가
      **빈 diff**다(REQ-041).
   3. `BesirTime.parseDatetime`의 접두 목록에서 **빈 문자열이 마지막**이다 — 앞에 있으면
@@ -228,7 +230,8 @@ sed -n '/^`AddActivityView` (22절)/,/^\*\*형태가 바뀌는/p' acceptance.md 
      `grep -c "^struct PlaceField" Shared/AddActivityView.swift`가 **1**. (b) 디바운서가
      **붙지 않았다** — `grep -c "PlaceSearchDebouncer" Shared/AddActivityView.swift`가 **0**이고
      `onChange`도 여전히 **0**이다. (c) 계약 6 위반 3건이 고쳐져
-     `grep -c "\.secondary\|\.quaternary" `의 `PlaceField` 구간 해당분이 **0**이다.
+     `grep -c "\.secondary\|\.quaternary" Shared/AddActivityView.swift`가 **0**이다(전환 후
+     파일에 남는 위반은 PlaceField 것뿐이라 구간 경계 없이 파일 전체로 잰다).
   8. `FullSirView`의 `PlaceField` 호출 3곳(`:107`·`:366`·`:379`)이 **무변경**이고 그 화면이
      그대로 돈다 — 색 토큰만 바뀌었으므로 동작 변화가 없어야 한다.
 
