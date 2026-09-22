@@ -25,9 +25,23 @@
 
 (마일스톤별로 채운다 — 커밋 SHA, 게이트 출력, 기계적 신호 실측값.)
 
-### M2 — 컴포넌트 표면 (REQ-001~003)
+### M2 — 컴포넌트 표면 (REQ-001~003) 🟢
 
-⬜ 진행 전
+구현: `hns-besir-app-swift-impl-specialist`(spawn m2-swift-impl) · 설계 검수: `hns-besir-app-ui-design-specialist`(spawn m2-ui-design, 판정 **GO** — 6렌즈 OK·수정 0건).
+
+변경: `Shared/EditCard.swift`(+33/−7) · `Shared/EditCardView.swift`(+30/−14) 두 파일만.
+- REQ-001: `parseDatetime` 접두 목록 `["arr:", "dep:", ""]`(빈 문자열 마지막) · `EditField.anchored = true` 기본값 · `customLabel` 삼항 → `anchor(ofPrefix:)` 경유 switch(nil이면 접두 없는 시각) · `EditCardActions.chooseTimePlain` 기본값 추가 · `datetimeEditor` 확인이 `field.anchored`로 분기
+- REQ-002: `datetimeRow` 기준 칩 전용 ChipFlow(`[.departure, .arrival]`) + 시각 칩 전용 ChipFlow, `anchored == false`면 기준 줄 통째로 부재
+- REQ-003: `departureAnchored`가 `$0.kind == .datetime && $0.anchored`만 봄 — `currentBasis`의 `?? .departure` 폴백은 바이트 무변경(AC-003 (5))
+
+리드 재실측(관측된 출력 — 구현자 보고와 별개로 이 세션이 직접 실행):
+- `grep -c '"arr:" ?' Shared/EditCard.swift` = **0** · `grep -c 'kind == .datetime })' Shared/EditCardView.swift` = **0** · `grep -c 'ScheduleAnchor.arrival, .departure'` = **0** · `.departure, .arrival` = **1** · datetimeRow 내 ChipFlow = **2** · 생성부 `kind: .datetime` AddEventView **1** + AIAssistant **1** · `anchor(ofPrefix:)` 본문 diff 무변경
+- 드라이버(워크트리 CLAUDE.md 레시피): compile-exit **0**, **205/205 통과** — 단언 추가 0건(REQ-040 (a))
+- iOS 빌드: exit **0**, BUILD SUCCEEDED **1**, 툴체인 경고 제외 **0건**
+- macOS 빌드: exit **0**, BUILD SUCCEEDED **1**, 툴체인 경고 제외 **0건** (리드 재실측, 커밋 직전)
+
+미검증(M5/AC-010 이월): 카드 렌더링·제스처·낭독은 가드 밖 — AC-001 (6) 시뮬레이터 확인, AC-002 (3)(4)(5), AC-003 (2)(3)의 기기 관측.
+M3 인계 감시(ui-design 검수 지목, LOW): `AddActivityView`가 진짜 true를 돌려주는 `chooseTimePlain`을 넘기는지 — 깜빡하면 확인 버튼이 조용히 죽는다(REQ-001 (d)의 실패 모양).
 
 ### M3 — AddActivityView 전환 (REQ-010~014)
 

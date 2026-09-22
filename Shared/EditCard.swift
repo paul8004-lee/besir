@@ -62,8 +62,11 @@ import Foundation
 
     /// "arr:2026-09-17T15:00:00" 형태의 시각 줄 값을 (접두, Date)로 푼다. accepts·customLabel·
     /// 직렬화·기준 재선택이 전부 이 파서를 지난다 — 제각각 파면 어느 한쪽만 고쳐진다.
+    /// 접두 없는 값도 ("", Date)로 푼다 — 활동의 시작·종료는 도착/출발 기준을 갖지 않는 시각이라
+    /// 확정값에 접두가 붙지 않는다. 빈 문자열이 목록 맨 끝인 이유: hasPrefix("")는 항상 참이라
+    /// 앞에 두면 "arr:"와 "dep:"가 영영 도달하지 않는다.
     static func parseDatetime(_ raw: String) -> (prefix: String, date: Date)? {
-        for prefix in ["arr:", "dep:"] where raw.hasPrefix(prefix) {
+        for prefix in ["arr:", "dep:", ""] where raw.hasPrefix(prefix) {
             if let d = isoFormatter.date(from: String(raw.dropFirst(prefix.count))) {
                 return (prefix, d)
             }
@@ -159,6 +162,11 @@ import Foundation
     /// 늘어난다. 소유 화면이 카드를 완성한 뒤에 띄운다는 전제로 뷰가 onAppear에서 씨앗을
     /// 뿌린다. AI 카드는 전부 기본값 false라 무변화다.
     var startsOpen: Bool = false
+    /// 시각 줄이 도착/출발 기준을 갖는지. 활동의 시작·종료처럼 기준 없는 시각은 false로 만들며,
+    /// 그런 줄은 기준 칩이 없고(REQ-002) 확정이 chooseTimePlain으로 간다(REQ-001 (d)). 기본값이
+    /// true인 이유는 기존 생성부(AddEventView·AIAssistant)가 전부 기준 있는 줄이라 그 둘이 한
+    /// 줄도 바뀌지 않게 하려는 것이다.
+    var anchored: Bool = true
 
     var chosenLabel: String? {
         guard let chosen else { return nil }
@@ -173,9 +181,16 @@ import Foundation
         case .place, .mode, .title, .toggle: return value
         case .datetime:
             // "arr:2026-09-17T15:00:00" → "도착 9월 17일 (목) 오후 3:00" — 기준이 글자로 박혀
-            // 나간다(확정 요약·재오픈 칩 모두 이 문구를 쓴다).
-            return BesirTime.parseDatetime(value)
-                .map { ($0.prefix == "arr:" ? "도착 " : "출발 ") + BesirTime.when($0.date) } ?? value
+            // 나간다(확정 요약·재오픈 칩 모두 이 문구를 쓴다). 기준 글자는 anchor(ofPrefix:)의
+            // 답으로만 정한다 — 여기서 접두를 다시 읽으면 해석이 두 곳에 살고(계약 5) ""(기준
+            // 없는 시각)이 "출발"로 박혀 나간다.
+            return BesirTime.parseDatetime(value).map { parsed in
+                switch BesirTime.anchor(ofPrefix: parsed.prefix) {
+                case .arrival: return "도착 " + BesirTime.when(parsed.date)
+                case .departure: return "출발 " + BesirTime.when(parsed.date)
+                case nil: return BesirTime.when(parsed.date)
+                }
+            } ?? value
         }
     }
 
@@ -201,7 +216,8 @@ import Foundation
             return String(v)
         case .datetime:
             // 뷰의 DatePicker가 만든 값의 불변식 게이트다(시각 줄에는 텍스트 입력 경로가 없다) —
-            // 접두(도착/출발) + 정규 ISO만 받아들이고 통과하면 정규화해 돌려준다.
+            // 접두(도착/출발) + 정규 ISO만 받아들이고 통과하면 정규화해 돌려준다. 접두 없는 정규
+            // ISO도 받는다 — parseDatetime이 ""를 푼다(REQ-001 (a)).
             return BesirTime.parseDatetime(t)
                 .map { $0.prefix + BesirTime.isoFormatter.string(from: $0.date) }
         }
@@ -234,12 +250,17 @@ struct EditCardChrome {
 }
 
 /// 카드 뷰가 값을 소유한 쪽(AIAssistant 등)을 타입으로 모르게 하는 다리 — 뷰가 부르는
-/// 일곱 동작을 클로저로 묶어 넘긴다. 값은 Store/AIAssistant에만 있고, 결합이 이 어댑터로
+/// 여덟 동작을 클로저로 묶어 넘긴다. 값은 Store/AIAssistant에만 있고, 결합이 이 어댑터로
 /// 수축한다(네 편집 화면이 같은 카드를 쓰려면 뷰가 특정 소유자를 가져선 안 된다).
 struct EditCardActions {
     var chooseValue: @MainActor (UUID, String) -> Void
     var rechooseTimeBasis: @MainActor (UUID, ScheduleAnchor) -> Void
     var chooseTime: @MainActor (UUID, ScheduleAnchor, Date) -> Bool
+    /// 기준 없는 시각 줄의 확정 — chooseTime에서 ScheduleAnchor만 뺀 형태. chooseTime의 인자를
+    /// 옵셔널로 바꾸는 대신 별도 클로저를 둔 이유는 생성부 둘(AIAssistant·AddEventView)과 그
+    /// 안쪽 시그니처가 함께 바뀌지 않게 하려는 것이다(SPEC-UIKIT-003 D-2). 기본값이 있어 기존
+    /// 생성부는 무변경이고, 아직 기준 없는 줄을 만들지 않는 화면은 항상 false를 받는다.
+    var chooseTimePlain: @MainActor (UUID, Date) -> Bool = { _, _ in false }
     var choosePlace: @MainActor (UUID, Place) -> Void
     var searchPlaces: @MainActor (UUID, String) -> Void
     var submitCustom: @MainActor (UUID, String) -> Bool

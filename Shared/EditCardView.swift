@@ -70,9 +70,12 @@ struct EditCardView: View {
         }
     }
 
-    /// 시각 줄이 출발 기준으로 확정됐는지 — 이면 도착 여유 줄이 흐려지고 캡션이 붙는다.
+    /// 시각 줄이 출발 기준으로 확정됐는지 — 이면 도착 여유 줄이 흐려지고 캡션이 붙는다. 기준 있는
+    /// 줄만 재료로 삼는다: 활동 카드의 시작·종료는 기준이 없어 currentBasis의 ?? .departure
+    /// 폴백이 언제나 출발로 답하는데, 그 줄을 재보면 여유 줄은 생기자마자 영구히 흐려진다
+    /// (SPEC-UIKIT-003 §1.4 — REQ-014의 선행 조건이라 폴백은 고치지 않고 묻는 대상을 고쳤다).
     private var departureAnchored: Bool {
-        guard let time = card.fields.first(where: { $0.kind == .datetime }) else { return false }
+        guard let time = card.fields.first(where: { $0.kind == .datetime && $0.anchored }) else { return false }
         return currentBasis(time) == .departure
     }
 
@@ -176,17 +179,27 @@ struct EditCardView: View {
         draftBasis[field.id] = basis
     }
 
-    /// 시각 줄 몸통 — 기준 칩 2개 + (미선택) 점선 캡슐 또는 (커밋) 확정 칩. 칩으로 값을 열거하지
-    /// 않는 이유는 시각 줄을 만드는 쪽(timeField) 주석에 있다.
+    /// 시각 줄 몸통 — 기준 칩 한 줄, 그 아래 (미선택) 점선 캡슐 또는 (커밋) 확정 칩 한 줄. 칩으로
+    /// 값을 열거하지 않는 이유는 시각 줄을 만드는 쪽(timeField) 주석에 있다. 둘을 각기 다른
+    /// ChipFlow에 두는 이유: 한 흐름에 있으면 시각 칩이 감기는 위치가 폭의 함수가 되어 같은
+    /// 카드가 기기 폭·큰 글씨 설정마다 다르게 읽힌다(2026-09-20 사용자 확인 요청 ③).
     private func datetimeRow(_ field: EditField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            ChipFlow(spacing: 6, lineSpacing: 6) {
-                ForEach([ScheduleAnchor.arrival, .departure], id: \.self) { basis in
-                    chip(basis == .arrival ? "도착 기준" : "출발 기준",
-                         selected: currentBasis(field) == basis) {
-                        tapBasis(field, basis)
+            // 기준 없는 줄(활동의 시작·종료)은 이 줄이 통째로 없다 — 기준 칩만 남기면 고를 수
+            // 없는 값을 보여주는 셈이다(REQ-001).
+            if field.anchored {
+                ChipFlow(spacing: 6, lineSpacing: 6) {
+                    // 출발 기준 → 도착 기준 순서는 사용자 확인 요청 ③(2026-09-20)이다.
+                    ForEach([ScheduleAnchor.departure, .arrival], id: \.self) { basis in
+                        chip(basis == .arrival ? "도착 기준" : "출발 기준",
+                             selected: currentBasis(field) == basis) {
+                            tapBasis(field, basis)
+                        }
                     }
                 }
+            }
+
+            ChipFlow(spacing: 6, lineSpacing: 6) {
                 if let label = typedLabel(field) {
                     // 커밋된 값도 선택된 칩 문법으로 남는다(재탭 = 에디터 재오픈) — 텍스트 줄의
                     // 직접입력 칩과 같은 동작. 긴 날짜 문구는 접근성 크기에서 감기게 놔둔다.
@@ -203,8 +216,8 @@ struct EditCardView: View {
     }
 
     /// 시각 에디터 — 다른 줄의 텍스트 에디터 자리에 네이티브 DatePicker가 온다. 바퀴가 보여주는
-    /// 위치는 값이 아니다: 확인을 눌러야 chosen이 생긴다. 기준을 아직 안 골랐다면 확인은 아무것도
-    /// 확정하지 않는다(기준 없는 시각은 없다).
+    /// 위치는 값이 아니다: 확인을 눌러야 chosen이 생긴다. 기준 있는 줄에서 기준을 아직 안 골랐다면
+    /// 확인은 아무것도 확정하지 않고, 기준 없는 줄은 chooseTimePlain으로 곧장 확정한다.
     private func datetimeEditor(_ field: EditField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             DatePicker("날짜·시각", selection: Binding(
@@ -216,11 +229,19 @@ struct EditCardView: View {
             HStack {
                 Spacer()
                 Button("확인") {
-                    guard let basis = currentBasis(field) else { return }
-                    if actions.chooseTime(field.id, basis,
-                                          draftDate[field.id] ?? Self.nextWholeHour()) {
-                        closeCustom(field)
+                    // 기준 있는 줄과 없는 줄이 확정 경로에서 갈라지는 유일한 자리다. 없는 줄을
+                    // 아래 guard에 그대로 두면 확인이 조용히 아무 일도 하지 않는다 — 빌드도
+                    // 드라이버도 못 잡는 실패 모양이라 여기서 갈라야 한다(REQ-001 (d)).
+                    let confirmed: Bool
+                    if field.anchored {
+                        guard let basis = currentBasis(field) else { return }
+                        confirmed = actions.chooseTime(field.id, basis,
+                                                       draftDate[field.id] ?? Self.nextWholeHour())
+                    } else {
+                        confirmed = actions.chooseTimePlain(field.id,
+                                                            draftDate[field.id] ?? Self.nextWholeHour())
                     }
+                    if confirmed { closeCustom(field) }
                 }
                 .buttonStyle(.plain)
                 .font(.callout.weight(.semibold))

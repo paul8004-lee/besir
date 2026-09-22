@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-003
 title: "활동 두 화면을 편집 카드 컴포넌트로 전환 + 시각 줄 배치 정리 (UI 통일 3/3)"
 version: "0.2.0"
-status: draft
+status: in-progress
 created: "2026-09-22"
 updated: "2026-09-22"
 author: "manager-spec"
