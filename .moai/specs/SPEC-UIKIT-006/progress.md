@@ -221,3 +221,78 @@ LocationManager `lastError` 8 · LocationManager `AppKit|UIKit|NSWorkspace|UIApp
   - 감사자의 "N1·N2 이월(그대로)" 지적은 사실이 아니다. 둘 다 `924f924` 전에 반영됐다 —
     `grep -n "pgrep" plan.md spec.md`로 보면 `kill -0` 기본 신호와 `pgrep -fx` 한정 문구가 있고,
     "키가 있고 비어 있지 않음" 출처 문구도 두 파일에 각 1건 있다. 감사자가 옛 문구를 기준으로 판단한 것으로 보인다.
+
+## §E.2 Run-phase 실행·운영자 확인 기록
+
+### 드라이버 실행 1회 — REQ-030 (a) 절차 전 항목
+
+- **실행**: 2026-09-23 16:33:06–16:43:06, 바이너리 `/tmp/besir-t5-run/gd_t5_m4`(세션 scratch, 고유 이름 — `pgrep -fx` 안전).
+  `b8bbe1c` 트리에서 신선 컴파일(exit 0, 호스트 경고 24줄 — 기준선과 동일한 macOS 26 SDK 사용 중단, 카드 삭제분과 무관).
+- **(i) 실행 전 고지·확인**: 키체인 대화상자 가능성(여러 번일 수 있음)과 거부 요청을 고지, 운영자 응답
+  **"시작한다 (권장)"** — 이 세션 직접 입력.
+- **(ii) 백업**: `~/Library/Application Support/besir/`에서 config.json(288B, mtime 09-09)·events.json(2B)·
+  activities.json(2B) → `/tmp/besir-t5-run/backup-run1`(`cp -p`). 없던 것 4종 이름 기록:
+  favorites.json·meals.json·deleted_gcal_ids.json·ai_history.json. 참고 — plan 레인이 관측했던 시험 데이터
+  (`W-하룻밤`·`출근`·`헬스`)는 16:31에 이미 비워진 상태였다(이 세션은 관측만. 운영자쪽 정리·스냅샷 복원으로
+  추정, 이 세션이 확인하지는 못함).
+- **(iii) 시간 제한 600초 — 형태 변경 기록**: `perl -e 'alarm shift; exec @ARGV'` 형태는 워크트리 격리 가드가
+  거부했다(정적 검증 불가 구조). 우회하지 않고 같은 보장을 가드가 읽는 평문으로 옮겼다: **같은 호출 안**
+  `sleep 600 && kill -TERM` 감시자 + 도구 타임아웃 660초. 600초인 이유: 플랜 레인 관측 키체인 대기 행이
+  600초 넘게 CPU 0%였으므로 정상 실행이면 이 안에 끝난다고 본 판단.
+- **결과**: exit 0, **205/205 통과**, 마지막 불변식 "전체 실행 뒤에도 autoAddToCalendar는 꺼져 있다" ✓.
+  로그 265줄, `✗` 0건("실패" 단어 매치 4줄은 전부 `✓`가 붙은 시나리오명 — 201·208·214·216행).
+- **종료 시각 모호성**: 종료가 시작+정확히 600초(16:43:06)라 감시자 발화와 동시. exit 0이고 로그 끝에
+  요약·불변식 줄이 온전하므로 **완주로 판정**(잘렸다면 이 줄들이 있을 수 없다). 프로세스 소멸 이중 확인:
+  `kill -0 19080` 실패 ✓ · `pgrep -fx /tmp/besir-t5-run/gd_t5_m4` 빈 출력 ✓. 다음 드라이버 실행은 감시자를
+  900초로 넓일 것을 권고한다(모호성 재발 방지).
+- **(iv) 복원 전 확인**: 종료 코드 0 기록(위) → 프로세스 소멸 확인(위). 운영자 대화상자 확인 응답:
+  **"모르겠음"** — 등장 여부 미상. 완주했으므로 미응답 대화상자로 멈추지는 않았고, 죽은 PID는 대화상자
+  응답으로 되살지 않으므로 복원을 진행했다.
+- **(v) 복원(16:45:50)**: 3종 `cp -p` 되돌림 → 파일마다 `cmp` **무출력·exit 0**. 실행이 쓴 내용
+  (events.json 408B·activities.json 133B, config.json 무변경)이 2B·2B 실행 직전 상태로 되돌아갔다.
+  없던 4종은 실행 뒤에도 없음(`ls` 확인) — 새 파일 삭제 대상 0건.
+- **(vi) 키체인 답**: "모르겠음"(위 (iv)). 셋(거부·대화상자 없음·허용) 중 어느 것으로도 확정하지 못했다 —
+  구글 연결 여부는 **미상**으로 남는다. 허용으로 볼 근거도 거부로 볼 근거도 없다.
+
+### CLAUDE.md:127 수정 확인 — AC-006 (1)
+
+- 운영자 응답 **"확인 — 교체한다 (권장)"** — 이 세션 AskUserQuestion 직접 입력, 편집 직전
+  (REQ-020 (a)의 인정 수단 1번). 권한 프롬프트는 뜨지 않았다(직접 입력으로만 확인됨).
+- 교체 실행: `[SettingsView.swift:103](Shared/SettingsView.swift#L103)` →
+  `[SettingsView.swift:71](Shared/SettingsView.swift#L71)`. 실측 근거: `:71` = "⚠️ 테스트용 임시 버튼"
+  표식 줄, `:103` = `.frame(width: 460)`, 같은 목록의 `AIChatView.swift:56` 인용과 같은 표식-줄 규칙.
+  잔존 `SettingsView.swift:103` 인용 0건. **감사 3회차 부채 R3-1(재확인 수단 미정)은 이 기록으로 해소됐다.**
+
+## §E.3 Run-phase Audit-Ready Signal
+
+- run_complete_at: 2026-09-23T16:48+09:00
+- run_status: audit-ready
+- 구현 커밋: `b8bbe1c`(M2·M3 — Swift 5파일 +2/−50, spec.md `draft → in-progress` 전이 동반) +
+  기록 커밋(이 커밋 — CLAUDE.md 인용 교체·§E.2·§E.3)
+- **AC 판정**(그레프 신호는 전부 오케스트레이터가 specialist 보고와 별도로 독립 재측정):
+  - AC-001 ✓ — `func addActivity(` 0 · `func addActivityWithTravel` 1 · 문서 문장 전체 대조 1 ·
+    N=232 / N+1=233 / N+3=235(N+2=`@discardableResult`)
+  - AC-002 ✓ — 세 파일 `^import CoreLocation` 0·0·0, 전체 9
+  - AC-003 ✓ — `openLocationSettings` 0건 · AppKit/UIKit/NSWorkspace/UIApplication 0 ·
+    `^#if os(macOS)` 0(빈 껍데기 없음) · `lastError` 8(변경 전과 동일)
+  - AC-004 ✓ — `func updateMeal` 1 · `grep -B1`의 `SPEC-FULL-001` 1. 주석은 한국어로 사유만 서술 —
+    code-safety 렌즈 판정 통과(전제를 현 트리에서 재검증: SPEC-FULL-001 `status: in-progress`,
+    REQ-003이 `updateMeal` 명시)
+  - AC-005 ✓ — `deleteExpired` 0건 · `removeFromCalendar(` 비선언 9
+  - AC-006 (1) ✓ — 위 §E.2 확인 기록. (2)~(4)는 sync 레인 소관
+  - AC-007 ✓ — `git diff --name-only 00ab661...HEAD` = Swift 정확히 5개 + CLAUDE.md + 이 SPEC 디렉터리.
+    새 Swift 파일 0(`xcodegen generate` 불필요 — 돌리지 않았고, 서명 리셋도 없다)
+  - AC-008 (a) ✓ 205/205·exit 0·불변식 ✓ (b) ✓ iOS·macOS 둘 다 `BUILD SUCCEEDED`,
+    `grep 'warning:' <log> | grep -c '\.swift'` 0·0 (c) ✓ proxy 7/7·exit 0
+    (d) ✓ §E.2에 전 항목 기록(드라이버 실행 횟수 1회)
+- **code-safety 렌즈(M4)**: 결함 0건 — 렌즈 4개(await 인덱스 무효화·조용히 묻히는 실패·외부 한도·복제 계산)
+  전부 실행("검사하지 않은 것 = 실패" 계약 준수). 고아 검사 `removeFromCalendar` 9 · `enqueueCalendarUpload` 7 ·
+  `ActivityBlock(title:` 7 — 전부 기대치. `:176` 이동 정확성·삭제 자리 잔해 검사 통과. 관찰 1건
+  (CLAUDE.md 이월)은 위 §E.2에 완료 기록.
+- **하네스 전문가**: M2·M3 `swift-impl`, M4 `code-safety` — 디스패치 지정 그대로. `ui-design` 0명
+  (뷰 파일 셋은 import 한 줄·화면 변화 0 — plan.md §4의 판단 그대로).
+- **미관측·갭**: ① 키체인 등장 여부(운영자 "모르겠음" — 연결 여부 미상) ② 시뮬레이터·실기기 실행 —
+  권고안 (a)(a)(a)는 동작이 바뀌는 자리 0이라 실기기 전용 항목이 없음(SPEC §3.1 머리말) ③ CHECKLIST
+  드리프트 수리·루트 `plan.md:105` 항목 닫기 — sync 소관 ④ 드라이버 완주-감시자 동시 종료의 모호성 —
+  완주 증거(요약 줄 존재·exit 0)로 판정, §E.2에 기록
+- **드라이버 실행 횟수**: 1회(이 세션). 백업·시간 제한·소멸 확인·복원·cmp·키체인 답 기록 전 회 준수.
