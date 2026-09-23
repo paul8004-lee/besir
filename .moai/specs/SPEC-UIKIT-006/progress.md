@@ -303,10 +303,10 @@ LocationManager `lastError` 8 · LocationManager `AppKit|UIKit|NSWorkspace|UIApp
   동작이 바뀌는 자리가 0곳이라 운영자 실행을 기다리는 AC가 없다(SPEC §3.1 머리말). t6의
   `closed-for-machine-evidence`와 다른 값인 이유가 이것이다.
 - sync_complete_at: 2026-09-23
-- sync_commit_sha: 다음 커밋에서 백필한다 — 커밋은 자기 sha를 담을 수 없고 amend로 적으면 그 순간
-  다시 어긋난다(t6 sync가 한 번 겪었다). 001~005가 쓰는 방식이다.
+- sync_commit_sha: 2115990 — 다음 커밋에서 백필했다(001~005와 같은 스키마 필드). 커밋은 자기 sha를
+  담을 수 없고 amend로 적으면 그 순간 다시 어긋난다(t6 sync가 한 번 겪었다).
 - 커밋: `924f924`(plan) · `59c1870`(착수 게이트) · `b8bbe1c`(M2·M3 코드) · `9f96219`(M4 기록) ·
-  sync 종결 커밋 · sha 백필 커밋. 코드 커밋은 `b8bbe1c` 하나뿐이다.
+  `2115990`(sync 종결) · 본 커밋(sha 백필). 코드 커밋은 `b8bbe1c` 하나뿐이다.
 - 이 sync가 만진 파일: `CHECKLIST.md` · 루트 `plan.md` · `spec.md`(frontmatter + HISTORY 0.1.2) · 이 파일.
   `Shared/`·`Tools/`·`CLAUDE.md` 변경 **0건** — 코드 상태는 `b8bbe1c` 그대로다.
 - 작업 주체: sync 레인 오케스트레이터가 직접 했다(인용 대조·게이트·문서). 독립 `--deep` 렌즈만
