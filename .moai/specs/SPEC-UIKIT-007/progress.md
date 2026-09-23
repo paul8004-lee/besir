@@ -5,8 +5,11 @@
 
 ## §E.1 Plan-phase Audit-Ready Signal
 
-- kickoff_gate: pending — "구현 준비 완료"라는 뜻이 아니다. 결정 둘(D-1·D-2)과 Tier 확인이 남아 있고,
-  이 신호가 여는 다음 단계는 run 착수가 아니라 **착수 승인 게이트**다(`plan.md` §2).
+- kickoff_gate: **resolved 2026-09-23** — 운영자가 결정했고 리드가 전했다(기록은 `plan.md` §2): D-1 (a) 한 줄 씨앗 ·
+  D-2 (a) 한 자리 두 빌드 · Tier S. O-1은 카드가 아니다(리드 판정, Day 닫기 이월 목록). 이 plan 세션은 운영자의 답을
+  직접 보지 않았다. 결정을 반영한 판은 `spec.md` 0.1.1이다.
+- (게이트 전 기록) kickoff_gate: pending — 결정 둘(D-1·D-2)과 Tier 확인이 남아 있었고, 이 신호가 여는 다음 단계는
+  run 착수가 아니라 착수 승인 게이트였다.
 - 산출물: `spec.md` · `plan.md` · `progress.md`(이 파일). Tier S라 `acceptance.md`를 두지 않고 AC는 `spec.md` §3.1에 인라인했다.
 - 작성 주체: 세 파일 모두 `manager-spec`(서브에이전트)이 썼다. 오케스트레이터가 넘긴 실측 F1~F16을 이 트리에서 다시 쟀다.
   **`Shared/` 아래 변경은 0건이다**(`git diff --quiet 73ceb43 HEAD -- proxy/ Shared/ project.yml` exit 0).
@@ -32,7 +35,7 @@
 | `awk 'NR>=218 && NR<=236' Shared/ContentView.swift` · `awk 'NR>=55 && NR<=72'`·`'NR>=126 && NR<=162' Shared/LocationManager.swift` | "+" 메뉴 `이동 일정 추가` `:228` · 첫 측위 뒤 갱신 정지 `:61`·`:132` · 지명 대체값 `현재 위치` `:157` | 스크립트 1·7·8번 |
 | `git check-ignore -v .moai/state/verify/t7/dd/x` | `.gitignore:28:**/.moai/state/` | AC-004 |
 | `ID="SPEC-UIKIT-007"; [[ "$ID" =~ ^SPEC(-[A-Z][A-Z0-9]*)+-[0-9]{3}$ ]] && echo PASS` | `PASS` | frontmatter `id` |
-| (감사 1회차 반영 때) `grep -B8 'private func confirmedPlace' Shared/AddEventView.swift \| grep -c` `'도달 불가'`·`'편집 씨앗'` · `awk 'NR>=374 && NR<=380' Shared/AddEventView.swift` · `grep -n 'useCurrentLocation' Shared/App.swift` · `grep -n 'AddEventView()' Shared/*.swift` · `git check-ignore -v .moai/reports/plan-audit/SPEC-UIKIT-007-review-1.md` | `1` · `0` / 출발지 검색 기준 `near:` `:378` / `:90` / `ContentView.swift:151` / exit 1(추적 대상 — 그래서 AC-002 범위 대조에서 뺐다) | AC-003 · `plan.md` §4 D14 · REQ-004 · AC-002 |
+| (감사 1회차 반영 때) `grep -B8 'private func confirmedPlace' Shared/AddEventView.swift \| grep -c` `'도달 불가'`·`'편집 씨앗'` · `awk 'NR>=374 && NR<=380' Shared/AddEventView.swift` · `grep -n 'useCurrentLocation' Shared/App.swift` · `grep -n 'AddEventView()' Shared/*.swift` · `git check-ignore -v .moai/reports/plan-audit/SPEC-UIKIT-007-review-1.md` | `1` · `0` / 출발지 검색 기준 `near:` `:378` / `:90` / `ContentView.swift:151` / exit 1(무시 목록 밖 — `.gitignore`에 없어 커밋하면 diff에 잡힌다. 그래서 REQ-007·AC-002가 감사 보고서 경로를 뺀다) | AC-003 · `plan.md` §4 D14 · REQ-004 · AC-002 |
 
 AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 있다.
 
@@ -68,16 +71,20 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
 - **nil 출발지 편집·출발 기준 일정·구글 연결 상태의 편집 저장 — 미관측.** 앞의 둘은 코드 읽기로 같은 경로라고 판단했다.
 - **칩의 지명 문구(`…중구…`) — 예측.** `LocationManager.swift:154-157`의 조합 규칙에서 추정했다.
 
-### 미해소 결정 — 착수 승인 게이트에 올린다
+### 착수 승인 게이트 — 해소 기록 (2026-09-23)
 
-- D-1 수리 모양(권고 (a) 한 줄 씨앗) · D-2 수정 전 증거의 시점(권고 (a) 한 자리 두 빌드) · Tier S 확인.
-  선택지와 사실, 권고 근거는 `plan.md` §2에 있다. 미해소 표식은 `plan.md`에만 두고 이 파일에는 옮겨 적지 않는다.
-- 컴패니언 레인은 운영자에게 직접 묻지 않는다. 리드가 게이트에서 제시한다.
+- **D-1 → (a)** 한 줄 씨앗(`AddEventView.swift:166`에 `chosen: editing?.origin?.name`). REQ-005가 무조건형이 됐다.
+- **D-2 → (a)** 한 자리 두 빌드. run이 수정 전에 `dd-a`를 빌드해 두고, 수정을 쓴 뒤 `dd`를 빌드한다. 운영자는 한 번
+  앉아 `dd-a`로 AC-010·AC-009·파트 A를, `dd`로 파트 B를 돈다. 파트 A가 (다)면 수정 커밋을 되돌리고 멈춘다(REQ-008).
+- **Tier S** 확정.
+- 결정한 사람은 운영자이고, 리드가 plan 레인에 전했다. 컴패니언 레인은 운영자에게 직접 묻지 않았다.
+  세 게이트 표식은 `plan.md` §2에서 걷었다.
 
 ### 카드 밖 발견 — 리드가 카드로 올릴지 정할 것
 
 1. **O-1** — `Store.modifyEvent`가 nil 출발지를 목적지로 채운다(`Store.swift:345`, 코드 읽기 가설, 미관측). AI 편집으로
-   0분 이동이 생길 수 있다. 같은 부류("사용자가 안 고른 값으로 저장")다.
+   0분 이동이 생길 수 있다. 같은 부류("사용자가 안 고른 값으로 저장")다. **리드 판정(2026-09-23): 카드 아님, Day 닫기
+   이월 목록에 기록.**
 2. 카드 본문의 "이번 Day 회귀 아님" 정정(위 절).
 3. "현재 위치"라는 이름으로 저장된 출발지는 수리 뒤 옵션 칩과 같은 글자의 직접입력 칩으로 보인다 — 데이터는 맞다.
 
@@ -86,6 +93,12 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
 - **파트 A가 (다)로 나올 가능성.** 결함은 코드 읽기로만 확정했다. 그 경우 수정을 되돌리고 멈춘다(REQ-008).
 - **주석이 여섯 줄을 넘으면** 루트 `plan.md` 후속 14·17의 인용이 밀린다 — sync가 본문 바이트로 대조한다(AC-008).
 - **스크립트의 ±2분 허용치**는 경로 조회 결과가 호출마다 조금 다를 수 있다는 가정이다. 실측한 값이 아니다.
+- **한 자리의 순서는 `spec.md` §3.2 "함께 돌리기" 네 단계가 기준이다**(0.1.2). 위 해소 기록의 한 줄 요약에는 `dd`로 옮긴
+  AC-009 보류 판정(5·6·8·10 이동 구간 출발지·11번)이 빠져 있다.
+- **편집 시트의 출발지 칩은 이름만 보인다**(`EditCard.swift:181` — `.place`의 칩 글자는 값 그대로, 주소 없음). 그래서
+  SPEC-UIKIT-005 AC-009 5번의 "주소까지 서로 다른 두 스타벅스"는 `dd`의 시트로도 이름까지만 가려진다 — 카카오 후보
+  이름에 지점명이 들어 있으면 그것으로, 없으면 상세 화면 지도(`RouteMapView`, 출발점 = 저장된 출발지 좌표)로 가린다.
+  AC-009 스크립트 쪽 전제라 이 카드에서 고치지 않고 리드에게 넘긴다(오케스트레이터 코드 읽기, 미관측).
 
 ## §E.2 Run-phase Evidence
 
@@ -126,8 +139,10 @@ _<pending sync-phase>_
     꺼져 있다 — 판정은 Claude 단독이다.
   - **반영 뒤 이 레인의 재측정**: `grep -c '^- \*\*REQ-' spec.md` → `8` · `grep -c '^#### AC-' spec.md` → `8` ·
     감사 보고서 D2의 대상 줄 검색 패턴에 약식 표기(AC-006 헤더의 옛 목록)와 절 제목의 대역 표기를 더해 세 파일에 돌림
-    → 출력 없음, exit 1(패턴 문자열은 이 파일에 옮겨 적지 않는다 — 적으면 이 줄이 걸린다) · AC 헤더의 REQ 목록이 `plan.md` §0 매핑과 일치 · 표식 `grep -c 'NEEDS CLARIFICATION'` → plan 3 · spec 0 ·
-    progress 0 · `moai spec lint .moai/specs/SPEC-UIKIT-007/spec.md` → `✓ No findings` · `git diff --quiet 73ceb43 HEAD -- Shared/ proxy/ project.yml`
+    → 출력 없음, exit 1(패턴 문자열은 이 파일에 옮겨 적지 않는다 — 적으면 이 줄이 걸린다) · AC 헤더의 REQ 목록이 `plan.md` §0 매핑과 일치 · 게이트 표식 계수(`grep -c`, 이 줄을 쓰기 전 측정) → plan 3 · spec 0 ·
+    progress 0 — **0.1.1 정정**: 이 줄이 패턴 문자열을 담고 있어 커밋된 판(`8cbb499`)을 세면 progress는 1이었다(2회차 N5).
+    0.1.1 편집에서 문자열을 빼고 세 파일을 다시 셌고, 값은 plan 0 · spec 0 · progress 0이다(plan의 표식은 게이트 해소로
+    걷혔다) · `moai spec lint .moai/specs/SPEC-UIKIT-007/spec.md` → `✓ No findings` · `git diff --quiet 73ceb43 HEAD -- Shared/ proxy/ project.yml`
     → exit 0. 2회차 범위는 감사자 권고대로 D1~D6·D13의 델타와 회귀 확인이다. `Shared/`는 무변경이라 코드 인용을 다시 잴 필요가 없다.
 
 - **2회차: FAIL, 점수 0.89**(1회차 0.79에서 상승 — STOP 신호 없음). 보고서 `.moai/reports/plan-audit/SPEC-UIKIT-007-review-2.md`.
@@ -142,6 +157,20 @@ _<pending sync-phase>_
   - **3회차가 마지막이다(상한 3).** 게이트 없이 돌리면 D1이 같은 모양으로 남아 정체 결함이 된다 — 리드의 게이트 결정 뒤에
     결정 반영 + N1~N5를 한 편집으로 하고 그 델타만 3회차로 감사한다. 교차 모델은 두 회차 연속 GLM 무응답(fail-open)·codex 꺼짐
     — Claude 단독 판정이다.
+
+- **3회차(마지막): PASS, 점수 0.90**(2회차 0.89 — 하락 없음). 보고서 `.moai/reports/plan-audit/SPEC-UIKIT-007-review-3.md`.
+  적용 대상 must-pass 여섯 모두 PASS(MP-4 N/A) — MP-7은 게이트 해소로 표식 0건(세 파일). D1 해소 · N1·N3·N4·N5 해소 ·
+  N2는 권고와 다른 해법(run이 루트 `plan.md`를 고칠 수 있게 — `CLAUDE.md:23` 사용자 지시가 optional 권고보다 앞선다)을
+  감사자가 수용했다. 되돌아간 해소 항목 없음, 세 회차 연속 남은 결함 없음. 재시도 루프 종료.
+  - **감사 뒤 반영(0.1.2, 재감사 없음 — 문서만, 코드 무변경)**: **R1** — 한 자리 순서가 AC-009의 증거를 지키게 했다
+    (`dd-a`에서는 AC-009의 출발지 단계 5·8·10 일부·11과 편집 저장 단계 6을 보류하고, 파트 A 앞 초기화를 건너뛰며,
+    `dd` 설치 직후 편집 시트를 열고 "취소"로 보류 판정 → 초기화 → 파트 B). 1번 도착 시각을 내일 오후 7:00으로 옮겨
+    AC-009·AC-010 일정과 겹치지 않게 했다. 감사자가 "M3 자리 전 필수"로 지정한 항목이다. **R2** — REQ-007·AC-002의
+    "이 카드 항목"을 후속 17 · Phase 1.7 표의 t7 행(추가 대상) · run 중 새로 덧붙이는 후속 항목으로 정의하고, 후속 14는
+    카드 밖으로 못박았다(루트 `plan.md` 헝크가 셋 밖에 닿으면 FAIL).
+  - 반영 뒤 이 레인의 재측정: 표식 0·0·0 · REQ 8 · AC 8 · `moai spec lint` → `✓ No findings` ·
+    `git diff --quiet 73ceb43 -- Shared/ proxy/ project.yml CHECKLIST.md` → exit 0.
+  - 교차 모델은 세 회차 모두 GLM 무응답(fail-open)·codex 꺼짐 — Claude 단독 판정이다.
 
 - plan_complete_at: 2026-09-23
 - plan_status: audit-ready

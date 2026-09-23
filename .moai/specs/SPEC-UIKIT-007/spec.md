@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-007
 title: "일정 편집이 저장된 출발지를 현재 위치로 조용히 바꾸는 결함 — `AddEventView` 출발지 줄의 편집 씨앗"
-version: "0.1.0"
+version: "0.1.2"
 status: draft
 created: "2026-09-23"
 updated: "2026-09-23"
@@ -23,12 +23,14 @@ kanban_card: t7
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-23 | 최초 작성. 칸반 카드 t7 본문(`moai todo`로 확인)과 루트 `plan.md:533`(후속 17)을 GEARS로 정식화했다. **인용 줄번호는 전부 이 워크트리의 베이스 `73ceb43`(= `origin/master`)에서 명령을 돌려 얻었고, 세는 명령을 각 수치 옆에 적었다.** 오케스트레이터가 넘긴 실측 16건(F1~F16)을 다시 쟀다 — 어긋난 것은 F5·F6의 줄 범위 둘이고, 결론은 같다. 카드 본문의 "이번 Day 회귀 아님"은 사실이 아니다(§1.5). 시뮬레이터 스크립트는 넘겨받은 초안을 따르되 세 곳을 고쳤다 — 1번의 메뉴 이름(`이동 일정 추가`), 7번의 앱 재실행, 8번의 기대 문구(위치 캐시 때문, §3.2 8번 주석). 모두 `progress.md` §E.1에 근거와 함께 적었다. **커밋 전에 plan 감사 1회차(FAIL 0.79 — must-pass MP-1·MP-7) 지적을 반영했다**: REQ 번호를 001~008로 다시 매겼고(옛 번호 10·11·20·21 → 005~008), REQ-007의 run 범위에 이 SPEC 디렉터리를 넣었으며, 스크립트의 기대를 고른 후보의 이름(N₀)·프리필 칩의 두 형태·`약 Z분`(±2분)·(나) 재시도 상한으로 고치고, AC-003을 기계 신호로 바꿨다. MP-7(착수 게이트 표식 셋)은 리드의 게이트 몫이라 그대로 두었다(`progress.md` §F.1) |
+| 0.1.1 | 2026-09-23 | **착수 승인 게이트 해소.** 운영자가 결정했고 리드가 전했다: D-1 (a) 한 줄 씨앗(`:166`에 `chosen: editing?.origin?.name`) · D-2 (a) 한 자리 두 빌드 · Tier S. O-1은 리드 판정으로 카드가 아니고 Day 닫기 이월 목록에 올랐다. plan 감사 2회차(FAIL 0.89, 남은 must-pass는 게이트 표식 MP-7 하나)의 optional N1~N5를 같은 편집에서 반영했다. **다시 쓴 요구사항**: REQ-005 — `Where — D-1` 조건을 걷고 무조건형(Unwanted)으로 · REQ-007 — 감사 보고서 예외를 규범 문장으로 올리고(N1), run에 루트 `plan.md`의 계획-실제 갱신을 허용(N2, `CLAUDE.md:23`) · REQ-008 — D-2 의존을 걷고 (a)의 순서를 명시. **다시 쓴 인수 기준**: AC-002 — D-1 (b) 대비 문구 삭제, 루트 `plan.md` 허용, 기준 커밋 조건(N3) · AC-005 — (가)의 통과 조건을 기록 값과 분리(N4). §0·§3.1 머리말·§3.2 P0(이 자리의 시뮬레이터 증거 전부에 적용되는 빌드 조건)·§4·O-1 절도 결정 사실로 고쳤다. REQ 8 · AC 8은 그대로이고, **코드와 인용 줄번호는 바뀌지 않았다**(`Shared/` 무변경). 다음은 plan 감사 3회차(마지막)다 |
+| 0.1.2 | 2026-09-23 | **plan 감사 3회차(PASS 0.90) 뒤 R1·R2 반영 — 재감사 없음(감사 상한 도달), 문서만 고쳤고 코드는 무변경.** R1: `dd-a`에서 SPEC-UIKIT-005 AC-009의 출발지 확인 단계(5·8·11번, 10번의 이동 구간 출발지)는 편집 시트로밖에 볼 수 없고 그 시트가 이 카드의 결함을 지녀, §3.2 "함께 돌리기"를 순서로 다시 적었다 — `dd-a`에서는 그 단계를 판정하지 않고 편집 시트에서 저장하지 않는다(6번도 미룸), 파트 A 앞 초기화를 건너뛴다, `dd`를 덮어 설치한 뒤 미룬 단계를 "취소"로 판정하고 6번을 돈다, 그다음 초기화와 파트 B. 겹침 배너를 피하려고 1번의 도착 시각을 내일 오후 7:00으로 옮겼다(7번은 5:00 그대로). AC-005의 초기화 조건을 그 예외에 맞췄다. R2: REQ-007의 "이 카드 항목"을 후속 17 · §Phase 1.7 표의 t7 행 · run 중 새로 덧붙이는 후속 항목으로 정의하고 후속 14를 카드 밖으로 뺐으며, AC-002에 그 밖의 헝크는 FAIL이라고 적었다 |
 
 ## 0. 이 SPEC의 성격과 예산
 
 **as-built 베이스라인이 아니라 구현을 앞둔 변경의 계약이다.** `<base>`는 전부 `73ceb43`이다. 수리는 코드 한 줄과 주석 한 덩어리이지만 **동작이 바뀌는 수리**라서, 빌드 초록만으로는 닫지 않고 시뮬레이터 증거(수정 전·수정 후)를 붙인다.
 
-**Tier: S.** run이 고치는 소스 파일은 `Shared/AddEventView.swift` 하나, 코드 한 줄(`:166`)과 주석 여섯 줄 이내(`:531-536`)다. `spec-workflow.md`(주 체크아웃 `.claude/rules/moai/workflow/`)의 Tier S 기준(< 300 LOC, < 5 files) 안에 든다. 새 타입·새 화면·새 저장 경로가 없다. 운영자 확인은 착수 승인 게이트의 몫이다(`plan.md` §2).
+**Tier: S.** run이 고치는 소스 파일은 `Shared/AddEventView.swift` 하나, 코드 한 줄(`:166`)과 주석 여섯 줄 이내(`:531-536`)다. `spec-workflow.md`(주 체크아웃 `.claude/rules/moai/workflow/`)의 Tier S 기준(< 300 LOC, < 5 files) 안에 든다. 새 타입·새 화면·새 저장 경로가 없다. 운영자가 착수 승인 게이트에서 Tier S를 확정했다(2026-09-23, 리드 전달, `plan.md` §2).
 
 **REQ·AC 예산 — 둘 다 Tier S 상한(8)과 같다.** `grep -c '^- \*\*REQ-' spec.md` = **8**, `grep -c '^#### AC-' spec.md` = **8**. §2.1 4건(001~004) · §2.2 2건(005·006) · §2.3 2건(007·008).
 
@@ -98,15 +100,15 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 
 ### 2.2 단일 출처와 주석
 
-- **REQ-005 (Where — D-1)**: Where the kickoff gate resolves D-1 to the one-line seed, the origin row's `chosen` shall remain the only truth for "the origin is set": no second check such as `editing?.origin != nil` shall be added to `bootstrap`, `prefillOrigin`, or `confirmCurrentLocationAsOrigin`. 근거: 계약 5다. 세 가드 — `:424`(`confirmedPlace`), `:433`(`await` 너머의 `chosen` 재확인), `:441`(`chosen`) — 가 지금 모두 같은 `chosen`을 읽는다. 둘째 진실을 넣으면 그것을 읽는 가드는 하나뿐이고 나머지 둘은 계속 `chosen`을 읽는다. 두 진실이 어긋나는 날 가드끼리 다른 답을 한다. `:433`의 재확인은 건드리지 않는다.
+- **REQ-005 (Unwanted)**: The change shall not add a second "the origin is set" check — such as `editing?.origin != nil` — to `bootstrap`, `prefillOrigin`, or `confirmCurrentLocationAsOrigin`; the origin row's `chosen` shall remain the only such truth. 근거: 계약 5다. 게이트가 D-1 (a) 한 줄 씨앗을 확정해(2026-09-23) 조건절을 걷었다. 세 가드 — `:424`(`confirmedPlace`), `:433`(`await` 너머의 `chosen` 재확인), `:441`(`chosen`) — 가 지금 모두 같은 `chosen`을 읽는다. 둘째 진실을 넣으면 그것을 읽는 가드는 하나뿐이고 나머지 둘은 계속 `chosen`을 읽는다. 두 진실이 어긋나는 날 가드끼리 다른 답을 한다. `:433`의 재확인은 건드리지 않는다.
 
 - **REQ-006 (Ubiquitous)**: The comment above `confirmedPlace(_:)` shall assert nothing false about the tree, and shall name the origin-row consequence of a half-write. 근거: 지금의 `:531-536`은 "지금은 쓰기 자리들이 이름과 좌표를 늘 함께 적어 도달 불가"라고 단언하는데, 수정 전 트리에서는 `:178`이 반례다(§1.1). 수정 뒤에는 쓰기 자리 넷이 모두 이름과 좌표를 함께 적으므로(`:169`/`:174`, `:166`/`:178`, `:270`/`:276`, `:449`/`:447`) 그 단언은 조건을 붙여 남길 수 있다. 새 주석이 한국어로 적을 이유: 이 줄에서 nil 읽기는 "없는 장소"로 끝나지 않고 프리필(`:424`)을 여는 신호라서, fail-closed 읽기만으로는 저장된 출발지가 현재 위치로 조용히 바뀌었다는 것. 수리 모양(참고): 줄 수를 늘리지 않는 재서술(REQ-007).
 
 ### 2.3 범위와 증거
 
-- **REQ-007 (Unwanted)**: The change shall not modify any repository path outside its declared files: in run, `Shared/AddEventView.swift` and this SPEC directory (`progress.md` §E.2·§E.3, `spec.md` frontmatter `status`·`updated`); in sync, root `plan.md` and this SPEC directory. 근거: 새 파일을 만들지 않으므로 `xcodegen generate`가 필요 없고, 서명 계정 리셋도 `besir-iOS`·`besirShare` Team 재선택 요청도 없다. plan 감사 보고서(`.moai/reports/plan-audit/SPEC-UIKIT-007-*`)는 감사자의 산출물이라 이 경계에 넣지 않는다. 이 경계가 무변경으로 두는 파일 가운데 이 카드와 닿는 것: `Store.swift`(O-1 포함, §3 Out of Scope) · `AIAssistant.swift` · `EditCard.swift` · `EditCardView.swift` · `AddActivityView.swift` · `ActivityDetailView.swift` · `Tools/GuardDriver.swift` · `CHECKLIST.md` · `CLAUDE.md` · `proxy/`. 수리 모양(참고): `AddEventView.swift`의 줄 수 **645**(`wc -l`)를 유지하는 편집 — 코드는 한 줄 안의 인자 추가, 주석은 같은 여섯 줄 안의 재서술이다. 줄 수가 바뀌면 sync가 루트 `plan.md` 후속 14·17의 `AddEventView` 인용을 본문 바이트 대조로 옮긴다(AC-008).
+- **REQ-007 (Unwanted)**: The change shall not modify any repository path outside its declared files — in run, `Shared/AddEventView.swift`, this SPEC directory (`progress.md` §E.2·§E.3, `spec.md` frontmatter `status`·`updated`), and root `plan.md` limited to plan-versus-reality updates for this card's items; in sync, root `plan.md` and this SPEC directory — with plan-audit reports under `.moai/reports/plan-audit/` excepted as the auditor's output. 근거: 새 파일을 만들지 않으므로 `xcodegen generate`가 필요 없고, 서명 계정 리셋도 `besir-iOS`·`besirShare` Team 재선택 요청도 없다. run에 루트 `plan.md`를 여는 이유는 `CLAUDE.md:23`의 지시 — "계획이 실제와 달라지면 **그 자리에서 이 파일을 갱신**한다" — 이고, 범위는 이 카드 항목의 계획-실제 갱신이다. **이 카드 항목은 셋이다** — 후속 17, §Phase 1.7 표의 t7 행(지금은 없어 추가 대상 — `grep -c 't7' plan.md` = 0), 그리고 run 중에 새로 발견해 뒤에 덧붙이는 후속 항목(선례: t6 run 커밋 `27d35a5`가 후속 14를 덧붙였다). 후속 14는 카드 밖이다 — run은 고치지 않고, sync가 줄 수가 바뀐 경우에만 그 `AddEventView` 인용을 옮긴다(AC-008). 후속 17을 닫는 일은 여전히 sync의 몫이다(AC-008). 감사 보고서 경로는 `.gitignore`에 없어 커밋하면 diff에 잡히므로 규범 문장에서 뺀다(AC-002). 이 경계가 무변경으로 두는 파일 가운데 이 카드와 닿는 것: `Store.swift`(O-1 포함, §3 Out of Scope) · `AIAssistant.swift` · `EditCard.swift` · `EditCardView.swift` · `AddActivityView.swift` · `ActivityDetailView.swift` · `Tools/GuardDriver.swift` · `CHECKLIST.md` · `CLAUDE.md` · `proxy/`. 수리 모양(참고): `AddEventView.swift`의 줄 수 **645**(`wc -l`)를 유지하는 편집 — 코드는 한 줄 안의 인자 추가, 주석은 같은 여섯 줄 안의 재서술이다. 줄 수가 바뀌면 sync가 루트 `plan.md` 후속 14·17의 `AddEventView` 인용을 본문 바이트 대조로 옮긴다(AC-008).
 
-- **REQ-008 (Event-driven)**: When the card is about to leave run, `progress.md` shall carry Part A simulator evidence from a build whose `Shared/` and `project.yml` equal `73ceb43`, and Part B evidence from the fix build, each identified by commit SHA; when Part A lands in outcome (다), the fix shall be reverted and the card stopped. 근거: 파트 A 결과가 (다)(재현 안 됨)이면 이 SPEC의 전제가 틀린 것이므로 수정 커밋을 되돌리고 리드에게 보고한다. 두 파트를 언제 돌리는지는 D-2가 정한다(`plan.md` §2).
+- **REQ-008 (Event-driven)**: When the card is about to leave run, `progress.md` shall carry Part A simulator evidence from a build whose `Shared/` and `project.yml` equal `73ceb43` and Part B evidence from the fix build, each identified by commit SHA and both gathered in one sitting after the fix is written, Part A first; when Part A lands in outcome (다), the fix commit shall be reverted, the card stopped, and the outcome reported to the lead. 근거: 게이트가 D-2 (a) 한 자리 두 빌드를 확정했다(2026-09-23). 파트 A 빌드는 `Shared/`를 고치기 전에 만들어 자리까지 보관한다(`plan.md` §1 M1). 파트 A 결과가 (다)(재현 안 됨)이면 이 SPEC의 전제가 틀린 것이다 — 수정이 먼저 쓰여 있으므로 되돌릴 커밋이 하나 생기고, 게이트는 그 비용을 알고 (a)를 골랐다.
 
 ## 3. 인수 기준과 범위 밖
 
@@ -114,15 +116,15 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 
 ### 3.1 인수 기준 (Tier S 인라인)
 
-권고안 D-1 (a)를 기준으로 적었다. D-1 (b)가 채택되면 AC-002의 셋째 값과 헝크 조건이 바뀐다(`plan.md` §2).
+착수 승인 게이트가 D-1 (a) 한 줄 씨앗을 확정했다(2026-09-23, 운영자 결정·리드 전달). 아래 AC는 그 안을 기준으로 적었다.
 
 #### AC-001 — 출발지 줄이 저장된 이름을 씨앗으로 받는다 (REQ-001)
 
-**Given** run이 끝난 트리에서 **When** `grep -n 'chosen: editing?.origin?.name' Shared/AddEventView.swift`·`grep -n '\.init(key: "origin_query"' Shared/AddEventView.swift`·`grep -c 'chosen: editing?.destination.name' Shared/AddEventView.swift`를 돌리면 **Then** 첫째가 정확히 한 줄이고 그 줄번호가 둘째가 찍은 줄의 바로 다음이며, 셋째가 1이다. `73ceb43`에서는 첫째 0줄 · 둘째 `:165` · 셋째 1이다. 이 글자 그대로의 식을 요구하는 것은 D-1 (a)의 일부다 — `:169`의 `chosen: editing?.destination.name`과 같은 모양이기 때문이다. 같은 뜻의 다른 식을 쓰려면 게이트에서 D-1을 다시 정한다.
+**Given** run이 끝난 트리에서 **When** `grep -n 'chosen: editing?.origin?.name' Shared/AddEventView.swift`·`grep -n '\.init(key: "origin_query"' Shared/AddEventView.swift`·`grep -c 'chosen: editing?.destination.name' Shared/AddEventView.swift`를 돌리면 **Then** 첫째가 정확히 한 줄이고 그 줄번호가 둘째가 찍은 줄의 바로 다음이며, 셋째가 1이다. `73ceb43`에서는 첫째 0줄 · 둘째 `:165` · 셋째 1이다. 이 글자 그대로의 식을 요구하는 것은 확정된 D-1 (a)의 일부다 — `:169`의 `chosen: editing?.destination.name`과 같은 모양이기 때문이다. 같은 뜻의 다른 식을 쓰려면 게이트에서 D-1을 다시 정한다.
 
 #### AC-002 — 둘째 진실이 없고 고친 자리가 둘뿐이다 (REQ-005·REQ-007)
 
-**Given** run이 끝난 브랜치에서 **When** `git diff --name-only 73ceb43 HEAD -- . ':!.moai/reports/plan-audit'`·`git diff -U0 73ceb43 HEAD -- Shared/AddEventView.swift | grep '^@@'`·`grep -c 'editing?.origin' Shared/AddEventView.swift`·`git diff --name-only --diff-filter=A 73ceb43 HEAD -- Shared/`를 돌리면 **Then** 첫째가 `Shared/AddEventView.swift` 한 줄과 `.moai/specs/SPEC-UIKIT-007/` 아래 경로뿐이고(그 밖의 경로가 하나라도 있으면 FAIL), 둘째의 헝크가 `-166`과 `:531-536` 안쪽뿐이라 `bootstrap`(`:142-152`)·`prefillOrigin`(`:423-436`)·`confirmCurrentLocationAsOrigin`(`:438-460`)에 닿는 헝크가 없고, 셋째가 1(`73ceb43`에서 0)이며, 넷째가 0줄이다. 줄 수가 바뀌었다면 세 함수 본문을 이름으로 잘라 `git show 73ceb43:Shared/AddEventView.swift`의 같은 본문과 `cmp`해 무출력임을 보인다.
+**Given** run이 끝난 브랜치에서 **When** `git diff --name-only 73ceb43 HEAD -- . ':!.moai/reports/plan-audit'`·`git diff -U0 73ceb43 HEAD -- Shared/AddEventView.swift | grep '^@@'`·`grep -c 'editing?.origin' Shared/AddEventView.swift`·`git diff --name-only --diff-filter=A 73ceb43 HEAD -- Shared/`를 돌리면 **Then** 첫째가 `Shared/AddEventView.swift` 한 줄, `.moai/specs/SPEC-UIKIT-007/` 아래 경로, 그리고 run이 계획-실제 갱신을 했다면 루트 `plan.md`뿐이고(그 밖의 경로가 하나라도 있으면 FAIL. 루트 `plan.md`가 나오면 `git diff 73ceb43 HEAD -- plan.md`를 읽어 헝크마다 REQ-007의 이 카드 항목 셋 가운데 어디에 닿는지 `progress.md` §E.2에 적는다 — 셋 밖에 닿는 헝크가 하나라도 있으면 FAIL), 둘째의 헝크가 `-166`과 `:531-536` 안쪽뿐이라 `bootstrap`(`:142-152`)·`prefillOrigin`(`:423-436`)·`confirmCurrentLocationAsOrigin`(`:438-460`)에 닿는 헝크가 없고, 셋째가 1(`73ceb43`에서 0)이며, 넷째가 0줄이다. 줄 수가 바뀌었다면 세 함수 본문을 이름으로 잘라 `git show 73ceb43:Shared/AddEventView.swift`의 같은 본문과 `cmp`해 무출력임을 보인다. 기준 `73ceb43`이 네 명령 모두에서 성립하는 것은 이 카드가 다른 브랜치를 병합하지 않기 때문이다. 카드 브랜치에 병합이 들어오면 `git merge-base origin/master HEAD`가 찍는 커밋을 기준으로 대조하고, 그 사실과 SHA를 `progress.md` §E.2에 적는다.
 
 #### AC-003 — 주석이 거짓을 말하지 않는다 (REQ-006)
 
@@ -134,7 +136,7 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 
 #### AC-005 — 파트 A: 수정 전 빌드에서 결함이 재현된다 (REQ-008)
 
-**Given** `git diff --quiet 73ceb43 -- Shared/ project.yml`이 exit 0인 트리의 빌드를 iPhone 17 Pro 시뮬레이터에 설치하고 §3.2의 P0~P4와 초기화를 마친 상태에서 **When** §3.2의 1~5번을 돌리면 **Then** 3번이 (가) · (나) · (다) 중 하나로 분류되고, `progress.md` §E.2에 빌드 SHA · 위 `git diff --quiet`의 exit 0 · 분류 · 값이 적혀 있다. 값은 (가)면 N₀·X·D·Y(4번의 Y < X, 출발 시각이 D보다 늦음), (나)면 N₀·X·D와 "Y 없음(저장 회색)"이다. 5번은 (가)·(나) 모두 출발지 줄이 비고 저장이 회색이다. (나)는 P1을 확인하고 **한 번만** 다시 돈다 — 다시 (나)면 그것을 결과로 받는다(저장된 출발지가 지켜지지 않았으므로 여전히 재현이다). (다)이면 멈추고 REQ-008대로 처리한다.
+**Given** `git diff --quiet 73ceb43 -- Shared/ project.yml`이 exit 0인 트리의 빌드를 iPhone 17 Pro 시뮬레이터에 설치하고 §3.2의 P0~P4와 초기화(합쳐 돌 때는 건너뜀 — §3.2 "함께 돌리기")를 마친 상태에서 **When** §3.2의 1~5번을 돌리면 **Then** 3번이 (가) · (나) · (다) 중 하나로 분류되고, `progress.md` §E.2에 빌드 SHA · 위 `git diff --quiet`의 exit 0 · 분류 · 기록 값이 적혀 있다. **(가)의 통과 조건**: 4번에서 Y < X이고, 출발 시각이 D보다 늦다. (가)로 분류됐는데 이 조건이 깨지면 AC-005는 FAIL이고, 값과 함께 리드에게 보고한다. **(가)·(나) 공통 통과 조건**: 5번의 출발지 줄이 비고 저장이 회색이다. **기록 값**: (가)는 N₀·X·D·Y, (나)는 N₀·X·D와 "Y 없음(저장 회색)". (나)는 P1을 확인하고 **한 번만** 다시 돈다 — 다시 (나)면 그것을 결과로 받는다(저장된 출발지가 지켜지지 않았으므로 여전히 재현이다). (다)이면 멈추고 REQ-008대로 처리한다.
 
 #### AC-006 — 파트 B: 수정 뒤 저장된 출발지가 남는다 (REQ-001·002·003·008)
 
@@ -154,16 +156,16 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 
 **사전 조건(파트마다 한 번)**
 
-- **P0. 빌드.** 파트 A = `Shared/`·`project.yml`이 `73ceb43`과 같은 트리(수정 없음), 파트 B = run 레인의 수정 커밋. run 레인이 빌드·설치하고 SHA를 `progress.md`에 적는다. **주 체크아웃(로컬 `master` `291db49`)으로 빌드하지 않는다** — 카드 전환 전 화면이라 결함이 재현되지 않는다(가짜 음성).
+- **P0. 빌드.** 파트 A = `Shared/`·`project.yml`이 `73ceb43`과 같은 트리(수정 전에 `dd-a`로 만들어 둔 빌드), 파트 B = run 레인의 수정 커밋(`dd`). run 레인이 빌드·설치하고 SHA를 `progress.md`에 적는다. **이 자리의 시뮬레이터 증거는 전부 — 파트 A·B, SPEC-UIKIT-003 AC-010, SPEC-UIKIT-005 AC-009 — `73ceb43` 이후 커밋의 워크트리에서 만든 빌드로 모은다.** 주 체크아웃(로컬 `master` `291db49`)의 빌드는 카드 전환 전 화면이라 셋 모두에서 가짜 음성이 된다(리드가 운영자에게 전한 안내, 2026-09-23).
 - **P1.** 시뮬레이터 메뉴 Features → Location → Custom Location… → 위도 `37.5663`, 경도 `126.9779`(서울시청).
 - **P2.** iOS 설정 → besir → 위치 → "앱을 사용하는 동안".
 - **P3.** 일정을 만들 때 "구글 캘린더에도 등록" 줄이 보이면 "안 함"을 고른다. 편집 저장이 캘린더에 다시 올리기 때문이다(`Store.swift:961-968`, 올림 판정 `:804-816`). 이 줄은 구글 캘린더와 자동 등록이 켜져 있을 때만 보인다(`AddEventView.swift:246`).
 - **P4.** 1번에서 대중교통 칩에 소요시간이 뜨지 않으면(경로 조회 실패) 그 파트는 처음부터 "자동차"로 돌리고 그 사실을 적는다. 아래의 "대중교통"은 그 경우 전부 "자동차"로 읽는다.
-- **초기화.** 설정 → "일정 모두 삭제" — P1~P4 다음, 1번 직전.
+- **초기화.** 설정 → "일정 모두 삭제" — P1~P4 다음, 1번 직전. 단 AC-009와 한 자리에서 합쳐 돌 때 파트 A 앞의 초기화는 건너뛴다(아래 "함께 돌리기").
 
 **단계**
 
-1. "+" → **"이동 일정 추가"**(`ContentView.swift:228`). 제목 `T7 출발지 확인`. 출발지가 현재 위치(서울시청 근처 지명)로 프리필되면, 출발지 줄에서 `강남역`을 검색해 강남역(주소 강남구) 후보를 고르고, **고른 뒤 출발지 칩에 찍힌 이름을 N₀로 적는다**(검색 후보의 이름이 그대로 저장되므로 `강남역`과 다를 수 있다). 목적지 줄에서 `서울역`을 검색해 고른다. 시각 줄: "도착 기준" → 내일 오후 3:00 → "확인". 이동 수단: 대중교통. 대중교통 칩의 소요시간을 **X분**으로 적는다.
+1. "+" → **"이동 일정 추가"**(`ContentView.swift:228`). 제목 `T7 출발지 확인`. 출발지가 현재 위치(서울시청 근처 지명)로 프리필되면, 출발지 줄에서 `강남역`을 검색해 강남역(주소 강남구) 후보를 고르고, **고른 뒤 출발지 칩에 찍힌 이름을 N₀로 적는다**(검색 후보의 이름이 그대로 저장되므로 `강남역`과 다를 수 있다). 목적지 줄에서 `서울역`을 검색해 고른다. 시각 줄: "도착 기준" → 내일 오후 7:00 → "확인"(AC-009의 내일 3시 일정·AC-010의 내일 2~4시 활동과 겹치지 않게 — 겹치면 충돌 배너가 뜬다, `AddEventView.swift:56`). 이동 수단: 대중교통. 대중교통 칩의 소요시간을 **X분**으로 적는다.
 2. "추가" → 시간표에서 그 일정을 탭 → 상세 카드의 `…로 약 N분`의 N(= X)과 "출발 시각"(**D**)을 적는다.
 3. 상세 오른쪽 위 "편집" → 시트가 열리면 **6초** 기다린다(프리필 대기 최대 5초, `AddEventView.swift:426`).
    - 파트 A 기대(결함): 출발지 줄이 `현재 위치` 또는 `현재 위치(…)` 칩으로 선택돼 있다 — N₀가 아니다(지명은 그 순간 역지오코딩이 끝나 있을 때만 붙는다, `:452`). 대중교통 소요시간이 X보다 짧다(시청 → 서울역).
@@ -181,7 +183,12 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 8. (파트 B만) 7번 일정 → "편집" → "현재 위치" 칩을 직접 탭 → 그 칩이 선택되고(글자는 `현재 위치` 또는 `현재 위치(…강남구…)`) 소요시간이 Z보다 길게 다시 계산된다 → "취소"(저장하지 않음). 끝나면 Custom Location을 P1 값으로 되돌린다.
    - **7번에서 앱을 다시 실행하는 이유**: `LocationManager`는 첫 측위 뒤 갱신을 멈추고(`LocationManager.swift:61`·`:132`), 칩 탭은 이미 가진 좌표가 있으면 그것을 곧장 쓴다(`AddEventView.swift:413-414`). 같은 프로세스에서 위치만 바꾸면 8번이 옛 시청 좌표를 써서, 이 카드와 무관한 캐시 동작이 실패처럼 보인다. 칩의 지명은 역지오코딩이 끝났을 때만 붙는다(`:452`).
 
-**함께 돌리기.** 파트 A는 SPEC-UIKIT-003 AC-010·SPEC-UIKIT-005 AC-009와 같은 `73ceb43` 빌드·같은 자리에서 그 둘 다음에 돌릴 수 있다(초기화를 한 번 더 하고, 제목 `T7 …`로 구분). 파트 B는 빌드를 바꿔 설치한 뒤 같은 자리에서 이어서 돈다.
+**함께 돌리기(D-2 (a) 확정) — 순서가 AC-009의 증거를 지킨다.** SPEC-UIKIT-005 AC-009는 저장된 일정의 출발지를 보라고 한다(그 `acceptance.md:241-242` 5번 · `:254` 8번 · `:261` 10번의 이동 구간 출발지 · `:262-263` 11번). 그런데 상세 화면은 목적지만 그린다(`EventDetailView.swift:172-175`) — 출발지를 볼 곳은 편집 시트뿐이고, `dd-a`의 편집 시트는 이 카드의 결함대로 저장된 출발지를 현재 위치로 덮는다(§1.2). 거기서 저장하면 시험 데이터까지 망가진다. 그래서 한 자리를 이렇게 돈다.
+
+1. `dd-a` 설치 → SPEC-UIKIT-003 AC-010 → SPEC-UIKIT-005 AC-009. **AC-009의 5·8·11번과 10번의 이동 구간 출발지는 여기서 판정하지 않는다.** AC-009 동안 편집 시트(`AddEventView`)에서는 **"저장"을 누르지 않는다.** 열어 보고 "취소"하는 것도 `dd-a`에서는 뜻이 없으니 건너뛴다. 편집 시트에서 저장해야 하는 6번(`:243`)도 미룬다 — 5번 일정의 출발지를 바꾸는 단계라, 5번을 판정하기 전에 돌면 판정할 것이 사라진다.
+2. 파트 A 1~5번. **파트 A 앞의 초기화는 건너뛴다**(AC-009의 일정이 남아 있어야 한다). 파트 A의 일정은 제목 `T7 …`로 가린다.
+3. `dd`를 `dd-a` 위에 설치한다(시뮬레이터는 앱 데이터를 남긴다). **먼저** 남은 일정에서 AC-009의 5·8·10(이동 구간 출발지)·11번을 판정한다 — 일정마다 편집 시트를 열어 출발지 줄을 보고 **"취소"**(저장하지 않음). 수리 뒤의 시트는 저장된 출발지를 보여준다. 이어서 6번을 돈다(사용자가 `집`을 직접 고르고 저장하는 단계라 수리 뒤에는 안전하다). 판정마다 어느 빌드(`dd-a`/`dd`)에서 나왔는지 AC-009 기록에 적는다.
+4. 초기화(설정 → "일정 모두 삭제") → 파트 B 1~8번.
 
 ### 3.3 실기기 전용 — Day 닫기 이월 목록 (AC 아님)
 
@@ -192,7 +199,7 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 ### Out of Scope — `modifyEvent`의 nil 출발지 대체 (O-1, 코드 읽기 가설 — 미관측)
 
 - `Store.swift:345` `origin: newOrigin ?? current.origin ?? current.destination` — 출발지가 nil인 일정(`Models.swift:158` `var origin: Place?`, `GoogleCalendarService.swift:181-185`)을 AI로 고치면 출발지가 목적지로 채워져 0분 이동이 될 수 있다. 같은 부류("사용자가 안 고른 값으로 저장")다.
-- 이 카드는 `Store.swift`를 건드리지 않는다(REQ-007). 카드로 올릴지는 리드가 정한다.
+- 이 카드는 `Store.swift`를 건드리지 않는다(REQ-007). **리드 판정(2026-09-23): 카드 아님, Day 닫기 이월 목록에 기록.**
 
 ### Out of Scope — 이름이 "현재 위치"인 저장된 출발지 (표시 모호성, 잔여 위험)
 
@@ -207,9 +214,9 @@ $ awk 'NR>=537 && NR<=539' Shared/AddEventView.swift
 
 - 드라이버는 돌리지도 고치지도 않는다(§0, 카드 t8). `AddActivityView`·`ActivityDetailView`·`AIAssistant`에는 같은 결함이 없다(§1.4) — 고칠 것이 없다.
 
-## 4. 결정 — 착수 승인 게이트에서 정한다
+## 4. 결정 — 해소 (착수 승인 게이트, 2026-09-23)
 
-결정 셋(D-1 수리 모양 · D-2 수정 전 증거의 시점 · Tier S 확인)의 선택지, 사실, 권고 근거는 `plan.md` §2에 한 번만 적었다. 권고는 D-1 (a) 한 줄 씨앗, D-2 (a) 한 자리 두 빌드, Tier S다. REQ-005의 `Where` 절이 D-1을, REQ-008이 D-2를 조건으로 건다.
+운영자가 결정했고 리드가 전했다: **D-1 (a)** 한 줄 씨앗 · **D-2 (a)** 한 자리 두 빌드 · **Tier S**. 세 건 모두 권고안이다. 그래서 REQ-005와 REQ-008의 조건절을 걷었다. O-1은 카드가 아니다(리드 판정, Day 닫기 이월 목록). 결정 기록과 채택하지 않은 안은 `plan.md` §2에 있다.
 
 ## 5. 관련 문서
 
