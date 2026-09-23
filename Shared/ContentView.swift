@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreLocation
 #if os(iOS)
 import UIKit
 #endif

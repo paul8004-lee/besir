@@ -1,10 +1,5 @@
 import Foundation
 import CoreLocation
-#if os(macOS)
-import AppKit
-#else
-import UIKit
-#endif
 
 /// 현재 위치를 관리한다. CoreLocation 권한이 없거나 실패하면
 /// 사용자가 수동으로 출발지를 지정할 수 있게 한다.
@@ -113,18 +108,6 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         } catch {
             // 폴백 실패 시 조용히 무시(상위에서 에러 메시지 처리)
         }
-    }
-
-    func openLocationSettings() {
-        #if os(macOS)
-        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices") {
-            NSWorkspace.shared.open(url)
-        }
-        #else
-        if let url = URL(string: UIApplication.openSettingsURLString) {
-            UIApplication.shared.open(url)
-        }
-        #endif
     }
 
     // MARK: - CLLocationManagerDelegate

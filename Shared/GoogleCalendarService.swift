@@ -1,7 +1,6 @@
 import Foundation
 import AuthenticationServices
 import CryptoKit
-import CoreLocation
 #if os(iOS)
 import UIKit
 #else

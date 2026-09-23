@@ -173,20 +173,6 @@ final class Store: ObservableObject {
 
     // MARK: - 활동(체류형) 블록
 
-    /// 여러 요일에 반복되는 활동 블록(수업·근무·점심 등)을 한 번에 생성한다. 이동시간 계산은 없다.
-    /// 반복 없는 단발성 활동 블록 하나를 추가한다("+" 메뉴에서 수동으로 만드는 경우).
-    func addActivity(title: String, location: Place?, startDate: Date, endDate: Date,
-                     syncToCalendar: Bool = true) async {
-        var activity = ActivityBlock(title: title, location: location, startDate: startDate, endDate: endDate)
-        activity.syncToCalendar = syncToCalendar
-        activities.append(activity)
-        activities.sort { $0.startDate < $1.startDate }
-        saveActivities()
-        if config.autoAddToCalendar && syncToCalendar {
-            enqueueCalendarUpload(activityIDs: [activity.id])
-        }
-    }
-
     /// 활동 블록과 그에 딸린 이동 구간(가는 편·오는 편)을 **한 번에, 서로 묶어서** 만든다.
     ///
     /// 따로 만들면 둘 사이에 아무 연결이 없어서, 나중에 활동 블록을 드래그해 옮겨도 이동 구간은
@@ -243,6 +229,7 @@ final class Store: ObservableObject {
         return (activity.id, made)
     }
 
+    /// 여러 요일에 반복되는 활동 블록(수업·근무·점심 등)을 한 번에 생성한다. 이동시간 계산은 없다.
     /// recurrenceId를 공유하는 ScheduledEvent(이동 구간)와 같이 묶여 일괄 삭제된다.
     @discardableResult
     func addRecurringActivities(title: String,
@@ -418,6 +405,7 @@ final class Store: ObservableObject {
         return meal
     }
 
+    /// 호출부가 0개여도 남긴다 — 진행 중인 SPEC-FULL-001 REQ-003이 이 연산을 Store 요구사항으로 명시한다.
     func updateMeal(_ updated: MealLog) {
         guard let idx = meals.firstIndex(where: { $0.id == updated.id }) else { return }
         meals[idx] = updated
@@ -1312,22 +1300,6 @@ final class Store: ObservableObject {
         if !meals.isEmpty {
             meals.removeAll()
             saveMeals()
-        }
-    }
-
-    /// 도착 시각이 이미 지난(만료) 일정을 한 번에 삭제한다.
-    func deleteExpired() {
-        let now = Date()
-        let expired = events.filter { $0.arrivalDate < now }
-        for e in expired {
-            if let nid = e.notificationId { notifications.cancel(id: nid) }
-        }
-        events.removeAll { $0.arrivalDate < now }
-        save()
-        // 만료 정리는 이미 지난 일정만 지우므로 식사 기록은 건드리지 않는다(실제로 먹은 기록).
-        let gids = expired.compactMap { $0.googleEventId }
-        if !gids.isEmpty {
-            Task { await removeFromCalendar(gids) }
         }
     }
 

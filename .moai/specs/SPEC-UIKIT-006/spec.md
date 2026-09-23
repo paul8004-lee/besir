@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-006
 title: "데드 코드 정리 — 호출부 없는 함수 넷(`Store` 셋·`LocationManager` 하나)과 쓰이지 않는 `import CoreLocation` 셋"
 version: "0.1.1"
-status: draft
+status: in-progress
 created: "2026-09-23"
 updated: "2026-09-23"
 author: "manager-spec"
