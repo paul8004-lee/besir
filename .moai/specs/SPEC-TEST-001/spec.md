@@ -2,7 +2,7 @@
 id: SPEC-TEST-001
 title: "가드 드라이버 구조적 경화 — 실제 앱 데이터·키체인 격리, 내부 시간 제한, 하네스 스킬 항목 정리"
 version: "0.1.2"
-status: draft
+status: in-progress
 created: "2026-09-24"
 updated: "2026-09-24"
 author: "plan-lane (orchestrator-direct)"

@@ -86,7 +86,20 @@
 
 ## §E.2 Run-phase Evidence
 
-(run 단계가 채운다 — `plan.md` §1의 M1~M5, 드라이버 실행마다 명령 원문·종료 코드·출력 꼬리·바깥 대조·운영자 키체인 답)
+### M1 — 실행 전 바깥 기록 (2026-09-24, run 레인 오케스트레이터 직접)
+
+| 항목 | 명령 | 관측 |
+|---|---|---|
+| 맥 앱 미실행 | `pgrep -x besir` | 빈 출력(exit 1) — M3 각 실행 앞뒤로 다시 잰다 |
+| 실제 지원 디렉터리 목록 | `ls -la "$HOME/Library/Application Support/besir/"` | 파일 셋 — `activities.json`(2B)·`config.json`(288B)·`events.json`(2B), 하위 디렉터리·그 외 항목 없음(`find -mindepth 1 -maxdepth 1 ! -type f` 빈 출력) |
+| 파일별 해시 | `find … -type f -exec shasum -a 256 {} +` | `events.json` `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945` · `config.json` `e2698db8979f91dc787e310ce2f62575eb102ddca98c01f5ccc653917cbc7c05` · `activities.json` `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945` |
+| 컴파일 집합 12파일 ≡ `2a37673` | `git diff --quiet 2a37673 -- Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift Shared/Store.swift Shared/Models.swift Shared/Config.swift Shared/PlaceSearch.swift Shared/DirectionsService.swift Shared/LocationManager.swift Shared/NotificationManager.swift Shared/GoogleCalendarService.swift Shared/SharedInbox.swift` | exit 0 |
+
+- 2B 두 파일은 9/23 정리된 `[]` 그대로다(공용 메모리 기록과 일치). 바깥 대조의 기준 삼값은 이 표다.
+- 감사 보고서 3부(`.moai/reports/plan-audit/SPEC-TEST-001-review-1·2·3.md`) 존재 확인. Phase 1 게이트 소비 방식: plan 3회차 PASS 0.89(회차 상한 도달, 감사자 "R3 반영은 판정 불변" 서술)를 최종 판정으로 삼고 재실행하지 않았다 — 리드가 3회차 뒤 run을 디스패치했다(`plan.md` §2 끝).
+- 키체인 고지·맥 앱 금지 안내(AC-002·AC-003 전제)는 M3 직전 운영자에게 별도로 한다.
+
+(M3부터: 드라이버 실행마다 명령 원문·종료 코드·출력 꼬리·바깥 대조·운영자 키체인 답을 이어 붙인다)
 
 ## §E.3 Run-phase Audit-Ready Signal
 
@@ -95,6 +108,7 @@
 ## §F Phase 4 Mode Selection
 
 - 선택: **serial**(서브에이전트 없이 오케스트레이터 직접 작성 + 독립 감사 한 채널). 근거: Tier S, 문서 셋, 수치 대조가 작성과 한 손에 있어야 한다.
+- run 단계(2026-09-24): **serial** — 구현 위임(`swift-impl`) 1회와 렌즈(`code-safety`) 1회를 순차로. 근거: Tier S·코딩 중심 작업이라 순차가 기본(`orchestration-mode-selection.md` §B), 드라이버 실행은 어느 에이전트도 맡지 않고 run 레인 오케스트레이터가 직접(`plan.md` §4).
 
 ## §F.1 Phase 11 — 독립 감사
 
