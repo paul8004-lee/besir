@@ -129,7 +129,29 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
   - `git diff --name-only --diff-filter=A 73ceb43 -- Shared/` → 무출력(새 소스 파일 0 → `xcodegen generate` 불필요)
 - **Gaps**: AC-002의 `73ceb43 HEAD` 기준 명령은 이 증거가 워킹 트리 기준이라는 점만 다르며, 커밋이 이 내용 그대로를 담으니 M4(run 종료)에서 `HEAD`판으로 재실측한다. 빌드 게이트(AC-004)와 시뮬레이터 양 파트(AC-005~007)는 M3의 몫이다. 주석의 AC-003 기록 항목(code-safety 렌즈 판독)도 M3 렌즈가 채운다.
 
-_<pending run-phase — M3 이하 계속>_
+### M3a — 빌드 게이트(AC-004, 수정 트리 `dd`)
+
+- **주장**: 수정 커밋 `b73013b`의 트리가 iOS·macOS 양쪽에서 전체 컴파일·무경고로 빌드된다(AC-004).
+- **증거(이 run 레인이 직접 관측, 2026-09-23, 커밋 `b73013b` 트리)**:
+  - iOS: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t7/dd build > .moai/state/verify/t7/ios.log 2>&1` → exit **0** ·
+    `grep -c 'BUILD SUCCEEDED'` → **1** · `grep -c '^SwiftCompile'` → **42** · `grep '^SwiftCompile' … | grep -c 'AddEventView.swift'` → **2**(컴파일+모듈) · `grep 'warning:' … | grep -c '\.swift'` → **0**
+  - macOS: `xcodebuild -scheme besir-macOS -derivedDataPath .moai/state/verify/t7/dd build > .moai/state/verify/t7/macos.log 2>&1` → exit **0** ·
+    `BUILD SUCCEEDED` **1** · `^SwiftCompile` **38** · `AddEventView.swift` **2** · swift 경고 **0**
+  - 프록시: `git diff --quiet 73ceb43 HEAD -- proxy/` → exit **0** — `npm test`는 **돌리지 않았다**(무변경이라 선택 항목).
+  - `.app` = `.moai/state/verify/t7/dd/Build/Products/Debug-iphonesimulator/besir.app`(한 자리 3단계 `dd` 덮어 설치에 씀)
+- **Gaps**: dd-a(수정 전) 빌드의 경고 계수와 swiftc 진단은 잡지 않았다(AC-004는 수정 트리에만 적용).
+
+### M3b — 렌즈(`ui-design`·`code-safety`) — D14·AC-003 기록 항목 포함
+
+- **주장**: 두 렌즈 모두 이 카드 diff 귀속 결함 **0건**(렌즈를 안 돌린 게 아니라 돌리고 0건), AC-003 기록 항목 충족, D14는 결함이 아닌 허용 가능한 도달 가능성 변화다.
+- **증거(두 렌즈 읽기 전용 보고 — run 레인이 위임해 받아 이 자리에 옮겨 적음. 렌즈는 progress.md를 직접 고치지 않았다)**:
+  - **code-safety — 지적 0건.** H1(await 재사용): 세 가드(`:424`·`:433`·`:441`)가 전부 같은 `chosen` 진실을 읽고 어느 것도 `editing`을 직접 읽지 않음 — 씨앗이 가드 불일치를 만들 수 없음. 씨앗의 이름(`:166`)과 좌표(`:178`)는 `buildCard()`의 같은 동기 호출에서 함께 쓰임(반쪽 상태 관측 불가). H2(조용한 실패): fire-and-forget `Task` 2곳 무변경, 편집 오픈마다 `:459` 호출은 오히려 하나 감소. H3(외부 한도): `updateEvent` 알림 경로 무변경, `estimateAll` 호출 수 동일, 위치 요청은 편집 오픈 1회→**0회**(저장된 출발지 있는 경우). H4(복제 계산): 진실은 출발지 줄 `chosen` 하나 — `grep -c 'editing?.origin'` = **1** 실측. 간결성 통과(645줄 무변경). 남는 비대칭 하나(`submitCustom`이 이름만 쓰고 좌표를 안 씀)는 이 diff가 만든 경로가 아니고 살아 있는 경로에서 `:433`이 먼저 걸려 `:441`에 닿지 않으며 루트 `plan.md` 후속 14가 다루는 카드 밖 항목 — 기록만 남김.
+  - **AC-003 기록 항목: 충족(code-safety 판독).** (1) "출발지 줄의 nil 읽기는 '없는 장소'로 끝나지 않고 **프리필(prefillOrigin)을 여는 신호다**"(`:535-536`) (2) "**fail-closed만 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다**(1b98e14)"(`:536`). 옛 주석의 거짓 단언("도달 불가")은 사라지고 참이 된 조건과 "규율이 지킨다"를 함께 적었음(REQ-006 모양).
+  - **ui-design — 지적 0건.** Q1(선택 칩): 렌더 경로가 목적지 줄과 완전히 동일(`EditCardView.swift:160-164`·`:122-124`, `EditCard.swift:181`), 첫 프레임부터 씨앗 표시(깜빡임 없음, `:52` `if let card` 이후 렌더), busy 스피너도 없음(`:424` 즉시 반환). 경계: 빈 이름 도달 불가(생성 경로 전부 비지 않음), 긴 이름 칩 오버플로는 **기존 문법·후속 15와 같은 부류**(목적지 줄이 이미 겪는 것 — 새 후속으로 안 올림), 즐겨찾기 라벨 우연 일치는 목적지 줄 규칙과 동일(§3 Out of Scope). Q2("현재 위치" 저장값): 데이터 정상, 두 칩이 글리프·굵기·채움으로 구분, 혼란 인구 좁음 — 후속 카드 불필요. §3.2 7번 실측에서 이 창이 자주 만들어지면 재검토한다는 조건을 Day 닫기 이월 목록에 한 줄 남기라고 권장(리드에게 전달함). Q3(VoiceOver): 칩 `.isSelected` trait(`EditCardView.swift:290`), 줄 컨테이너 라벨 — 목적지 줄과 같은 메커니즘, 갭 없음(실제 발화는 §3.3 실기기 이월).
+  - **D14 — 양 렌즈 일치: 결함 아님, 후속 카드 불필요.** 카카오 우선 경로는 `near`를 파라미터로 받지도 않음(`PlaceSearch.swift:23-27` — `query`·`size`뿐), MapKit 폴백은 `near == nil`에 region만 건너뛰고 정상 강등(`:113-120`), 권한 거부 세션은 수정 전에도 같았음(`LocationManager.swift:50-53`). 잔여 위험: (앱 시작 측위 미완료 창)×(MapKit 폴백)×(편집 중 출발지 검색) 교집합의 **정렬 품질 저하**뿐. 목적지 검색 축은 오히려 순개선(편집 중 `originCoord`가 저장 출발지 좌표로 생존, `:541-545`·`:379`).
+- **Gaps**: 두 렌즈 모두 코드 읽기 판정(빌드·시뮬레이터 미실행 — AC-004는 M3a가 채웠고 AC-005~007은 운영자 관측 몫). ui-design의 긴 이름 관찰은 후속 15 중복이라 루트 `plan.md`에 새 항목으로 올리지 않았다.
+
+_<pending run-phase — 시뮬레이터(운영자 몫) 계속>_
 
 ## §E.3 Run-phase Audit-Ready Signal
 
