@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-007
 title: "일정 편집이 저장된 출발지를 현재 위치로 조용히 바꾸는 결함 — `AddEventView` 출발지 줄의 편집 씨앗"
 version: "0.1.2"
-status: draft
+status: in-progress
 created: "2026-09-23"
 updated: "2026-09-23"
 author: "manager-spec"

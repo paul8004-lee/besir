@@ -163,7 +163,7 @@ struct AddEventView: View {
             .init(key: "title", kind: .title, label: "일정 제목", options: [], allowsCustom: true,
                   chosen: editing?.title, startsOpen: fresh),
             .init(key: "origin_query", kind: .place, label: "출발지", options: originOptions,
-                  allowsCustom: true, busy: location.isLocating),
+                  allowsCustom: true, chosen: editing?.origin?.name, busy: location.isLocating),
             .init(key: "destination_query", kind: .place, label: "목적지",
                   options: store.favorites.map { .init(label: $0.label, value: $0.label) },
                   allowsCustom: true, chosen: editing?.destination.name, startsOpen: fresh),
@@ -531,9 +531,9 @@ struct AddEventView: View {
     /// 줄에 걸린 좌표를 되찾는다 — 열쇠는 chosen 이름이 아니라 줄 신원이다.
     /// `chosen == nil`을 먼저 거르는 이유는 실패 방향을 닫아두기 위해서다. 열쇠가 이름이던 시절엔
     /// 이름 없는 줄이 사전을 못 찾아 저절로 nil이 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은
-    /// 없는 줄"이 생기면 그 좌표가 조용히 실려 나간다 — 지금은 쓰기 자리들이 이름과 좌표를 늘 함께
-    /// 적어 도달 불가하지만, 그 불변식을 강제하는 것은 코드가 아니라 규율뿐이라 한 절로 갚아 둔다
-    /// (잘못된 장소보다 없는 장소가 낫다).
+    /// 없는 줄"이 생기면 그 좌표가 조용히 실려 나간다 — 쓰기 자리들이 지금은 이름과 좌표를 늘
+    /// 함께 심지만 그 불변식은 코드가 아니라 규율이 지킨다. 출발지 줄의 nil 읽기는 "없는 장소"로
+    /// 끝나지 않고 프리필(prefillOrigin)을 여는 신호다 — fail-closed만 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다(1b98e14).
     private func confirmedPlace(_ key: String) -> Place? {
         field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
     }

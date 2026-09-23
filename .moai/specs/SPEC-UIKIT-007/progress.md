@@ -102,7 +102,34 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+### M1 — 수정 전 빌드(`dd-a`)
+
+- **주장**: 파트 A 빌드는 `Shared/`·`project.yml`이 `73ceb43`과 같은 트리에서, `Shared/`를 고치기 **전에** 만들었다.
+- **증거(이 run 레인이 직접 관측, 2026-09-23)**:
+  - `git rev-parse --short HEAD` → `66f04e6` · `git branch --show-current` → `WT-origin-overwrite` ·
+    `git log --oneline 73ceb43..HEAD` → `66f04e6`, `8cbb499`(둘 다 SPEC 문서 커밋)
+  - `git diff --quiet 73ceb43 -- Shared/ project.yml` → exit **0**
+  - 기준선 재확인: `wc -l Shared/AddEventView.swift` → **645** · `grep -c 'chosen: editing?.origin?.name'` → **0** ·
+    `grep -c 'editing?.origin'` → **0**(plan §5 "측정된 기준선"과 일치)
+  - 빌드 명령: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t7/dd-a build > .moai/state/verify/t7/dd-a-ios.log 2>&1`
+  - 빌드 결과: exit **0** · 로그 끝 `** BUILD SUCCEEDED **` · `grep -c '^SwiftCompile'` → **42**(전체 컴파일) ·
+    `.app` = `.moai/state/verify/t7/dd-a/Build/Products/Debug-iphonesimulator/besir.app`(보관 — 파트 A 설치에 씀)
+- **Gaps**: dd-a 빌드의 경고 계수는 세지 않았다(무경고 게이트 AC-004는 수정 트리 `dd`에만 적용).
+
+### M2 — 한 줄 수리 + 주석 재서술
+
+- **주장**: 출발지 줄이 저장된 출발지 이름을 `chosen` 씨앗으로 받고(AC-001), 고친 자리는 둘뿐이며 둘째 진실이 없다(AC-002), `confirmedPlace` 위 주석이 거짓을 말하지 않는다(AC-003). 파일 길이는 645 그대로다(REQ-007).
+- **증거(이 run 레인이 직접 관측, 2026-09-23 — 수정 뒤·커밋 전 워킹 트리에서, `git diff` 기준 `73ceb43`)**:
+  - `grep -n 'chosen: editing?.origin?.name' Shared/AddEventView.swift` → `166:                  allowsCustom: true, chosen: editing?.origin?.name, busy: location.isLocating),` — 정확히 **1줄**(`:166`)
+  - `grep -n '\.init(key: "origin_query"' Shared/AddEventView.swift` → `165:            .init(key: "origin_query", kind: .place, label: "출발지", options: originOptions,` — 165 + 1 = **166**(씨앗은 출발지 줄의 바로 다음 줄)
+  - `grep -c 'chosen: editing?.destination.name'` → **1** · `grep -c 'editing?.origin'` → **1**(기준선 0 — REQ-005: 둘째 진실을 안 더했다)
+  - `grep -B8 'private func confirmedPlace' Shared/AddEventView.swift`의 출력에서 `grep -c '프리필'` → **1** · `grep -c '도달 불가'` → **0** · `grep -c '편집 씨앗'` → **0**
+  - `wc -l Shared/AddEventView.swift` → **645**
+  - `git diff -U0 73ceb43 -- Shared/AddEventView.swift | grep '^@@'` → `@@ -166 +166 @@` · `@@ -534,3 +534,3 @@` — 헝크 **2개**, 둘 다 `-166`과 `:531-536` 안쪽(주석 531-533줄은 바이트 동일이라 git가 534-536만 보인다)
+  - `git diff --name-only --diff-filter=A 73ceb43 -- Shared/` → 무출력(새 소스 파일 0 → `xcodegen generate` 불필요)
+- **Gaps**: AC-002의 `73ceb43 HEAD` 기준 명령은 이 증거가 워킹 트리 기준이라는 점만 다르며, 커밋이 이 내용 그대로를 담으니 M4(run 종료)에서 `HEAD`판으로 재실측한다. 빌드 게이트(AC-004)와 시뮬레이터 양 파트(AC-005~007)는 M3의 몫이다. 주석의 AC-003 기록 항목(code-safety 렌즈 판독)도 M3 렌즈가 채운다.
+
+_<pending run-phase — M3 이하 계속>_
 
 ## §E.3 Run-phase Audit-Ready Signal
 
