@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-006
 title: "데드 코드 정리 — 호출부 없는 함수 넷(`Store` 셋·`LocationManager` 하나)과 쓰이지 않는 `import CoreLocation` 셋"
-version: "0.1.0"
+version: "0.1.1"
 status: draft
 created: "2026-09-23"
 updated: "2026-09-23"
@@ -23,6 +23,7 @@ kanban_card: t5
 | 버전 | 날짜 | 변경 |
 |---|---|---|
 | 0.1.0 | 2026-09-23 | 최초 작성. 칸반 카드 t5 본문(`moai todo`로 확인한 "확정 7건")을 GEARS로 정식화. **인용 줄번호와 건수는 전부 이 워크트리(`t5`)의 베이스 `00ab661`(= `origin/master`)에서 명령을 돌려 얻었고, 세는 명령을 각 수치 옆에 함께 적었다.** 카드가 적은 줄번호 넷(`Store.swift:178`·`:421`·`:1319`, `LocationManager.swift:118`)은 t3·t6 뒤에도 그대로다 — `git diff --name-only 9e4a374 00ab661 -- Shared/ Tools/`의 일곱 파일에 `Store`·`LocationManager`가 없다. **카드 본문과 실측이 어긋난 자리 넷**을 근거와 함께 적었다: ① `openLocationSettings()`를 지우면 `LocationManager.swift:3-7`의 `AppKit`/`UIKit` 조건부 import가 새로 죽는다(§2.2 REQ-010) ② `SettingsView` 테스트 블록의 끝은 카드의 `:84`가 아니라 `:86`이다(REQ-020) ③ `updateMeal`을 남길 근거는 카드의 "곧 사용할 가능성"이 아니라 진행 중인 SPEC의 요구사항이다(§4 D-2) ④ `deleteExpired`의 "휴면 결함: 만료 일정 무한 누적"은 누적 자체가 결함이 아니고, 가능한 피해 경로는 다른 곳에 있다(가설, 미관측 — §4 D-3, §3 Out of Scope). 가드 드라이버 기준선 205/205는 **오케스트레이터가 이 트리에서 돌린 값**이고 이 plan 레인은 재현하지 못했다(§0). "가드 드라이버가 이 맥의 실제 besir 데이터에 쓴다"는 발견은 처음에 코드 읽기 가설로 적었으나, 커밋 전에 오케스트레이터가 실제 데이터 파일을 읽어(제목·날짜만, 수정 없음) **관측으로 확정**됐다 — 그래서 드라이버를 돌릴 때마다 백업·`cmp` 복원 절차를 REQ-030 (a)·AC-008 (d)에 박았다(§3 Out of Scope). **커밋 전 plan-audit 1회차(0.80, must-pass 실패는 의도된 게이트 표식의 MP-7 하나) 지적 D2~D15·D17을 반영했다** — 드라이버 실행의 시간 제한·프로세스 소멸 확인·키체인 답(거부) 지정, REQ-020 (a)의 조건화, REQ-021의 저장소 경로 한정과 예외 셋, §4의 선택지와 권고 근거 분리, 가설 문장의 표기, AC 신호 보강(빈 `#if` 껍데기·문장 전체 대조), `<base>` = `00ab661` 고정, 요구사항 유형 표기 정정. D16(REQ 번호 재배열)은 10단위 블록이 프로젝트 관례라 반영하지 않았다 |
+| 0.1.1 | 2026-09-23 | **착수 승인 게이트 해소.** 운영자가 다섯 항목을 모두 권고안으로 확정했다(리드가 plan 레인에 전달). D-1 (a) 제거(`:3-7` import 포함) · D-2 (a) 유지 + 이유 주석 · D-3 (a) 제거 · `CLAUDE.md:127` 수정 승인 · Tier S 확정. §4 머리말과 D-1~D-3 제목을 해소 문구로 바꾸고, §2.2 머리말·§3.1 머리말·§0·REQ-020 (a)의 대기 문구를 결정 사실로 바꿨다. **다시 쓴 REQ·AC는 없다**(세 `Where` 조건이 모두 권고안 그대로 성립한다). REQ 8 · AC 8은 그대로이고, 인용 줄번호도 바뀌지 않았다(코드는 아직 한 줄도 안 바뀌었다). `CLAUDE.md` 승인은 다른 세션을 거쳐 전달됐으므로, run 레인이 편집 직전에 자기 세션에서 운영자에게 다시 확인받는다는 절을 REQ-020 (a)에 더했다. frontmatter `status`는 `draft`로 둔다 — `draft → in-progress` 전이는 run 단계의 몫이다. §4 "결정 조합과 Tier" 문단도 확정 문구로 바꿨다. **plan 감사 3회차는 PASS 0.86이다**(2회차 0.92보다 낮고, 3회 상한에 도달해 STOP 신호가 났다). 하락 원인인 R3-1(`CLAUDE.md` 재확인 수단이 정해지지 않았고 "컴패니언은 묻지 않는다"와 충돌)·R3-2(§0의 깨진 문장)·R3-3(§0 가정문)은 감사자가 지정한 문구대로 커밋 전에 반영했다. GEARS 조건을 "in the run lane's own session immediately before the edit"로 바꿨고, 확인 수단은 둘(직접 입력 · 권한 프롬프트 승인)로 한정했으며, 기록 위치는 `progress.md` §E.2이고 AC-006 (1)에 기록 요구를 더했다. **이 반영은 재감사를 받지 않았다**(4회차 없음) |
 
 ## 0. 이 SPEC의 성격과 예산
 
@@ -30,9 +31,9 @@ kanban_card: t5
 
 **거의 전부 삭제다.** 권고안(§4의 세 결정을 모두 (a)로)대로 가면 run이 하는 일은 삭제 49줄(함수·문서·import와 뒤따르는 빈 줄), 문서 한 줄 이동, 이유 주석 한 줄 추가, `CLAUDE.md` 인용 한 줄 교체다. 줄 수의 셈과 명령은 `plan.md` §0에 있다. 동작이 바뀌는 자리는 0곳이다 — 지우는 넷은 호출부가 0이고, import 셋은 그 파일에서 CoreLocation 심볼을 한 번도 쓰지 않는다.
 
-**Tier: S.** 설계 판단이 들어가는 자리가 없고 삭제 위주 약 50줄이다. 다만 권고안에서 run이 건드리는 파일은 **여섯**이다. 주 체크아웃의 `.claude/rules/moai/workflow/spec-workflow.md:140-141` 표에서 Tier S의 파일 기준은 "< 5 files", Tier M은 "5 - 15 files"이므로 여섯은 **Tier M의 파일 범위**이고, `Shared/*.swift` 다섯만으로도 이미 "5개 미만"을 벗어난다. 그래도 S로 두는 판단은 줄 수에 있다 — 여섯 중 셋은 import 한 줄, `CLAUDE.md`는 인용 한 줄이라 파일 수가 작업량을 과장한다. 이 판단은 착수 승인 게이트에서 운영자가 확인한다(`plan.md` §2). **§4 D-1 또는 D-3에서 (b)(연결)를 고르면 기능이 생기고 화면 설계가 들어오므로 Tier M으로 올려 `acceptance.md`를 따로 세워야 한다.**
+**Tier: S.** 설계 판단이 들어가는 자리가 없고 삭제 위주 약 50줄이다. 다만 권고안에서 run이 건드리는 파일은 **여섯**이다. 주 체크아웃의 `.claude/rules/moai/workflow/spec-workflow.md:140-141` 표에서 Tier S의 파일 기준은 "< 5 files", Tier M은 "5 - 15 files"이므로 여섯은 **Tier M의 파일 범위**이고, `Shared/*.swift` 다섯만으로도 이미 "5개 미만"을 벗어난다. 그래도 S로 두는 판단은 줄 수에 있다 — 여섯 중 셋은 import 한 줄, `CLAUDE.md`는 인용 한 줄이라 파일 수가 작업량을 과장한다. 운영자가 착수 승인 게이트에서 이 판단을 확정했다(2026-09-23, `plan.md` §2). **§4 D-1 또는 D-3에서 (b)(연결)를 고르면 기능이 생기고 화면 설계가 들어오므로 Tier M으로 올려 `acceptance.md`를 따로 세워야 한다.**
 
-**REQ·AC 예산 — 둘 다 Tier S 상한(8)과 같다.** 세는 명령은 `grep -c '^- \*\*REQ-' spec.md` = **8**, `grep -c '^#### AC-' spec.md` = **8**이다: §2.1 2건(001·002) · §2.2 3건(010~012) · §2.3 2건(020·021) · §2.4 1건(030). REQ와 AC가 1:1이다. 여유가 0이므로, 게이트가 권고와 다른 안을 골라 요구사항이 늘면 이 등급 안에 둘 자리가 없다 — 그것도 tier-up 신호다.
+**REQ·AC 예산 — 둘 다 Tier S 상한(8)과 같다.** 세는 명령은 `grep -c '^- \*\*REQ-' spec.md` = **8**, `grep -c '^#### AC-' spec.md` = **8**이다: §2.1 2건(001·002) · §2.2 3건(010~012) · §2.3 2건(020·021) · §2.4 1건(030). REQ와 AC가 1:1이다. 여유가 0이므로, 게이트가 권고와 다른 안을 골라 요구사항이 늘었다면 이 등급 안에 둘 자리가 없었다 — 그것도 tier-up 신호였다. 게이트가 (a)(a)(a)로 정해 해당하지 않는다(2026-09-23).
 
 **가드 드라이버 기준선 — 이 plan 레인의 실측이 아니다.** 오케스트레이터가 이 트리(`00ab661`)에서 이 워크트리 `CLAUDE.md` § 빌드 · 배포의 블록을 돌려 **205/205 통과, exit 0**, 마지막 불변식 "전체 실행 뒤에도 autoAddToCalendar는 꺼져 있다" ✓를 얻었다. 이 plan 레인은 같은 컴파일 집합으로 새로 컴파일해(출력 경로만 세션 scratchpad) 돌렸으나 **끝나지 않았다** — 600초 시점에 CPU 0%로 잠들어 있었고, `sample`로 본 메인 스레드는 `AIAssistant.executeUpdateRecurringSchedule` → `Store.updateRecurringSeries` → `Store.googleConnected.getter` → `Keychain.get` → `SecItemCopyMatching`에서 키체인 응답을 기다리고 있었다. 새로 컴파일한 바이너리가 키체인 접근 확인을 받는 중이었던 것으로 보고 프로세스를 종료했다(exit 143, 표준출력 버퍼는 비어 있었다). **종료 전에 이미 실제 `events.json`을 썼다**(14:17, §3 Out of Scope). 따라서 205/205는 **오케스트레이터의 관측**으로만 인용한다. **그 기준선 실행도 부작용이 없는 실행이 아니었다** — 14:11에 실제 `activities.json`을 시험 활동 `W-하룻밤` 한 건으로 남겼다(§3 Out of Scope). **그 실행의 키체인 상태는 미상이다** — 오케스트레이터는 대화상자를 보지 못한 채 완주했고, 대화상자가 떴다가 누군가 답했는지, 아예 뜨지 않았는지는 알 수 없다. 마지막 불변식(`autoAddToCalendar` 꺼짐)은 구글 연결 여부를 말해 주지 않는다. run 레인은 자기 트리에서 다시 재야 하고, REQ-030 (a)의 절차대로 돌린다(`plan.md` §3).
 
@@ -136,7 +137,7 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 ### 2.2 게이트에서 정하는 세 건 (010번대)
 
-> 이 절의 세 REQ는 §4 결정의 **권고안**으로 적었다. `Where` 절이 착수 승인 게이트의 결정을 조건으로 건다 — 게이트가 다른 안을 고르면 해당 REQ를 그 안으로 다시 쓰고, (b)(연결)를 고르면 Tier M으로 올린다(§0).
+> 이 절의 세 REQ는 §4 결정의 **권고안**으로 적었다. `Where` 절이 착수 승인 게이트의 결정을 조건으로 건다. **게이트가 세 건 모두 (a)로 해소했으므로(2026-09-23) 세 `Where` 조건이 모두 성립한다** — REQ-010·REQ-012는 제거, REQ-011은 유지 + 이유 주석이다. 다시 쓴 REQ는 없고, Tier는 S 그대로다.
 
 - **REQ-010 (Where — D-1)**: Where the kickoff gate resolves D-1 to removal, the `LocationManager` shall carry neither `openLocationSettings()` nor the platform UI-framework import that only that function used. 함수 `:118-128`과 뒤따르는 빈 줄 `:129`, 그리고 `#if os(macOS) import AppKit #else import UIKit #endif`(`:3-7`)를 **다섯 줄 모두** 지운다. 근거: §1.4 — 두 프레임워크의 사용처가 이 함수 안의 `NSWorkspace`(`:121`)·`UIApplication`(`:124-125`)뿐이다. 함수만 지우고 import를 남기면, REQ-002에서 지우는 것과 같은 종류의 죽은 import를 이 카드가 새로 만든다. import 두 줄만 지우고 `#if`/`#else`/`#endif`를 남기면 빈 껍데기가 남는다.
   - 기계적 신호: `grep -rn "openLocationSettings" Shared/ ShareExtension/ Tools/`가 **0건**, `grep -c "^import AppKit\|^import UIKit\|NSWorkspace\|UIApplication" Shared/LocationManager.swift` = **0**(`00ab661`에서 5), `grep -c '^#if os(macOS)' Shared/LocationManager.swift` = **0**(`00ab661`에서 1 — `:3`).
@@ -151,8 +152,8 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 ### 2.3 문서 인용과 범위 경계 (020번대)
 
-- **REQ-020 (Ubiquitous · (a)는 Where)**: The project documents' line citations into the files this card changes shall resolve to the cited content on the final tree; where the operator confirms the `CLAUDE.md` edit at the kickoff gate, `CLAUDE.md`'s citation of the settings test block shall also resolve to that block's marker line. 두 부분이다:
-  - (a) **`CLAUDE.md:127`** — `[SettingsView.swift:103](Shared/SettingsView.swift#L103)`을 `[SettingsView.swift:71](Shared/SettingsView.swift#L71)`로 고친다. 실측: 블록은 `:71-86`이다 — `⚠️` 표식 주석 `:71`, `VStack` `:72-81`, `.confirmationDialog` `:82-86`(상태 `@State private var showingWipe`는 `:11`). 지금의 `:103`은 `.frame(width: 460)`이다(`awk 'NR==103' Shared/SettingsView.swift`). 카드가 적은 "71-84"는 끝이 `:86`이다. **`:71`(표식 줄)을 고르는 이유**: 바로 아래 `CLAUDE.md:128`의 `AIChatView.swift:56`이 그 파일의 `⚠️` 표식 줄을 가리키고 실측으로 맞다(`grep -n "테스트용 임시" Shared/*.swift` → `AIChatView.swift:56`·`SettingsView.swift:71`). 같은 목록의 두 인용이 같은 규칙을 따른다. `CLAUDE.md`는 프로젝트 지시 파일이므로 **이 수정은 착수 승인 게이트에서 운영자가 명시적으로 확인해야 한다** — 리드 디스패치만으로는 권한이 생기지 않는다(`plan.md` §2). **거절하면 (a)와 AC-006 (1)을 뺀다**(run 파일은 다섯이 된다).
+- **REQ-020 (Ubiquitous · (a)는 Where)**: The project documents' line citations into the files this card changes shall resolve to the cited content on the final tree; where the operator confirms the `CLAUDE.md` edit in the run lane's own session immediately before the edit, `CLAUDE.md`'s citation of the settings test block shall also resolve to that block's marker line. 두 부분이다:
+  - (a) **`CLAUDE.md:127`** — `[SettingsView.swift:103](Shared/SettingsView.swift#L103)`을 `[SettingsView.swift:71](Shared/SettingsView.swift#L71)`로 고친다. 실측: 블록은 `:71-86`이다 — `⚠️` 표식 주석 `:71`, `VStack` `:72-81`, `.confirmationDialog` `:82-86`(상태 `@State private var showingWipe`는 `:11`). 지금의 `:103`은 `.frame(width: 460)`이다(`awk 'NR==103' Shared/SettingsView.swift`). 카드가 적은 "71-84"는 끝이 `:86`이다. **`:71`(표식 줄)을 고르는 이유**: 바로 아래 `CLAUDE.md:128`의 `AIChatView.swift:56`이 그 파일의 `⚠️` 표식 줄을 가리키고 실측으로 맞다(`grep -n "테스트용 임시" Shared/*.swift` → `AIChatView.swift:56`·`SettingsView.swift:71`). 같은 목록의 두 인용이 같은 규칙을 따른다. `CLAUDE.md`는 프로젝트 지시 파일이므로 **이 수정은 착수 승인 게이트에서 운영자가 명시적으로 확인해야 한다** — 리드 디스패치만으로는 권한이 생기지 않는다(`plan.md` §2). 게이트 결과(2026-09-23): 리드가 운영자의 승인을 전했다. 그 확인이 다른 세션을 거쳐 왔으므로, run 레인은 이 줄을 고치기 직전에 자기 세션에서 운영자에게 한 번 더 확인받는다. **확인으로 치는 수단은 둘뿐이다**: 운영자가 run 세션에 직접 입력한 확인, 또는 그 편집에 뜨는 권한 프롬프트를 운영자가 승인하는 것. 리드나 다른 세션을 거친 메시지는 확인으로 치지 않는다. run 레인은 이 확인을 위해 리드에게 블로커 보고로 되묻지 않는다 — 되물으면 또 다른 세션을 거친 승인이 되어 이 절의 목적이 무너진다. 수단과 결과는 `progress.md` §E.2에 적는다. **거절하면 (a)와 AC-006 (1)을 뺀다**(run 파일은 다섯이 된다).
   - (b) **`CHECKLIST.md` 드리프트** — 이 카드가 만든 드리프트는 이 카드가 sync에서 수리한다. 파일 앵커 인용 수(`grep -o "<파일>.swift:[0-9]*" CHECKLIST.md | wc -l`): `Store.swift` **33**(그중 `:176`보다 뒤인 것 `grep -o "Store.swift:[0-9]*" CHECKLIST.md | sed 's/.*://' | awk '$1>176' | wc -l` = **25**) · `GoogleCalendarService.swift` **4**묶음(`CHECKLIST.md:221`·`:271`·`:281`·`:448`, 전부 `:4` 뒤라 −1씩 밀린다) · `ContentView.swift` **5**묶음(`:161`·`:255`·`:258`·`:260`·`:262`, 전부 `:2` 뒤라 −1씩) · `LocationManager.swift` 0 · `AddActivityView.swift` 0. 앵커 뒤에 이어 붙은 맨 `:N` 인용도 함께 밀린다. 같은 수정에서 **기존 오인용 1건**을 고친다 — L3 줄(`CHECKLIST.md:271`)이 `GoogleCalendarService.swift:124-125·:1360-1364`를 인용하지만 그 파일은 415줄이다(`wc -l`). 뜻한 대상은 `Store`의 동기화 2-4 단계(알림 해제 루프, `grep -n "clearReminders" Shared/Store.swift` → `:1458`)로 보이나, **대상은 sync 레인이 문맥을 읽고 정한다.** 루트 `plan.md`·`CLAUDE.md`·`STATUS.md`에는 이 다섯 파일의 파일 앵커 인용이 0건이다(같은 `grep -o` 명령).
   - D-3이 (a)로 해소되면 루트 `plan.md:105`의 "알고도 안 고친 것" 항목이 닫혔다고 sync에서 적는다. `plan.md:87`은 지난 버그 수정의 이력이라 고치지 않는다.
 
@@ -182,7 +183,7 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 ### 3.1 인수 기준 (Tier S 인라인)
 
-권고안 (a)(a)(a)와 `CLAUDE.md` 수정 확인을 기준으로 적었다. 게이트가 다른 안을 고르면 AC-003~005를 그 안으로 다시 쓰고, `CLAUDE.md` 수정을 거절하면 AC-006 (1)을 뺀다. 동작이 바뀌는 자리가 0곳이므로 실기기 전용 항목은 없다 — 기기에서 보이는 차이가 없다는 것 자체가 기대 결과다.
+권고안 (a)(a)(a)와 `CLAUDE.md` 수정 확인을 기준으로 적었다. **게이트가 (a)(a)(a)와 `CLAUDE.md` 수정 승인으로 확정했으므로(2026-09-23) AC-003~006은 적힌 그대로 적용한다.** 단, run 레인이 `CLAUDE.md` 수정 직전에 자기 세션에서 운영자에게 다시 확인받았을 때 거절되면 AC-006 (1)을 뺀다(REQ-020 (a)). 동작이 바뀌는 자리가 0곳이므로 실기기 전용 항목은 없다 — 기기에서 보이는 차이가 없다는 것 자체가 기대 결과다.
 
 #### AC-001 — `addActivity`가 사라지고 옮긴 문서 줄이 제자리에 있다 (REQ-001)
 
@@ -206,7 +207,7 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 #### AC-006 — 인용이 최종 트리의 내용을 가리킨다 (REQ-020)
 
-**Given** sync가 끝난 트리에서 **When** `CLAUDE.md`의 테스트 블록 인용과, `CHECKLIST.md`에서 `Store.swift`·`GoogleCalendarService.swift`·`ContentView.swift`를 가리키는 모든 줄번호 인용(앵커와 이어 붙은 `:N`)을 **인용된 줄의 본문과 바이트로 대조**하면 **Then** (1) `CLAUDE.md`가 `SettingsView.swift:71`/`#L71`을 가리키고 그 줄이 `⚠️ 테스트용 임시` 표식이다(운영자가 수정을 확인했을 때만) (2) 대조한 인용이 전부 뜻한 내용에 닿는다(검토자 판정 — sync 레인, 근거 기록) (3) L3 줄에 415줄 파일의 `:1360-1364` 같은 파일 밖 줄번호가 없다 (4) 대조 건수와 정정 건수를 sync 레인이 명령과 함께 기록했다. 산술(일괄 −1 등)만으로 고친 인용은 대조로 치지 않는다.
+**Given** sync가 끝난 트리에서 **When** `CLAUDE.md`의 테스트 블록 인용과, `CHECKLIST.md`에서 `Store.swift`·`GoogleCalendarService.swift`·`ContentView.swift`를 가리키는 모든 줄번호 인용(앵커와 이어 붙은 `:N`)을 **인용된 줄의 본문과 바이트로 대조**하면 **Then** (1) `CLAUDE.md`가 `SettingsView.swift:71`/`#L71`을 가리키고 그 줄이 `⚠️ 테스트용 임시` 표식이다(운영자가 run 세션에서 수정을 확인했을 때만 — 확인 수단(직접 입력 또는 권한 프롬프트 승인)과 결과가 `progress.md` §E.2에 기록돼 있어야 하고, 기록이 없으면 FAIL) (2) 대조한 인용이 전부 뜻한 내용에 닿는다(검토자 판정 — sync 레인, 근거 기록) (3) L3 줄에 415줄 파일의 `:1360-1364` 같은 파일 밖 줄번호가 없다 (4) 대조 건수와 정정 건수를 sync 레인이 명령과 함께 기록했다. 산술(일괄 −1 등)만으로 고친 인용은 대조로 치지 않는다.
 
 #### AC-007 — 선언한 파일 밖은 무변경이고 새 파일이 없다 (REQ-021)
 
@@ -261,11 +262,11 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 - `Store.deleteEverythingForTesting()`(`Store.swift:1309`)·`AIAssistant.transcriptForDebugging()`과 두 화면 블록은 출시 전 제거 대상이지만 **데드 코드가 아니다**(설정 화면·채팅 화면에서 불린다). 이 카드는 그 인용 한 줄(REQ-020 (a))만 고친다.
 
-## 4. 결정 기록 — 미해소 (착수 승인 게이트)
+## 4. 결정 기록 — 해소 (착수 승인 게이트, 2026-09-23)
 
-세 건 모두 미해소다. 착수 승인 게이트에서 운영자가 고르며, 게이트용 미해소 표식은 `plan.md` §2에만 둔다. 권고는 첫 번째 안이다. **선택지에는 결과·비용·파일/렌즈/Tier 변화·확인된 사실만 적고, 권고의 논거는 각 결정 밑의 "권고 근거"에 따로 둔다.**
+세 건 모두 **(a)로 해소됐다**(2026-09-23 운영자 확정, 리드가 전달, 결정 기록은 `plan.md` §2). 아래 선택지와 권고 근거는 결정 기록으로 남긴다. 권고는 첫 번째 안이었다. **선택지에는 결과·비용·파일/렌즈/Tier 변화·확인된 사실만 적고, 권고의 논거는 각 결정 밑의 "권고 근거"에 따로 둔다.**
 
-### D-1 — `LocationManager.openLocationSettings()` — 미해소
+### D-1 — `LocationManager.openLocationSettings()` — 해소: (a) 제거
 
 - **(a) 제거 (권고).** `:118-129`와 그것만 쓰던 `:3-7` 조건부 import를 지운다(REQ-010) — 삭제 17줄(`awk 'NR>=118 && NR<=129'` 12줄 + `awk 'NR>=3 && NR<=7'` 5줄). 파일 +0, 렌즈 +0, Tier S 유지. CHECKLIST L9는 ⚠️ 그대로이고 사용자가 보는 상태는 바뀌지 않는다. 지운 줄은 git 이력에 남는다.
 - **(b) 연결.** 거부 상태가 보이는 자리에 설정 버튼을 둔다. 렌즈에 `ui-design`·`swift-impl`이 들고, 버튼을 둘 화면 파일이 하나 이상 더해진다(자리는 미정). 문구 출처로 `LocationManager.lastError`(§3 Out of Scope)가 들어올 수 있다. L9를 ⚠️ → ✅로 옮길 수 있으나 실기기 확인 항목이 생긴다(권한 거부 상태에서 설정 앱으로 넘어가는지). **Tier M.**
@@ -273,14 +274,14 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 **권고 근거.** 데드 코드 카드가 기능을 키우지 않는다. 연결 UI를 어디에 둘지(`FullSirView.swift:101`의 경고 옆, `AddEventView`의 현재 위치 칩, 채팅 답 가운데 어디) 자체가 화면 설계 질문이라 별도 카드가 맞다. 카드가 붙인 "L9의 미완성 해결책"이라는 해석은, 이 함수를 부르던 화면이 없고 짝이 될 문구(`lastError`)를 읽는 화면도 없어 확인할 근거가 없다.
 
-### D-2 — `Store.updateMeal(_:)` — 미해소
+### D-2 — `Store.updateMeal(_:)` — 해소: (a) 유지 + 이유 주석
 
 - **(a) 유지 + 이유 주석 한 줄 (권고).** REQ-011 — 추가 1줄. 파일 +0(`Store.swift`는 어차피 바뀐다), 렌즈 +0, Tier S. 확인된 사실: SPEC-FULL-001(`status: in-progress`) REQ-003(`spec.md:60`)이 이 연산을 명시하고, AC-113(`acceptance.md:133-139`)이 동작을 검증 대상으로 적었다.
 - **(b) 제거 + SPEC-FULL-001 REQ-003 개정.** 삭제 7줄(`awk 'NR>=421 && NR<=427' Shared/Store.swift | wc -l`, 함수 + 뒤 빈 줄). 진행 중인 다른 SPEC의 REQ-003과 AC-113이 깨지므로 그 SPEC의 개정이 먼저 필요하다. 이 카드의 범위(REQ-021)가 다른 SPEC으로 넓어진다 — **별도 카드.**
 
 **권고 근거.** 남길 근거는 예측이 아니라 살아 있는 요구사항이다. 카드가 든 근거("be full sir Phase 1이 곧 사용할 가능성")는 측정할 수 없는 예측이고, 루트 `plan.md`에 이 연산을 부를 화면 계획은 없다(`:206` 완료 기록 한 번뿐). 주석이 없으면 다음 전수 분석이 또 후보로 올린다.
 
-### D-3 — `Store.deleteExpired()` — 미해소
+### D-3 — `Store.deleteExpired()` — 해소: (a) 제거
 
 - **(a) 제거 (권고).** REQ-012 — 삭제 16줄(`awk 'NR>=1318 && NR<=1333' Shared/Store.swift | wc -l`). 파일 +0, 렌즈 +0, Tier S. sync에서 `plan.md:105`의 해당 항목을 닫는다(REQ-020).
 - **(b) 연결 — 자동 실행 또는 설정 버튼.** 지난 일정을 로컬에서 지우고(`:1325`) 구글 캘린더에도 삭제를 보낸다(`:1328-1331`). 앱 안에서는 되돌릴 방법이 없다(구글 캘린더 휴지통 복구는 확인하지 않았다). 활동은 그대로 남아 "활동은 있는데 이동 구간만 사라진" 날이 생긴다. 버튼이면 화면 파일과 `ui-design`이 더해지고, 자동이면 사용자 조작 없이 이력이 지워진다. **Tier M.**
@@ -290,7 +291,7 @@ $ grep -n '#if' Shared/LocationManager.swift
 
 ### 결정 조합과 Tier
 
-권고안 (a)(a)(a)이면 run이 건드리는 파일은 `Store.swift`·`LocationManager.swift`·`ContentView.swift`·`AddActivityView.swift`·`GoogleCalendarService.swift`·`CLAUDE.md` **6개**이고 전부 삭제·주석 한 줄·인용 한 줄이다. 파일 수로는 Tier M의 범위(5~15개, `spec-workflow.md:141`)이고 `Shared/*.swift` 다섯만으로도 Tier S의 "5개 미만"을 벗어나지만, 줄 수(약 50, `plan.md` §0의 명령)와 설계 내용 0으로 S를 유지한다 — 게이트에서 운영자가 확인한다. **D-1 또는 D-3에서 (b)를 고르면 Tier M으로 올린다.** D-2 (b)는 이 카드의 범위를 다른 SPEC으로 넓히므로 별도 카드가 맞다.
+권고안 (a)(a)(a)이면 run이 건드리는 파일은 `Store.swift`·`LocationManager.swift`·`ContentView.swift`·`AddActivityView.swift`·`GoogleCalendarService.swift`·`CLAUDE.md` **6개**이고 전부 삭제·주석 한 줄·인용 한 줄이다. 파일 수로는 Tier M의 범위(5~15개, `spec-workflow.md:141`)이고 `Shared/*.swift` 다섯만으로도 Tier S의 "5개 미만"을 벗어나지만, 줄 수(약 50, `plan.md` §0의 명령)와 설계 내용 0으로 S를 유지한다 — 운영자가 게이트에서 확정했다(2026-09-23). **D-1 또는 D-3에서 (b)를 고르면 Tier M으로 올린다.** D-2 (b)는 이 카드의 범위를 다른 SPEC으로 넓히므로 별도 카드가 맞다.
 
 ## 5. 관련 문서
 

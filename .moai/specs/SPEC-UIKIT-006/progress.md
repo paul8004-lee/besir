@@ -7,7 +7,10 @@
 
 - plan_complete_at: 2026-09-23T15:47+09:00
 - plan_status: audit-ready
-- kickoff_gate: pending — "구현 준비 완료"라는 뜻이 **아니다.** 세 결정(D-1~D-3)이 미해소이고,
+- kickoff_gate: **resolved 2026-09-23** — 운영자가 다섯 항목을 모두 권고안으로 확정했다(리드가 전달, 기록은 `plan.md` §2).
+  D-1 (a) · D-2 (a) · D-3 (a) · `CLAUDE.md:127` 승인 · Tier S. 이 plan 세션은 운영자의 답을 직접 보지 않았다.
+  `CLAUDE.md` 편집은 run 레인이 직전에 자기 세션에서 운영자에게 다시 확인받는다(REQ-020 (a)).
+- (게이트 전 기록) kickoff_gate: pending — "구현 준비 완료"라는 뜻이 **아니다.** 세 결정(D-1~D-3)이 미해소이고,
   `CLAUDE.md` 수정과 Tier S 판정도 운영자가 확인해야 한다. 그래서 이 신호가 여는 다음 단계는 run 착수가 아니라
   **착수 승인 게이트**다(`plan.md` §2의 다섯 항목). `plan_status` 값은 스키마의 정식 값(`audit-ready`)으로 적었다.
   t6는 비정식 값 `audit-ready-for-kickoff-gate`를 썼는데, 감사 2회차가 이를 지적했다. 그래서 게이트 대기는 별도 줄에 적는다.
@@ -195,3 +198,26 @@ LocationManager `lastError` 8 · LocationManager `AppKit|UIKit|NSWorkspace|UIApp
   - 반영 뒤 재측정: `grep -c '^- \*\*REQ-' spec.md` = 8 · `grep -c '^#### AC-' spec.md` = 8 ·
     미해소 표식 plan 3 / spec 0 / progress 0 · `moai spec lint` `✓ No findings`.
 - **3회차는 착수 승인 게이트 뒤에 한다.** 대상은 결정 내용으로 바뀐 `plan.md` §2이고, (a)가 아닌 안이 나와 고쳐 쓴 REQ/AC가 있으면 그것도 포함한다.
+- **착수 승인 게이트 해소(2026-09-23)** — 리드가 운영자의 확정을 전했다: (a)(a)(a) · `CLAUDE.md:127` 승인 · Tier S.
+  plan 레인 오케스트레이터가 이를 `plan.md` §2와 `spec.md`(0.1.1)에 기록했다. 다시 쓴 REQ·AC는 없다.
+- **감사 3회차(게이트 해소분만 대상): PASS, 점수 0.86** — 필수 기준 7개 모두 PASS이고, MP-7은 표식 0/0/0으로 해소됐다.
+  항목별 점수: 명확성 0.75 · 완전성 1.0 · 검증 가능성 0.75 · 추적성 1.0.
+  - **STOP 신호**: 2회차 0.92에서 점수가 내려갔고 3회 상한에도 도달했다. 원인은 게이트 기록 편집이 만든 문구 결함이다.
+    - R3-1(차단 등급, minor): `CLAUDE.md` 재확인 수단이 정해지지 않았다. "컴패니언은 운영자에게 묻지 않는다"와
+      칸반 규칙 "No question delegation"과 충돌하고, GEARS 조건이 여전히 "at the kickoff gate"였다.
+    - R3-2(선택): §0 문장이 깨졌다.
+    - R3-3(선택): §0에 가정문이 남았다.
+  - 감사자는 **PASS-with-debt**를 권했다. 부채는 R3-1이고, run이 M4 전에 닫는다. 범위 축소는 불필요하다고 봤다.
+  - **오케스트레이터가 R3-1~R3-3을 감사자가 지정한 문구대로 커밋 전에 반영했다.**
+    - GEARS 조건을 "in the run lane's own session immediately before the edit"로 바꿨다.
+    - 확인 수단을 둘로 한정했다: 운영자가 run 세션에 직접 입력한 확인, 또는 그 편집의 권한 프롬프트 승인.
+      다른 세션을 거친 메시지는 확인으로 치지 않고, 리드에게 블로커로 되묻지도 않는다.
+    - 기록 위치는 §E.2로 정했고, AC-006 (1)은 기록이 없으면 FAIL이다.
+    - `plan.md` §2 첫 문장을 "게이트 결정을 묻지 않는다"로 좁히고 예외를 명시했다.
+  - 기계 확인: `grep -c "착수 승인 운영자가"` = 0 · `grep -c "at the kickoff gate"` = 0 ·
+    `grep -c "in the run lane's own session"` = 2(GEARS 줄 + HISTORY) · REQ 8 · AC 8 · 표식 0/0/0 · `moai spec lint` `✓ No findings`.
+  - **이 반영은 재감사를 받지 않았다**(3회 상한 — 4회차 없음). PASS-with-debt를 문구 수정으로 닫은 것으로
+    받을지, 연장 감사를 할지는 리드가 운영자에게 제시한다.
+  - 감사자의 "N1·N2 이월(그대로)" 지적은 사실이 아니다. 둘 다 `924f924` 전에 반영됐다 —
+    `grep -n "pgrep" plan.md spec.md`로 보면 `kill -0` 기본 신호와 `pgrep -fx` 한정 문구가 있고,
+    "키가 있고 비어 있지 않음" 출처 문구도 두 파일에 각 1건 있다. 감사자가 옛 문구를 기준으로 판단한 것으로 보인다.
