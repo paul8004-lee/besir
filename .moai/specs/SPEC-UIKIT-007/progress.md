@@ -184,7 +184,179 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+- **sync_status: closed** — 문서 수명주기가 닫혔다(`spec.md` frontmatter `completed`, 0.1.3). AC 여덟 개 모두 증거가
+  붙었다. 시뮬레이터 셋(AC-005~007)은 운영자 관측을 리드가 전한 것이다. 남은 실기기 확인 셋(spec §3.3)은 AC가 아니고
+  Day 닫기 이월 목록으로 간다. **다만 AC-005·006의 "값 기록" 절은 충족되지 않았다**(§E.4.4) — `completed`는 문서의
+  종료이지 모든 기록 요건이 채워졌다는 뜻이 아니다.
+- sync_complete_at: 2026-09-24
+- sync_commit_sha: _<다음 커밋에서 백필>_ — 커밋은 자기 sha를 담을 수 없고, amend로 적으면 그 순간 다시 어긋난다
+  (001~006과 같은 스키마 필드·같은 방식).
+- 커밋: `8cbb499`(plan) · `66f04e6`(착수 게이트·감사 3회차) · `b73013b`(M2 수리) · `8f13265`(M3a·M3b) · `ce9fa7a`(M3c·run
+  종결) · `c9a4abd`(M4) · sync 종결 커밋 · sha 백필 커밋. 코드 커밋은 `b73013b` 하나뿐이다.
+- 이 sync가 만진 파일: 루트 `plan.md`(t7 행 · 후속 17 닫기 · 후속 5 오인용 1건 · 후속 19·20 신설) · `spec.md`(frontmatter + HISTORY 0.1.3) ·
+  이 파일. `Shared/`·`Tools/`·`CHECKLIST.md`·`CLAUDE.md`·`proxy/` 변경은 **0건**이다. 코드 상태는 `b73013b` 그대로다.
+- 작업 주체: sync 레인 오케스트레이터가 인용 대조·게이트·문서를 직접 했다. 독립 `--deep` 렌즈만 `code-safety`
+  서브에이전트(읽기 전용)에 맡겼다.
+
+### §E.4.1 Claim — 이 sync가 주장하는 것
+
+1. 루트 `plan.md` 후속 17이 수리 커밋 `b73013b`와 유입 커밋 `1b98e14`(t2)를 적고 닫혔다(AC-008 (1)).
+2. 이 카드는 인용 드리프트를 만들지 않았다. `AddEventView.swift`가 645줄 그대로이고, 헝크 둘은 길이가 같은 교체다.
+   루트 `plan.md`의 `AddEventView` 인용을 바이트로 대조했고, 다른 끝점은 수리 자체인 둘뿐이다(AC-008 (2)).
+3. 대조 중 이전 카드가 남긴 오인용 하나(후속 5)를 고쳤다. 같은 부류로 `AddActivityView` 인용 끝점 7개(후속 11·14·16)가 한 줄씩 밀린 것은
+   재기만 하고 고치지 않았다 — 이 카드가 만진 파일이 아니다(§E.4.8).
+4. `CHECKLIST.md`는 무변경이고 `AddEventView` 줄번호 인용이 0건이다(AC-008 (3)).
+5. iOS·macOS 전체 빌드와 프록시 테스트가 **이 레인의 실행으로** 통과했다.
+6. 독립 `--deep` 렌즈가 결함 0을 판정했다(§E.4.7). 관찰 일곱 가운데 이 diff가 새로 깨운 셋(O1~O3)은 루트 `plan.md` 후속 19로,
+   원래 있던 넷(O4~O7)은 후속 20으로 올렸다. 코드는 고치지 않았다 — `Shared/`는 sync 범위 밖이다(REQ-007).
+
+### §E.4.2 Evidence — 돌린 명령과 관측된 출력
+
+증거 파일과 스크립트는 `.moai/state/verify/t7-sync/`(git 무시 경로 — `git check-ignore -v` → `.gitignore:28`)에 있다.
+명령은 전부 이 워크트리에서 HEAD `c9a4abd`(sync 편집 전)에 대고 돌렸다.
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `git diff --quiet b73013b HEAD -- Shared/ Tools/ ShareExtension/ proxy/ project.yml` | exit 0 — 코드는 수리 커밋 그대로 |
+| `git merge-base origin/master HEAD` · `git rev-parse --short origin/master` | `73ceb43…` · `73ceb43` — 병합 없음, AC-002 기준 유효 |
+| `git diff --name-only 73ceb43 HEAD -- . ':!.moai/reports/plan-audit'` | `.moai/specs/SPEC-UIKIT-007/{plan,progress,spec}.md` · `Shared/AddEventView.swift` · `plan.md` — 허용 집합 밖 0 |
+| `git diff -U0 73ceb43 HEAD -- Shared/AddEventView.swift \| grep '^@@'` | `@@ -166 +166 @@` · `@@ -534,3 +534,3 @@` — 둘 다 길이가 같은 교체 |
+| AC-001 `grep -n 'chosen: editing?.origin?.name'` · `grep -n '\.init(key: "origin_query"'` · `grep -c 'chosen: editing?.destination.name'` | `166:` 한 줄 · `165:` · `1` |
+| AC-002 `grep -c 'editing?.origin'` · `git diff --name-only --diff-filter=A 73ceb43 HEAD -- Shared/` | `1` · 무출력 |
+| AC-003 `grep -B8 'private func confirmedPlace'` 출력에서 `grep -c` `프리필`·`도달 불가`·`편집 씨앗` | `1` · `0` · `0` |
+| `wc -l Shared/AddEventView.swift` | `645` |
+| `python3 .moai/state/verify/t7-sync/cites.py plan.md` | `AddEventView`를 언급하는 줄 중 인용이 있는 줄 다섯(`:73`·`:483`·`:502`·`:531`·`:534`). 파일 앵커는 후보일 뿐이고, 귀속은 문맥을 읽어 사람이 정했다(아래) |
+| `python3 .moai/state/verify/t7-sync/bytecmp.py` | `len base=645 head=645` · 후속 17 끝점 15개 중 **13 SAME · 2 DIFF**(`:166`·`:536` — 수리 자체) · 후속 14 끝점 4개(`:573`·`:574`·`:601`·`:276`) **4 SAME** · 후속 5 `:601`·`:604` SAME이지만 **내용이 `store.addEvent(…)` 호출**이다 — 주장(`ConflictBanner`)과 맞지 않는다 |
+| `git log -S`(후속 5의 인용 문자열)` -- plan.md` · `git show d5203cb:Shared/AddEventView.swift` `:601`·`:604` | 후속 5를 쓴 커밋은 `d5203cb`(t3 sync)이고, 그 트리의 두 줄은 `.foregroundStyle(.secondary)`·`.foregroundStyle(.tertiary)`다 |
+| `git log d5203cb..73ceb43 -- Shared/AddEventView.swift` | `02481c6`(t6 M2) 하나 — 파일을 26줄 밀었다 |
+| `cmp` `d5203cb` `:601`·`:604` ↔ HEAD `:627`·`:630` | exit 0 → 후속 5를 `:627·:630`으로 옮겼다 |
+| `python3 .moai/state/verify/t7-sync/aav_shift.py` (`git diff -U0 d5203cb 73ceb43 -- Shared/AddActivityView.swift` = `@@ -2 +1,0 @@`, t5의 `import` 제거) | 후속 11 `:128`·`:130`·`:102`, 후속 14 `:423-429`·`:179`, 후속 16 `:575` — 끝점 7개 모두 옛 줄의 내용이 **HEAD에서 한 줄 앞(−1)**에 있다. 단 후속 11은 옛 줄 자체가 주장과 다른 줄이다(§E.4.8). 고치지 않았다 |
+| `grep -o 'AddEventView[.swift]*:[0-9]' CHECKLIST.md \| wc -l` · `git diff --quiet 73ceb43 HEAD -- CHECKLIST.md STATUS.md CLAUDE.md` | `0` · exit 0 |
+| `grep -n '^\| [A-Z][0-9]* \|' CHECKLIST.md \| grep -E '편집\|수정\|수동\|출발지'` | 수동 편집의 출발지를 다루는 행이 없다 — 판정이 바뀌는 행 0. 수동 편집 행을 더하는 일은 Day 닫기 `ux-check` 몫(AC-008) |
+| `grep -c 'editing' Shared/AddActivityView.swift` | `0` — 후속 17 끝 문장의 "확인하지 않았다"를 닫는 근거(spec §1.4와 같은 값) |
+| `git show 73ceb43:plan.md \| grep -n '^1[47]\. '` · 같은 grep을 HEAD에 | `530`·`533` → `531`·`534` — run이 t7 행을 한 줄 넣었기 때문(§E.4.3) |
+| `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t7-sync/dd build` | exit 0 · `BUILD SUCCEEDED` 1 · `^SwiftCompile` **42** · 그중 `AddEventView.swift` 2 · `grep 'warning:' \| grep -c '\.swift'` **0** · `error:` 0 |
+| `xcodebuild -scheme besir-macOS -derivedDataPath .moai/state/verify/t7-sync/dd build` | exit 0 · `BUILD SUCCEEDED` 1 · `^SwiftCompile` **38** · `AddEventView.swift` 2 · swift 경고 **0** · `error:` 0. 남은 경고는 양쪽 모두 `Metadata extraction skipped. No AppIntents.framework dependency found.`뿐이다 |
+| `npm --prefix proxy test` | exit 0 · `7/7 통과`(`proxy/`는 `73ceb43` 대비 무변경 — run은 이 테스트를 돌리지 않았다) |
+
+**귀속을 사람이 정한 자리.** `cites.py`는 가장 가까운 파일명을 앵커로 찍는다. 후속 17의 뒤쪽 인용(`:165-166`·`:178`·`:531-536`)은
+그 앞에 나온 `EditCard`·`c5396b3`에 붙어 찍혔지만, 문맥상 `73ceb43`의 `AddEventView` 좌표다("수리 모양"과 "그 한 줄이 셋을 함께
+갚는다" 문장). `c5396b3`의 `:158-159`·`:511-513`만 그날의 `AddEventView` 좌표다. 후속 17의 좌표는 t6 sync(`a32ad08`)에서
+적혔고, 그 트리와 `73ceb43`의 `AddEventView`는 같다(`git diff --quiet a32ad08 73ceb43 -- Shared/AddEventView.swift` exit 0).
+
+### §E.4.3 Baseline-attribution — 무엇에 대고 쟀나
+
+- 인용 대조의 옛 트리는 **`73ceb43`**이다. 후속 14·17은 그 트리와 같은 `AddEventView`에서 적혔다(위 exit 0).
+- 후속 5는 **`d5203cb`**에 대고 쟀다. 그 인용을 쓴 커밋이다(`git log -S`).
+- `AddActivityView` 인용은 `d5203cb`에 대고 쟀다. 그 뒤 이 파일을 바꾼 것은 t5의 한 줄 삭제뿐이다.
+- 빌드·프록시는 **이 레인의 실행**이다. run 레인 §E.2 M3a의 값을 인용하지 않았다. 새 DerivedData를 쓴 이유는 증분 빌드가
+  `SwiftCompile` 0단계로도 `BUILD SUCCEEDED`를 내 "경고 0"을 거짓으로 만들기 때문이다(SPEC-UIKIT-006 §E.4.2).
+- **가드 드라이버는 돌리지 않았다.** 컴파일 집합(`CLAUDE.md:59-63`)에 `AddEventView.swift`가 없어 이 경로를 지나지 않고,
+  디스패치가 실행을 금지했다(실제 앱 데이터에 쓴다 — 카드 t8). 이 카드에는 드라이버 수치가 없다. 인용한 것도 없다.
+- 시뮬레이터 관측(AC-005~007)은 이 레인의 것이 아니다 — 운영자가 보고 리드가 run 레인에 전한 것을 run이 적었다(§E.2 M3c).
+- **이 SPEC 문서 셋의 루트 `plan.md` 인용(`:530`·`:533`)은 `73ceb43` 좌표다.** spec HISTORY 0.1.0이 인용 기준을 그 트리로 못박았고,
+  run이 t7 행을 넣어 지금은 `:531`·`:534`다. spec 본문은 sync 몫이 아니라서 옮기지 않았고, HISTORY 0.1.3에 기록했다.
+
+### §E.4.4 AC 판정 (sync 레인 기준)
+
+- **AC-008 ✅** — (1) 후속 17 끝에 닫기 문단: 수리 `b73013b`, 유입 `1b98e14`(t2), 시뮬레이터 증거 요약, 남은 실기기 셋과 O-1.
+  (2) 줄 수가 645라 옮길 인용은 없었다. 그래도 대조했다: 후속 17은 끝점 15개 중 13개가 같고 다른 둘은 수리 자체다. 후속 14는
+  4개 모두 같다. 정정은 이 카드 몫이 0건이고, 이전 오인용 1건(후속 5)을 고쳤다. `c5396b3` 좌표와 `plan.md:73`의 2026-09-12
+  기록(`AddEventView.swift:279`)은 그날의 좌표라 건드리지 않았다. (3) `CHECKLIST.md` `AddEventView` 줄번호 인용 0 · 무변경 exit 0.
+- **AC-001·002·003 ✅ 재확인** — §E.4.2의 신호가 run M2·M4의 값과 같다.
+- **AC-004 ✅ 재확인** — 이 레인의 새 DerivedData 전체 빌드. 프록시는 이번에 실제로 돌렸다(7/7).
+- **AC-005·006 — 판정은 ✅, 기록 절은 미충족.** 두 AC는 `progress.md` §E.2에 값을 적으라고 요구한다. AC-005는 N₀·X·D·Y를,
+  AC-006은 N₀·X·D를 요구한다. AC-005는 "(가)의 통과 조건: 4번에서 Y < X, 출발 시각이 D보다 늦다"도 둔다. §E.2 M3c에는 값이 없다
+  — 운영자가 따로 적지 않아 판정만 왔고, run이 그 차이를 스스로 밝혔다. 그래서 (가)의 Y < X 조건은 **기록으로 확인되지 않는다**.
+  관측된 것은 3번의 칩 치환이다. 이 sync는 판정을 뒤집지 않는다. 결함의 존재와 수리는 운영자가 두 빌드에서 직접 보았다. 다만 갭을
+  "수용된 기록 결손"으로 남기고, 수용 여부는 리드의 몫이다(§E.4.8).
+- **AC-007 ✅** — 8번의 소요시간이 Z보다 길어지지 않고 같게 관측됐다. 기대("Z보다 길게")와 다른 관측을 운영자가 판단해 통과로 확정했고
+  리드가 수용했다(§E.2 M3c). 원인(7번 일정을 만든 시점의 위치)은 가설이다.
+
+### §E.4.5 Gaps — 돌리지 않은 것 (증거 없음 ≠ 통과)
+
+- **가드 드라이버** — 금지이고, 이 경로에 닿지 않는다(§E.4.3).
+- **시뮬레이터 재관측** — 이 레인은 시뮬레이터를 보지 않았다. AC-005~007은 run 레인 기록의 인용이다.
+- **실기기 셋**(spec §3.3: 편집 뒤 출발 알림 실제 수신 · 구글 캘린더 항목 · macOS 편집 시트)과 **VoiceOver 실기기 발화** —
+  Day 닫기 몫.
+- **인용 의미의 전수 감사** — 루트 `plan.md`에서 `AddEventView`를 언급하는 줄만 읽었다. `AddActivityView`는 밀림만 쟀다. t5가 바꾼
+  다른 파일(`Store`·`GoogleCalendarService`·`ContentView`·`LocationManager`)을 가리키는 루트 `plan.md` 인용은 재지 않았다.
+- **이 SPEC 문서 셋의 코드 인용 재대조** — spec·plan 본문은 `73ceb43` 좌표로 선언됐고 줄 수가 같아, 수리 두 자리 말고는 그대로다.
+  전수 바이트 대조는 하지 않았다.
+
+### §E.4.6 Residual-risk — 관측하고도 남는 위험
+
+- **수치 없는 시뮬레이터 증거.** 파트 A·B에서 이동시간과 출발 시각이 실제로 어떻게 바뀌었는지는 기록이 없다. 다음에 누가 같은
+  경로를 고치면 비교할 기준선이 없다.
+- **귀속은 사람이 문맥으로 정했다.** 대조한 끝점 21개(후속 5·14·17)는 새 좌표의 내용까지 전부 읽었지만, 귀속 자체는 기계 증명이 아니다.
+- **루트 `plan.md`의 다른 파일 인용에 t5 드리프트가 남아 있을 가능성이 높다** — `AddActivityView` 7끝점이 전부 밀려 있었다.
+  t5 sync는 `CHECKLIST.md`만 재정렬했다(그 커밋의 `plan.md` 변경은 3줄).
+- 증거 스크립트와 비교본은 git 무시 경로에 있어 워크트리를 정리하면 사라진다. 명령은 §E.4.2에 있다.
+
+### §E.4.7 sync 게이트 `--deep` 렌즈 (독립 패스, 2026-09-24)
+
+읽기 전용 `code-safety` 패스를 카드의 코드 diff(`73ceb43..HEAD -- Shared/`)에 돌렸다. run 레인 M3b와 **같은 렌즈지만 다른 손**이다.
+M3b는 코드를 쓴 레인이 자기 출력을 판정한 것이라 게이트로 세지 않는다. 렌즈는 자기 판정을 다 낸 뒤에야 M3b를 읽고 비교했다.
+`xcodebuild`·`npm`·드라이버·시뮬레이터·`~/Library`는 금지했다(빌드·프록시는 이 레인이 따로 돌렸다 — §E.4.2). **판정은 전부 코드 읽기이고 관측이 아니다.**
+
+**결함 0건 · 관찰 7건(이 diff가 새로 깨운 것 셋) · 기지 2건.** 부류마다 실행 기록이 있다.
+
+- ① `firstIndex` 12곳 모두 동기 함수 안이다(렌즈 보고는 "13곳"이었으나 줄 목록은 12개였고, `grep -o 'firstIndex' | wc -l` = 12로 이 레인이 고쳐 적었다). `await`를 가로지르는 인덱스는 0이다.
+- ② `Task {` 6곳 중 `try?`를 품은 곳 0 · `Task { try? await … }` 모양 0이다.
+- ③ 편집을 열 때 `estimateAll`: 위치가 있는 흔한 경우는 1회 → 1회로 같다(`:459` → `:149`로 자리만 옮김). 위치가 없던 세션에서만 0 → 1이다.
+  저장된 출발지가 있는 편집은 `:425`의 위치 요청이 사라진다. 알림 경로(`Store.updateEvent`)는 무변경이다.
+- ④ 씨앗의 이름(`:166`)과 좌표(`:177-178`)는 같은 동기 호출에서 같은 값을 읽어 어긋날 수 없다.
+
+REQ-005 둘째 진실은 `grep -cF` `editing?.origin` 1(기준 0) · `origin != nil`·`origin == nil`·`editing != nil` 모두 0/0이다. 세 가드
+(`:424`·`:433`·`:441`)는 여전히 `chosen`만 읽는다. 주석 ①("쓰기 자리들이 지금은 이름과 좌표를 늘 함께 심는다")은 도달 가능한 코드에서 참이다.
+`confirmedPlaces[` 쓰기는 넷(`:174`·`:178`·`:276`·`:447`)이고, 짝 없는 `chosen` 쓰기 `:332` `submitCustom`은 장소 줄에서 도달할 수 없다
+(`EditCardView.swift:310`). `1b98e14` 귀속도 그 트리에서 확인했다. REQ-004는 `editing?.origin?.name`이 nil이면 생략한 기본값
+(`EditCard.swift:155`)과 같아, 생성 모드·nil 출발지의 줄 구성이 바뀌지 않는다.
+
+| # | 내용 | 처리 |
+|---|---|---|
+| O1 | **새로 깨움(표시만).** 앱 시작 측위가 진행 중이면, 이미 저장된 출발지가 선택된 줄에도 "진행 중" 스피너가 돈다. 스피너를 모는 것은 프리필이 아니라 `location.isLocating`이다(`:93` `.onChange(of: location.isLocating) { … setBusy(key: "origin_query", on) }` → `EditCardView.swift:91-95`, VoiceOver "진행 중"). 수정 전에는 프리필이 그 위치를 실제로 기다렸으니 참인 표시였다. 조건은 캐시된 위치 없는 냉시작 직후뿐이다. 값은 덮이지 않는다 | 루트 `plan.md` 후속 19 — 이 sync가 검증함(`awk 'NR==93'`) |
+| O2 | **새로 도달(사소).** 편집 중 위치 권한이 거부된 채 "현재 위치" 칩을 탭하면, `:276`이 씨앗 좌표를 지우고 `:297`이 `chosen`을 nil로 만든다. `:416-417`의 프리필은 빈손으로 끝나고(`LocationManager.swift:51-53`), 저장된 출발지가 줄에서 사라져 저장이 잠긴다. 이 시트에는 안내가 없다(`grep -c lastError` = 0). REQ-002가 이 탭을 사용자의 선택으로 정했고, 취소하고 다시 열면 돌아온다. 수정 전에는 잃을 값이 애초에 없었다 | 후속 19 — `awk 'NR>=292 && NR<=299'`·`'NR>=412 && NR<=419'`로 확인 |
+| O3 | **주석 범위.** 새 주석의 "출발지 줄의 nil 읽기는 … 프리필을 여는 신호다"를 전칭으로 읽으면 한 칸 과하다. 출발지 nil 읽기는 넷(`grep -n 'confirmedPlace("origin_query")'` → `:424`·`:465`·`:542`·`:573`)이고, 프리필을 여는 것은 `:424` 하나다. "~로 끝나지 않고"는 결과가 하나 더 있다는 뜻으로 읽을 수 있어 **REQ-006 위반으로는 보지 않는다**(AC-003 신호도 통과). 곁가지로 `:536`은 171바이트로 파일에서 가장 긴 줄이다(645줄 유지의 대가) | 후속 19 — `Shared/` 편집이라 sync 범위(REQ-007) 밖. t6의 주석 과장(후속 18)과 같은 처리 |
+| O4 | **원래 있던 것.** `recomputeEstimates`(`:464-474`)는 좌표를 `await` 앞에서 잡고, 뒤에서 `estimates`·`estimating`을 무조건 쓴다. 열 때의 계산이 도는 동안 칩을 바꾸면 늦게 끝난 쪽이 이겨 옛 출발지의 소요시간·충돌 배너가 남을 수 있다. 저장은 `Store.updateEvent`가 다시 계산하므로 표시만 틀린다. 수정 전에도 `:459` 계산과 같은 경합이 있었다 | 루트 `plan.md` 후속 20 |
+| O5 | **원래 있던 것, 가설.** 하단 저장 버튼은 `.disabled(!(card?.isReady ?? false))`(`:119`)라 `saving`(`:29`·`:593`)을 보지 않는다. 카드 안 확인은 `canConfirm = card.isReady && !busy`(`EditCardView.swift:37`)라 제출 판정이 두 곳에 따로 있다. 두 번 탭하면 `updateEvent`가 둘 돌고, `Store.swift:941-968`이 `await` 앞 사본을 되써 `googleEventId`를 옛 값으로 덮을 수 있다(중복 캘린더 항목 — 가설, 재현 안 함). 수정 뒤에는 편집 시트의 저장이 여는 순간부터 켜져 창이 조금 넓어졌다 | 후속 20 — `:119`·`EditCardView.swift:37`은 이 sync가 확인함. `Store` 쪽 결과는 미확인 |
+| O6 | **가설, 사소.** 저장된 출발지 이름이 `""`이면 빈 글자 선택 칩이 된다(접근성 라벨도 빔). 확인된 생성 경로는 없고, 코드는 nil만 막는다(`GoogleCalendarService.swift:183` `?? "출발지"` 등). 목적지 줄도 이미 같다 | 후속 20 |
+| O7 | **간결성, 원래 있던 것.** 편집 씨앗의 `gatedRows(datetime: editingDatetime(e), …)` 인자 여섯이 두 곳(`:179-182`·`:201-204`)에 글자 그대로 있다 — 한쪽만 고쳐질 모양이다 | 후속 20 |
+| K1 | 저장된 출발지 이름이 `현재 위치`이면 직접입력 칩과 옵션 칩이 나란히 보인다 | **기지** — spec §3 Out of Scope 첫 절 |
+| K2 | 저장된 출발지 이름이 즐겨찾기 라벨과 같으면 그 칩이 선택돼 보이고, 다시 탭하면 화면은 그대로인 채 좌표만 즐겨찾기 것으로 바뀐다 | **기지** — spec §3 Out of Scope 둘째 절(재탭 경로는 렌즈가 덧붙임) |
+
+**M3b와 어긋난 자리**(판정을 뒤집는 것은 없다).
+
+1. **스피너가 "없음"이 아니다(O1).** M3b ui-design은 `:424` 즉시 반환을 근거로 들었지만, 스피너는 `:424`가 아니라 `isLocating`이 몬다.
+2. **`submitCustom` 비대칭의 근거가 다르다.** 도달 불가의 실제 이유는 `:433`이 아니라 장소 줄에 `submitCustom` 경로가 없다는 것이다(`EditCardView.swift:310`). 판정(카드 밖)은 같다.
+3. **빈 이름은 "도달 불가"가 아니라 "확인된 경로 없음"이다(O6).** 코드가 막는 것은 nil뿐이다.
+4. **계수 차이.** `Task {`는 2곳이 아니라 6곳이다(결론 같음). 위치 요청 "1회 → 0회"는 위치가 없던 세션에서만 성립한다.
+5. **M3b에 없던 관찰.** O2·O3·O4·O5·O7.
+
+**렌즈가 검사하지 않은 것**:
+- 빌드·드라이버·시뮬레이터·실기기(금지)
+- macOS에서 장소 검색창에 포커스가 있을 때 Return(`:115` `.keyboardShortcut(.defaultAction)`)의 향방 — 받는다면 편집 시트에서 Return이 곧바로 저장이 된다. 기기 관측이 필요하다
+- O5의 `Store` 쪽 결과
+- VoiceOver 실제 발화
+- 시각 경계
+- `AIAssistant`·`AddActivityView`·`ActivityDetailView`의 같은 모양 재측정(spec §1.4를 믿음)
+
+**절차 고지.** 렌즈가 기준판 대조용으로 `git show 73ceb43:Shared/AddEventView.swift`의 출력을 세션 스크래치패드(저장소 밖)에 파일 하나로
+썼다. "파일 생성 금지" 지시에 어긋난다고 스스로 알려 왔고, 이 레인이 지웠다. 저장소 경로에는 쓰지 않았다(`git status`는 이 레인의 편집 셋뿐이다).
+
+### §E.4.8 리드에게 넘기는 것
+
+1. **AC-005·006의 기록 결손 수용 여부**(§E.4.4) — 판정은 유지하되 값이 없다. 수용하면 그대로 두고, 아니면 다음 한 자리에서
+   파트 B 1~4번만 값을 적으며 다시 돈다(수리 빌드 `dd`는 `.moai/state/verify/t7/dd/`에 보관돼 있다).
+2. **루트 `plan.md`의 `AddActivityView` 인용 7끝점 −1 밀림(t5 드리프트)** — 후속 11 `:128`·`:130`·`:102`, 후속 14 `:423-429`·`:179`,
+   후속 16 `:575`. 후속 14·16은 한 줄 당기면 맞는다(`aav_shift.py`). **후속 11은 밀림과 별개로 처음부터 틀렸다.** 그 인용을 쓴
+   `d5203cb` 트리에서도 `anchored: false` 생성은 `ActivityDetailView:152`·`:154` · `AddActivityView:140`·`:142`였고, 배선은 `:122`·`:114`였다
+   (`git show d5203cb:… | grep -n 'anchored: false\|chooseTimePlain'`. `ActivityDetailView`는 그 뒤 무변경 — `git diff --quiet d5203cb HEAD` exit 0).
+   후속 11이 적은 `:142`·`:144`·`:116`·`:128`·`:130`·`:102`는 어느 쪽 트리에서도 그 줄이 아니다. MAJOR-A 수정이 줄을 늘리기 전 트리에서
+   적힌 것으로 보인다(가설). HEAD 좌표는 `ActivityDetailView:152`·`:154`·`:122` · `AddActivityView:139`·`:141`·`:113`이다. t5가 바꾼 다른
+   네 파일의 `plan.md` 인용도 같은 처지일 수 있다. Day 닫기의 "인용 의미 전수 감사" 항목(이월 목록)에 합칠 것을 권한다.
+3. **이 SPEC 문서의 루트 `plan.md` 좌표**(`:530`·`:533` → 지금 `:531`·`:534`) — HISTORY 0.1.3에 기록만 했다.
+4. 카드 밖 사안(AC-009 7·9번 · U-3 · U-4 · O-1)은 디스패치대로 이 카드에 끌어들이지 않았다.
 
 ## §F Phase 4 Mode Selection
 
