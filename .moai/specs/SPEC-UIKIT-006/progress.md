@@ -296,3 +296,132 @@ LocationManager `lastError` 8 · LocationManager `AppKit|UIKit|NSWorkspace|UIApp
   드리프트 수리·루트 `plan.md:105` 항목 닫기 — sync 소관 ④ 드라이버 완주-감시자 동시 종료의 모호성 —
   완주 증거(요약 줄 존재·exit 0)로 판정, §E.2에 기록
 - **드라이버 실행 횟수**: 1회(이 세션). 백업·시간 제한·소멸 확인·복원·cmp·키체인 답 기록 전 회 준수.
+
+## §E.4 Sync-phase Audit-Ready Signal
+
+- **sync_status: closed** — 문서 수명주기가 닫혔다(`spec.md` frontmatter `completed`, 0.1.2). 이 카드는
+  동작이 바뀌는 자리가 0곳이라 운영자 실행을 기다리는 AC가 없다(SPEC §3.1 머리말). t6의
+  `closed-for-machine-evidence`와 다른 값인 이유가 이것이다.
+- sync_complete_at: 2026-09-23
+- sync_commit_sha: 다음 커밋에서 백필한다 — 커밋은 자기 sha를 담을 수 없고 amend로 적으면 그 순간
+  다시 어긋난다(t6 sync가 한 번 겪었다). 001~005가 쓰는 방식이다.
+- 커밋: `924f924`(plan) · `59c1870`(착수 게이트) · `b8bbe1c`(M2·M3 코드) · `9f96219`(M4 기록) ·
+  sync 종결 커밋 · sha 백필 커밋. 코드 커밋은 `b8bbe1c` 하나뿐이다.
+- 이 sync가 만진 파일: `CHECKLIST.md` · 루트 `plan.md` · `spec.md`(frontmatter + HISTORY 0.1.2) · 이 파일.
+  `Shared/`·`Tools/`·`CLAUDE.md` 변경 **0건** — 코드 상태는 `b8bbe1c` 그대로다.
+- 작업 주체: sync 레인 오케스트레이터가 직접 했다(인용 대조·게이트·문서). 독립 `--deep` 렌즈만
+  `code-safety` 서브에이전트(읽기 전용)에 맡겼다.
+
+### §E.4.1 Claim — 이 sync가 주장하는 것
+
+1. `CHECKLIST.md`의 `Store.swift`·`GoogleCalendarService.swift`·`ContentView.swift` 본문 인용이 최종 트리의
+   같은 본문을 가리킨다(AC-006 (2)).
+2. 지운 세 함수를 가리키던 인용은 없었다 — 근거를 잃은 행이 없다.
+3. L3의 파일 밖 줄번호가 사라졌고(AC-006 (3)), 같은 부류의 이전 오인용 셋(I2·A3·L14)도 함께 고쳐졌다.
+4. 판정(✅/⚠️/❌)은 한 칸도 바뀌지 않았다.
+5. 루트 `plan.md:105`의 `deleteExpired` 항목이 닫혔고 §Phase 1.7에 t5 행이 생겼다.
+6. iOS·macOS 빌드와 프록시 테스트가 **이 레인의 실행으로** 통과했다. 드라이버는 run 레인 측정을 인용한다.
+7. 독립 `--deep` 렌즈가 코드 결함 0을 판정했다.
+
+### §E.4.2 Evidence — 돌린 명령과 관측된 출력
+
+증거 파일과 스크립트는 `.moai/state/verify/t5-sync/`(git 무시 경로)에 있다. `old/`는 `git show 00ab661:<파일>`로
+꺼낸 비교본이다.
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `extract.py CHECKLIST.md cites.json` (옛판 = `00ab661`, 이 sync 전 무변경 — `git diff --quiet 00ab661 HEAD -- CHECKLIST.md plan.md STATUS.md` exit 0) | 인용 조각 **332**. 파일명 앵커 `Store` 33 · `GoogleCalendarService` 4 · `ContentView` 5 · `LocationManager` 0 · `AddActivityView` 0 |
+| `git diff -U0 00ab661 HEAD -- <다섯 파일> \| grep '^@@'` | `Store` `-176,14` · `-245,0 +232` · `-420,0 +408` · `-1318,16` / GCS `-4` / ContentView `-2` / AddActivityView `-2` / LocationManager `-3,5` · `-118,12` |
+| `compare.py cites.json` (1차 기계 귀속) | `same 18 · moved_ok 83 · deleted 0 · mismatch 0 · oob 7` — 파일 길이를 넘는 7개가 오귀속의 첫 신호 |
+| `attrib.py cites.json` (앞 심볼이 인용 줄 ±3에 있는 파일을 옛 트리 전 파일에서 탐색) | 귀속 모순 표시: `Store`로 본 `AIAssistant` 9 · 다른 파일로 본 `ContentView` 6 + 오인용 후보 A3·I2·L14 |
+| `compare.py cites.json override.json` (최종 귀속) | `same 14 · moved_ok 75 · deleted 0 · mismatch 0 · oob 0` |
+| `apply.py` | `replacements 70`(자동 64 + 손 6) |
+| `verify.py override.json` (최종 파일 — 머리말 새 문단을 빼고 옛판과 줄별 짝짓기) | `inserted header block lines 30` · `changed lines 33` · `non-digit changes at [271]`(= L3, 옛 줄번호) · `header lines touched []` · `changed_file_ok 89` · `changed_file_bad []` · `protected_ok 264` · `protected_moved` = 의도한 4건뿐 · `count_mismatch []` |
+| `cmp` — L3: 옛 `Store` `:1455-1459` vs 새 `:1427-1431` · A3: `c5396b3` `AIAssistant` `:519-520` vs HEAD `:522-523` · L14: `c5396b3` `:1426-1428` vs HEAD `:1463-1465` · `ContentView` 옛 `:558` vs 새 `:557` | 넷 다 `cmp=0` |
+| `awk 'NR==883'` 옛 `Store` / `awk 'NR==871'` 새 `Store` (I2) | 두 줄 동일: `events[idx].wantsCalendarSync else { continue }   // "이건 캘린더에 올리지 마" 존중` |
+| `git log --format=%h -G "1360-1364" -- CHECKLIST.md` → `git show c156c4d -- CHECKLIST.md` | `-…GoogleCalendarService.swift:124-125·:1455-1459` / `+…·:1360-1364` — t1 sync가 만든 오인용 |
+| `grep -o '\| ✅ \|'`(⚠️·❌ 동일) 옛판·새판 | **102 / 8 / 2** — 양쪽 동일 |
+| `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` | exit 0, `BUILD SUCCEEDED` — 단 `SwiftCompile` **0단계**(92줄). run 레인 산출물을 쓴 증분 빌드라 경고 증거가 못 된다 |
+| 같은 명령, `-derivedDataPath .moai/state/verify/t5-sync/dd`(새 경로 — 전체 컴파일) | iOS: exit 0 · `BUILD SUCCEEDED` 1 · `SwiftCompile` 42 · 다섯 파일 컴파일 확인 · `grep 'warning:' \| grep -c '\.swift'` **0** · `error:` 0 |
+| `xcodebuild -scheme besir-macOS -derivedDataPath .moai/state/verify/t5-sync/dd build` | macOS: exit 0 · `BUILD SUCCEEDED` 1 · `SwiftCompile` 38 · 다섯 파일 컴파일 확인 · swift 경고 **0** · `error:` 0. 남은 경고는 양쪽 모두 `Metadata extraction skipped. No AppIntents.framework dependency found.`뿐이다 |
+| `npm --prefix proxy test` | exit 0, `7/7 통과` |
+| `git diff --quiet b8bbe1c -- <드라이버 컴파일 집합 12파일>` · `git diff --quiet b8bbe1c -- Shared/ Tools/ ShareExtension/ proxy/ project.yml` | 둘 다 exit 0 |
+| AC-001~005 신호 재측정 | AC-001 `0 1 1`, 줄 `232 233 235`, `N+2`=`@discardableResult` · AC-002 `0 0 0`, 전체 9 · AC-003 `0 0 0`, `lastError` 8 · AC-004 `1 1` · AC-005 `0`, `removeFromCalendar(` 9 |
+| AC-006 (1) `grep -o 'SettingsView.swift[:#L]*[0-9]*' CLAUDE.md` · `awk 'NR==71' Shared/SettingsView.swift` | `SettingsView.swift:71` · `SettingsView.swift#L71` / `// ⚠️ 테스트용 임시 버튼 — …` · 옛 `:103` 인용 0건 |
+| `stat -f '%Sm' /tmp/besir-t5-run/driver-run1.log` · `tail` · `grep -c '✗'` | `Sep 23 16:40:19 2026` · `205/205 통과`와 불변식 ✓ · `0` |
+
+### §E.4.3 Baseline-attribution — 무엇에 대고 쟀나
+
+- 인용 대조의 옛 트리는 **`00ab661`**이다. 옛 `CHECKLIST.md`가 그 트리를 가리키고 있었고, run은 이
+  문서를 건드리지 않았다(위 `git diff --quiet` exit 0). 새 트리는 이 sync의 작업 트리(`Shared/`는 `b8bbe1c`와 같다)다.
+- 오인용 A3·L14는 **`c5396b3`**(t6 이전)에 대고 쟀다. 그 인용들은 t6가 `AIAssistant`를 밀기 전 좌표였기 때문이다.
+- 빌드·프록시는 **이 레인의 실행**이다. run 레인 §E.3의 값을 인용하지 않았다.
+- **드라이버 205/205는 이 레인의 측정이 아니다** — run 레인이 `b8bbe1c`에서 돌린 값(§E.2)이다. 인용의 근거는
+  입력 동일성이다: 드라이버 컴파일 집합 12파일과 코드 경로 전체가 `b8bbe1c`와 바이트 동일하다(`git diff --quiet`
+  exit 0 둘). 결정적인 드라이버에 같은 입력을 다시 넣는 일이고, 한 번 돌 때마다 실제 앱 데이터를 덮고
+  키체인 대화상자를 부를 수 있어 운영자의 주의를 요구한다(REQ-030 (a)). 그래서 다시 돌리지 않았다 — **PASS-재실행이
+  아니라 PASS-귀속**이다. t6 sync는 드라이버를 다시 돌렸는데, 그때는 실데이터 사고가 아직 알려지기 전이었다.
+
+### §E.4.4 AC-006 판정 (sync 레인 소관)
+
+- **(1) ✓** — `CLAUDE.md`가 `SettingsView.swift:71`/`#L71`을 가리키고 그 줄이 `⚠️ 테스트용 임시` 표식이다.
+  확인 수단(운영자 직접 입력)과 결과는 §E.2에 있다.
+- **(2) ✓** — 세 파일 본문 인용 끝점 89개를 바이트로 대조했고, 인용 65조각(끝점 90줄 — 나중에 따로 고친 I2 `:788`
+  포함, `grep -c '^--- ' semantic.txt` = 65)의 새 좌표를 행의 주장과 나란히 읽었다(`semantic.py` 출력). 뜻한 내용에 닿지 않은 것은 I2의 `:788`(`}` 한 줄) 하나였고 `:871`로 고쳤다.
+- **(3) ✓** — L3 행: `GoogleCalendarService.swift:123-124·Store.swift:1427-1431`. `grep '| L3 |' CHECKLIST.md | grep -c 1360` = 0.
+  남은 `:1360-1364` 한 건은 F2 행의 `AIAssistant` 인용(`late_arrival`)이고 맞는 인용이다.
+- **(4) ✓** — 대조 건수·정정 건수와 명령은 §E.4.2와 `CHECKLIST.md` 머리말 t5 문단에 있다.
+
+### §E.4.5 Gaps — 돌리지 않은 것 (증거 없음 ≠ 통과)
+
+- **드라이버를 다시 돌리지 않았다**(§E.4.3). 이 레인이 관측한 것은 run 레인의 로그뿐이다.
+- **인용 의미의 전수 감사를 하지 않았다.** 의미를 읽은 것은 세 파일 본문 인용과 귀속 점검에 걸린 것까지다.
+  앞 심볼이 없는 맨 인용은 귀속 점검(`attrib.py`)이 닿지 않는다 — 그중 바뀐 세 파일을 가리키는 것이 남아 있다면
+  낡은 채 남는다. ux-check의 체크리스트 재작성 몫이다.
+- **머리말의 카드별 기준선 문단은 옮기지 않았다** — 그날 좌표의 기록이다(t6 문단의 `span(for:on:)` :543 등).
+- **`.claude/`(하네스 스킬)는 REQ-021 경계라 보지도 고치지도 않았다** — 렌즈 관찰 #6.
+- 시뮬레이터·실기기 — 해당 없음(바뀐 동작 0곳).
+
+### §E.4.6 Residual-risk — 관측하고도 남는 위험
+
+- **귀속은 사람이 문맥으로 정했다.** 기계 1차 귀속이 열다섯을 틀렸고, 고친 귀속도 기계 증명이 아니다.
+  다음 카드가 `Store.swift`를 다시 밀면 이 판이 기준선이 되므로, 남은 오귀속은 그때 증폭된다.
+- **run 레인 드라이버 실행의 키체인 상태는 여전히 미상이다**("모르겠음" — §E.2). 구글 연결 상태로 돌았는지는
+  이 sync로도 가릴 수 없다.
+- 증거 스크립트와 비교본은 git 무시 경로에 있어 워크트리를 정리하면 사라진다. 다시 대조하려면 `00ab661`·`c5396b3`에서
+  다시 꺼내야 한다(명령은 §E.4.2).
+
+### §E.4.7 sync 게이트 `--deep` 렌즈 (독립 패스, 2026-09-23)
+
+read-only `code-safety` 패스를 카드의 코드 diff(`00ab661..HEAD -- Shared/`)에 돌렸다. run 레인 M4 패스와 **같은
+렌즈지만 다른 손**이다 — M4는 코드를 쓴 레인이 자기 출력을 판정한 것이라 게이트로 세지 않는다. 드라이버·
+`xcodebuild`·`npm`·`~/Library`는 금지했다(빌드·프록시는 이 레인이 따로 돌렸다 — §E.4.2).
+
+**네 부류 0건, 간결성 패스 새 고아 0건 — 결함 0.** 부류마다 실행 기록이 있다: ① `firstIndex` 줄 24 → 24,
+`await` 줄 47 → 46(빠진 하나는 `deleteExpired`의 `Task { await removeFromCalendar }`) ② `Task {` 9 → 8, `try?` 35 → 35
+— 닿을 수 없던 fire-and-forget 하나가 빠졌다 ③ 알림 한도(`rescheduleNearestNotifications(limit: 60)`)·반복 상한(26주)
+무변경 ④ 오히려 복제 둘이 사라졌다 — `addActivity` 본문이 `addActivityWithTravel`과 같았고, `deleteExpired`는
+`deleteEvents`의 복제였는데 이미 어긋나 있었다(`removeUpcomingMeals`를 부르지 않았다). 고아 검사: 지운 본문이 쓰던
+심볼 전부 호출부가 남는다(`enqueueCalendarUpload(` 7 · `removeFromCalendar(` 9 · `ActivityBlock(title:` 7). 지운 자리에
+빈 줄 겹침·빈 `MARK`·짝 잃은 `#endif`가 없다. `LocationManager`에 남은 `NS*`는 `NSObject`·`NSError`(Foundation)뿐이다.
+
+| # | 내용 | 처리 |
+|---|---|---|
+| R1 | 옮긴 문서 줄이 옛 `:176`과 바이트 동일하고 AC-001 자리에 있다 | 결함 아님 |
+| R2 | `updateMeal` 주석이 이유를 말하고 전제가 참이다(SPEC-FULL-001 `in-progress`, REQ-003). 다만 "호출부가 0개여도"·"진행 중인"은 언젠가 낡는다 | 사소한 지적 — 고치지 않음. SPEC-FULL-001이 닫히거나 호출부가 생기면 함께 고칠 문구 |
+| R3 | `import` 제거가 이름 풀이를 조용히 바꿀 경로가 없다 — 세 파일에 CL/MK 식별자 0, Swift 5 모드에 `MemberImportVisibility` 없음(`project.yml:13`) | 결함 아님. **빌드 뒷받침·추론 수준**이다(AST 비교는 하지 않았다) |
+| R4 | **run 레인 §E.2의 "종료 시각 모호성"은 감시자가 만든 착시다.** 드라이버 로그의 마지막 쓰기는 **16:40:19**(이 레인이 `stat`으로 재확인)이고, 기록된 끝 16:43:06은 시작 + 600초 — 같은 호출 안의 `sleep 600` 감시자가 호출 길이를 정했다. 감시자는 드라이버가 끝난 뒤 약 167초 지나 죽은 PID에 `kill`을 보냈을 것이다(명령이 기록되지 않아 **기전은 가설**, 시각은 관측). §E.2가 권고한 "감시자 900초"는 모든 실행을 900초로 늘릴 뿐 고치지 못한다 — 드라이버가 끝나면 감시자를 거두는 것이 수리다 | 리드에게 전달 — t8(드라이버 경화)의 입력. 이 카드의 판정(완주)은 바뀌지 않는다 — 요약 줄과 exit 0이 그대로다 |
+| R5 | 하네스 스킬 `hns-besir-app-hazards`가 `updateMeal`을 여전히 "호출부 0" 후보로 싣는다(주 체크아웃 `.claude/`, git 비추적) | 리드에게 전달 — 하네스 수정(REQ-021 밖) |
+| R6 | `STATUS.md:21`의 "만료 일정 분리 폴더 + 일괄 삭제"가 코드와 더 멀어졌다 | 고치지 않음 — REQ-021이 무변경으로 선언했고 `CLAUDE.md`가 이미 낡은 문서로 지정했다 |
+
+**렌즈가 검사하지 않은 것**: 빌드·드라이버·프록시 재실행(금지 — 빌드·프록시는 이 레인이 덮었다), `~/Library` 복원
+결과, 컴파일러 수준의 이름 풀이 비교, `ShareExtension/`의 grep 밖 부분, `CHECKLIST.md` 인용 바이트 대조(이 레인의 몫 —
+§E.4.2).
+
+### §E.4.8 리드에게 넘기는 것
+
+1. R4 — 드라이버 감시자는 끝나면 거둬야 한다(t8 입력). 900초로 넓히는 것은 수리가 아니다.
+2. R5 — 하네스 스킬의 `updateMeal` 후보 항목(`.claude/` 수정).
+3. `CHECKLIST.md` 인용 의미 전수 감사 — t6에 이어 이 sync도 넘긴다(§E.4.5). 이번 귀속 점검에서 이전 카드가 만든
+   오인용이 넷 더 나왔으므로(L3는 t1, A3·L14는 t6, I2는 문서 작성 시점부터), 같은 부류가 더 있을 가능성이 높다.
+4. 카드 밖 발견(§E.1 "카드 밖 발견" 1·2·4·6) — 이 sync에서 새로 더한 것은 없다.
