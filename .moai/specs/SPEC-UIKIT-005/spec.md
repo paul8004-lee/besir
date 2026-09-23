@@ -1,10 +1,10 @@
 ---
 id: SPEC-UIKIT-005
 title: "장소 좌표 사전의 이름-키 충돌 수리 — `AddEventView`·`AIAssistant` (잔여 두 화면)"
-version: "0.1.0"
-status: in-progress
+version: "0.1.4"
+status: completed
 created: "2026-09-22"
-updated: "2026-09-22"
+updated: "2026-09-23"
 author: "manager-spec"
 priority: P1
 phase: "Phase 1.7 — 화면 UI 통일"
@@ -26,10 +26,33 @@ kanban_card: t6
 | 0.1.1 | 2026-09-22 | D-1 해소 — 운영자가 B안(확정 시점 이름 구분) 채택. §4 D-1 머리말·서두를 해소 문구로 바꾸고 frontmatter `status`를 draft → in-progress로(run 단계 전이). 인용 줄번호 변동 없음 — 코드는 아직 한 줄도 안 바뀌었다. 게이트 기록·AC-005 정리 경위는 progress.md §E.1에 있다 |
 | 0.1.2 | 2026-09-22 | M2(AddEventView) 구현 중 계수 신호 자기모순 정정 — REQ-001·AC-001의 "`\[String: Place\]`"=0은 REQ-002·AC-002가 요구하는 `favoritePlaces` 선언(=1)과 양립 불가(실측: 총수 1 = 전부 favoritePlaces, `confirmedPlaces: [String: Place]` = 0). 신호 범위를 confirmedPlaces 선언으로 좁혔다. 문서 정정이므로 그 자리에서 반영 |
 | 0.1.3 | 2026-09-22 | M4 ui-design 렌즈 정정 — REQ-022의 "확정 칩" 예외를 chosen이 그대로 흐르는 표면 전부(칩·확정 거품 줄 `chosenLine`·재탭 검색창 씨앗 `openCustom`)로 확정. 한 표면만 숨기면 칩과 거품이 다른 말을 하게 되고 `EditCard`·`EditCardView`는 REQ-021로 못 고쳐 숨김이 구조적으로 절반만 된다. AC-007 (6)·AC-009 (12)(13) 같은 정정. 표시 규칙 자체는 무변경 — 세 표면 모두 이 카드 이전부터 chosen을 그대로 심었다 |
+| 0.1.4 | 2026-09-23 | **sync 단계 종료 — 3-phase close(`completed`).** ① `CHECKLIST.md` 인용 재정렬: `AIAssistant.swift` 인용 154조각(149 바이트 대조 확인·2 실측·3 정정), `AddEventView.swift` 줄번호 인용은 **0건**. 첫 판이 귀속을 기계에 맡겼다가 남의 파일 인용 다섯을 밀어 되돌렸고, `AIAssistant` 귀속 156조각을 문맥과 함께 읽어 둘을 걸러낸 뒤 다시 적용했다 — **산술은 귀속을 검증하지 못한다.** ② 대조 중 **t6 이전부터의 오인용 3건**이 잡혀 함께 고쳤다(A1 기준 판정·A1 isSamePlace·N2 calendarPendingNote). ③ 루트 `plan.md` §Phase 1.7에 t6 행 신설 + 후속 8번 닫음. ④ 아래 §0 인용 기준선 표 신설(12앵커, sync 레인 실측). ⑤ 기계 게이트 넷을 sync 레인이 **직접 재실행**해 통과(드라이버 205/205 exit 0·프록시 7/7·iOS·macOS `BUILD SUCCEEDED` 경고 0/0) — run 기록의 인용이 아니라 이 트리에서의 관측이다. **`completed`는 문서 수명주기의 종료이지 동작 검증의 완료가 아니다** — AC-006·AC-009는 ⬜인 채 운영자 실행 대기이고, Day 닫기 목록으로 넘긴다 |
 
 ## 0. 이 SPEC의 성격과 예산
 
 **as-built 베이스라인이 아니라 구현을 앞둔 변경의 계약이다.** 설계 원본은 루트 `plan.md` §Phase 1.7 후속 8번이고 본 SPEC은 그것을 재발명하지 않는다. 인용 줄번호는 변경 전 상태(`c5396b3`) 기준이라 구현 중 밀린다 — 밀릴 때마다 실측 재정렬한다.
+
+**인용 기준선 — 읽는 사람을 위한 재정렬표 (2026-09-23 sync 레인 실측, 최종 트리 `42c29c0`).**
+아래 §1의 인용은 **일부러 `c5396b3`에 그대로 둔다** — 그 줄번호들은 *고치기 전의 결함*을 가리키고,
+고친 뒤 좌표로 옮기면 결함이 없는 코드를 가리키게 되어 근거가 거짓이 된다. 대신 지금 코드를 찾아야
+하는 사람을 위해 앵커를 병기한다. `AIAssistant.swift`의 이동 폭은 구간마다 다르다(+3 → +14 → +37).
+
+| 심볼 | `c5396b3` | 최종 트리 |
+|---|---|---|
+| `AddEventView.confirmedPlaces` 선언 | `:19` (`[String: Place]`) | `:22` (`[UUID: Place]`) |
+| `AddEventView.favoritePlaces` 선언 | — (없음) | `:26` |
+| `AddEventView` choose 좌표 쓰기 | — (없음) | `:276` |
+| `AddEventView` 현재 위치 좌표 쓰기 | — (없음) | `:447` |
+| `AddEventView.confirmedPlace(_:)` | `:511` | `:537` |
+| `AIAssistant.confirmedPlaces` 선언 | `:49` | `:52` |
+| `AIAssistant.choose(field:place:)` | `:747` | `:761` |
+| `AIAssistant.confirmedPlaceKey(for:in:)` | — (없음) | `:778` |
+| `AIAssistant.isSamePlace` | `:2279` | `:2316` |
+| `AIAssistant.resolveOrigin` | `:2309` | `:2346` |
+| `AIAssistant.unresolvedGenericPlace` | `:2366` | `:2403` |
+| `AIAssistant.resolveDestination` | `:2388` | `:2425` |
+
+세는 명령은 `grep -n 'var confirmedPlaces\|func choose(field: UUID, place: Place)\|func confirmedPlaceKey\|func isSamePlace\|func resolveOrigin\|func unresolvedGenericPlace\|func resolveDestination' Shared/AIAssistant.swift`이고, 양쪽 트리에서 각각 돌려 얻었다.
 
 **t3의 수정이 본보기이지 복사 대상이 아니다.** 카드 본문은 "`AddActivityView`·`ActivityDetailView`는 t3에서 사전 키를 줄 신원(`EditField.id`)으로 수정 중 — 그 수정을 본보기로 삼는다 … **화면마다 같은 4줄 수정**"이라고 적었다. 본보기라는 지시는 맞다. **같은 4줄이라는 셈은 틀렸고**, 그 사실이 이 SPEC의 척추다(§1.4·§1.5). 본보기의 다섯 요소 중 몇을 옮기고 몇을 버리는지를 화면마다 근거와 함께 정한다.
 
