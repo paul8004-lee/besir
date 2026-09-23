@@ -5,12 +5,16 @@
 
 ## §E.1 Plan-phase Audit-Ready Signal
 
-- kickoff_gate: **pending** — 결정 넷(D-1~D-4)과 Tier 확인이 남아 있다(`spec.md` §4, `plan.md` §2). 이 신호가 여는 다음 단계는
-  run 착수가 아니라 착수 승인 게이트다.
+- kickoff_gate: **resolved 2026-09-24** — 운영자가 결정했고 리드가 전했다(기록은 `plan.md` §2): D-1 (a) 격리 + 대조 · D-2 (a) 내부 시간 제한 ·
+  D-3 (a) 머리말 불변식 · D-4 `CLAUDE.md` 편집 승인 · Tier S. (b) 없음 → REQ·AC 재작성 없음. 이 plan 세션은 운영자의 답을 직접 보지 않았다.
+  결정을 반영한 판은 `spec.md` 0.1.1이다.
+- (게이트 전 기록) kickoff_gate: pending — 결정 넷(D-1~D-4)과 Tier 확인이 남아 있었고, 이 신호가 여는 다음 단계는 run 착수가 아니라
+  착수 승인 게이트였다(커밋 `08c1a1b`).
 - 산출물: `spec.md` · `plan.md` · `progress.md`(이 파일). Tier S라 `acceptance.md`를 두지 않고 AC는 `spec.md` §3.1에 인라인했다.
 - 작성 주체: 세 파일 모두 plan 레인 오케스트레이터가 직접 썼다(서브에이전트 위임 없음). 이유: 이 카드의 출발점이 "위임받은 서브에이전트가
   드라이버를 돌려 실제 데이터를 덮어썼다"(2026-09-23 14:17)이고, 실측 수치 수십 개를 그대로 옮겨야 했다.
-- **가드 드라이버는 돌리지 않았다**(디스패치 금지). **`Shared/`·`Tools/` 아래 변경은 0건이다**(`git status --short`로 커밋 전 확인 — §F.1 뒤 신호 앞에 기록).
+- **가드 드라이버는 돌리지 않았다**(디스패치 금지). **`Shared/`·`Tools/` 아래 변경은 0건이다** — 커밋마다 직전에 `git status --short`로
+  확인했다(바뀐 것은 이 SPEC 디렉터리와 감사 보고서뿐). 감사 2회차도 기준 트리·작업 트리 양쪽에서 `git diff --quiet … Shared/ Tools/` exit 0을 쟀다.
 - 신호 줄(`plan_complete_at`·`plan_status`)은 파일 끝, §F.1 감사 자리 뒤에 둔다.
 
 ### 관측된 증거 — 이 레인이 `2a37673`에서 직접 돌린 명령
@@ -22,7 +26,7 @@
 | `grep -n 'appendingPathComponent("' Shared/Store.swift Shared/AIAssistant.swift Shared/Config.swift` | 데이터 파일 7개 + 디렉터리 `:67` | spec §1.2 |
 | `awk` 머리말 `:168-188` · `awk 'NR>=274 && NR<=301'` · `sed -n '8,30p' Shared/Store.swift` · 첫 `drvCreate` `:428` · 절 머리 `grep -c` = 29 · 백업 `grep -n` = 10줄 | G `:278`은 없는 번호라 쓰기 전 반환(`:281` 단언) → 첫 쓰기는 H `:293`(`save()` `Store.swift:759`), 배열 `didSet`은 저장 안 함(`:10`·`:14`), 백업 7곳(`drvPersistedPayload`는 Q절 `:651`에서 불림) | spec §1.2 (감사 1회차 D1로 정정) |
 | `grep -o '"title":"[^"]*"' /tmp/besir-incident-20260923/*.fixture` · `grep -n 'V-출발\|W-하룻밤' Tools/GuardDriver.swift` | `V-출발`·`W-하룻밤` · V절 `:972`·W절 `:1038` | spec §1.1 (J `:1127`보다 앞) |
-| `grep -n 'Keychain\|isConnected\|…' Shared/GoogleCalendarService.swift` · `grep -n 'googleConnected\|hasGoogleCalendar\|removeFromCalendar(' Shared/Store.swift` · 함수 시작 줄 목록 | 게이트 갈래 7자리 · 게이트 밖 갈래 둘(`removeFromCalendar` 호출부 5, `updateActivity` `:273`) | spec §1.3 |
+| `grep -n 'Keychain\|isConnected\|…' Shared/GoogleCalendarService.swift` · `grep -n 'googleConnected\|hasGoogleCalendar\|removeFromCalendar(' Shared/Store.swift` · 함수 시작 줄 목록 | 게이트 갈래 7자리 · 게이트 밖 갈래 둘(`removeFromCalendar` 게이트 밖 호출부 6 — 아래 줄, `updateActivity` `:273`) | spec §1.3 |
 | `grep -n 'store\.delete\|store\.updateActivity\|delete_schedule\|delete_recurring' Tools/GuardDriver.swift` · `grep -o 'drvExecuteTool("[a-z_]*"' … \| sort \| uniq -c` · `grep -o 'drvAsk("[a-z_]*"' …` · `grep -n 'updateActivity(\|modifyActivity' Shared/Store.swift Shared/AIAssistant.swift` · `grep -n 'reconcileActivities(' Shared/*.swift` | 0줄 · `create_activity` 4 · `create_schedule` 3 · `drvAsk`는 생성 계열뿐 · `modifyActivity` `:288` → `:310` ← `AIAssistant.swift:2220` · `:1378` 한 곳 | spec §1.3 (드라이버는 게이트 밖 갈래를 부르지 않음, `:1425`는 게이트 안) |
 | `grep -n 'removeFromCalendar(' Shared/Store.swift` | 정의 `:97` + 호출 9곳, 게이트 밖 6(`:272`·`:370`·`:706`·`:1258`·`:1276`·`:1289`) | spec §1.3 (감사 1회차 D2로 정정 — 처음엔 다섯) |
 | `grep -n 'app-sandbox' project.yml` | `:107` `com.apple.security.app-sandbox: false` | AC-002 전제 (감사 1회차 D8) |
@@ -50,8 +54,9 @@
 - **"첫 백업이 J절(:1127)에만 존재"** — `events.json` 기준으로는 맞다. 파일 전체로는 Q절 `:633`(`ai_history.json`)과 그 도우미 `:152`가 먼저다.
   요지 — 앞쪽 절(첫 쓰기 H `:293`부터 V·W까지)의 쓰기에는 백업이 없다 — 는 그대로다.
 - **카드 (1)의 방식** — 카드는 "시작·종료 백업·복원·cmp 코드화"를 적었다. 이 레인은 실제 디렉터리를 아예 쓰지 않는 격리가 오늘 실측으로 가능함을 보였고,
-  그것을 권고안(D-1 (a))으로 올렸다. 카드 문구 그대로의 안은 D-1 (b)로 남겼다. 결정은 게이트 몫이다.
+  그것을 권고안(D-1 (a))으로 올렸다. 카드 문구 그대로의 안은 D-1 (b)로 남겼다. **게이트가 (a)로 확정했다(2026-09-24).**
 - **카드 (3)의 방식** — "sleep 감시자는 wait 뒤 회수"를 적었다. 권고안(D-2 (a))은 감시자를 없애 회수할 것 자체를 없앤다. 카드 문구 그대로는 D-2 (b).
+  **게이트가 (a)로 확정했다(2026-09-24).**
 
 ### Gaps — plan이 돌리지 않은 것 (증거 없음 ≠ 통과)
 
@@ -65,11 +70,13 @@
 - 드라이버가 실제로 네트워크를 부르는지(O-1) — 코드 읽기뿐이다.
 - `xcodebuild`·`npm test` — `Shared/`·`proxy/`를 바꾸지 않는 카드라 plan에서 돌리지 않았다.
 
-### 카드 밖 발견 — 리드가 카드로 올릴지 정할 것
+### 카드 밖 발견 — 리드 판정 (2026-09-24)
 
 - **O-1 드라이버의 네트워크 호출**(코드 읽기 가설, 미관측) — `spec.md` §3 Out of Scope. 사실이면 `CLAUDE.md:58`의 "(API 할당량 안 씀)"이 틀리다.
-- **O-2 절마다의 파일 백업 7곳** — D-1 (a) 뒤 샌드박스 안에서만 돈다. Day 닫기 간결성 검사의 입력.
-- **O-4 공용 메모리 갱신** — `feedback_besir_driver_touches_real_data`의 "t8 전까지" 절차.
+  → **Day 닫기 이월**, 이 카드로 끌어들이지 않는다.
+- **O-2 절마다의 파일 백업 7곳** — D-1 (a) 뒤 샌드박스 안에서만 돈다. Day 닫기 간결성 검사의 입력. → **Day 닫기 이월**.
+- **O-4 공용 메모리 갱신** — `feedback_besir_driver_touches_real_data`의 "t8 전까지" 절차. → **병합 뒤 리드가 갱신**.
+- R5 스킬 편집이 워크트리에서 막히면 → **리드가 run에게 `ExitWorktree(keep)` 후 편집을 지시**.
 
 ### 잔여 위험
 
@@ -103,10 +110,43 @@
   같은 명령으로 다시 확인했다(D2는 감사 결과가 오기 전에 이 레인도 따로 찾았다). 나머지 일곱은 요구사항·AC의 구멍이다 — REQ-008의 git 밖
   범위(D3), REQ-001 "every exit path"의 과장(D4), 종료 루틴 이원화와 코드 2의 자리(D5), AC-004가 메인 액터 밖 성질을 못 가림(D6),
   AC-003의 세는 명령(D7), 맥 앱 비샌드박스 전제(D8), 삭제 대상 확인의 AC(D9). 반영 내용은 `spec.md` HISTORY 0.1.0 행.
-- optional D10~D19 10건 중 9건 반영 — 잔여 위험의 범위(씨앗 전체), plan §0 매핑(002→008), §1.3의 `update_schedule` → `modifyActivity` 경로(툴 이름 전수를
-  명령째 넣음), AC-002 (3)의 grep(쓰기·삭제·디렉터리 생성 호출 전수로 바꿈), AC-005 (1)의 절 범위, AC-006 (2)의 `:408`, `plan.md` §2의
-  `[NEEDS CLARIFICATION]` 표식, 종료 코드 1의 중의성, 카드 원문 인용(이 파일 §E.1). 보류 1건: REQ 문장 안의 줄번호(프로젝트 관례).
-- **재감사 없음.** 2회차는 착수 게이트 결정(D-1~D-4·Tier)을 반영한 뒤 그 델타와 이 반영분을 함께 본다. 3회가 상한이므로 게이트 뒤 2회, 여유 1회가 남는다.
+- optional D10~D19 10건 가운데 7건 완전 반영, 2건 부분 반영, 1건 보류(2회차 감사가 D10·D15를 부분으로 판정 — 처음 이 자리에 "9건 반영"으로
+  적은 것을 정정한다). 완전: plan §0 매핑(002→008), §1.3의 `update_schedule` → `modifyActivity` 경로(툴 이름 전수를 명령째 넣음), AC-002 (3)의
+  grep(쓰기·삭제·디렉터리 생성 호출 전수), AC-005 (1)의 절 범위, `plan.md` §2의 게이트 표식(D16 — 넣었다가 게이트 해소로 걷음), 종료 코드 1의
+  중의성, 카드 원문 인용(이 파일 §E.1). 부분: 잔여 위험의 범위(D10 — spec §3 잔여 위험은 씨앗 전체로 넓혔지만 AC-008 (4)의 문구는 설정 한정으로
+  남음, 감사자 판정 "무해"), AC-006 (2)(D15 — `Store.swift:408`은 더했으나 `D-2`·새 문단 위치는 반영하지 않음). 보류: REQ 문장 안의 줄번호(프로젝트 관례).
+- **1회차 뒤 재감사 없이 커밋**(`08c1a1b`). 2회차는 착수 게이트 결정을 반영한 뒤 그 델타와 이 반영분을 함께 봤다(아래).
+
+### 2회차 — PASS 0.87, 2026-09-24
+
+- 보고서: `.moai/reports/plan-audit/SPEC-TEST-001-review-2.md`. 같은 채널(`plan-auditor` 서브에이전트 + `audit_multi`, GLM `inconclusive` → claude 단독).
+  금지 사항 동일, 준수 보고. 대상: 1회차 D1~D9 반영분 + 게이트 델타(`spec.md` 0.1.1).
+- must-pass MP-1~MP-7 전부 통과(MP-4 해당 없음). `moai spec lint` 결함 없음. REQ·AC 8/8, 결정에 기대는 REQ·AC 0, 명확화 표식 0, 교차 참조 끊김 0.
+- **D1~D9 아홉 모두 "해소"** — 감사자가 명령으로 재확인(D1·D5·D6의 판단은 감사자 쪽도 코드 읽기).
+- 새 결함 넷, 전부 반영:
+  - **R2-1 (major, blocking)** — REQ-006·AC-005 (4)·`plan.md` M4·§2 항목 4가 `CLAUDE.md` 편집 확인 수단을 권한 프롬프트 승인 하나로 좁혔다.
+    선례 SPEC-UIKIT-006(`spec.md:157`)은 run 세션 직접 입력과 권한 프롬프트 승인 둘을 인정했고, 그 run은 직접 입력으로만 확인됐다
+    (`progress.md:258-259` — 이 레인이 원문을 읽어 확인). 이대로면 구현이 옳아도 AC-005가 떨어질 수 있었다. → 네 곳 모두 두 수단으로, 다른 세션을
+    거친 메시지는 치지 않음, 수단과 결과를 §E.2에, 둘 다 없으면 편집 보류 + 리드에게 블로커 보고.
+  - R2-2 (minor) — `spec.md` HISTORY 0.1.1의 "다시 쓴 REQ·AC는 없다"가 AC-005 (4) 신설과 표식 제거를 빠뜨림 → 서술 정정.
+  - R2-3 (minor) — 이 파일의 낡은 문장 넷(호출부 5, "결정은 게이트 몫", 존재하지 않는 기록 위치, "9건 반영") → 정정.
+  - R2-4 (minor, 관측하지 않은 가설) — iOS 타깃도 제품 이름이 `besir`라 `pgrep -x besir`가 시뮬레이터 앱을 잡을 수 있다 → AC-002 전제와 `plan.md` M1에
+    `pgrep -lf besir` 경로 확인을 더함.
+- 감사자 권고: R2-1 반영분을 3회차(마지막)로 확인한다 — 3회차 뒤 재감사 없이 반영하는 일을 피하려는 것.
+
+### 3회차(마지막) — PASS 0.89, 2026-09-24
+
+- 보고서: `.moai/reports/plan-audit/SPEC-TEST-001-review-3.md`. 같은 채널, 금지 사항 동일·준수 보고. 범위: R2 델타만.
+- 점수 0.76 → 0.87 → 0.89(명확성 0.88 · 완결성 0.95 · 시험 가능성 0.85 · 추적성 0.90). REQ·AC 8/8, 명확화 표식 0(세 파일), `moai spec lint` 결함 없음.
+- R2-1·R2-2·R2-4 수정, R2-3 부분(D15 라벨 뒤바뀜 → R3-2).
+- 새 결함 셋(전부 minor·optional, blocking 없음) — 감사자 지정 문구대로 반영:
+  - R3-1 — R2-1이 붙인 블로커 경로가 선례 `spec.md:157` 끝 문장("리드에게 블로커 보고로 되묻지 않는다 — 되물으면 또 다른 세션을 거친 승인이
+    되어…")과 어긋남. 2회차 감사자가 제안한 경로였고 선례의 끝 문장을 놓쳤다. 이 레인이 원문을 읽어 확인했다. → "리드의 처리는 확인을 대신하지
+    않는다 — 이 블로커는 확인 요청이 아니라 편집 보류의 통지다"를 네 곳에.
+  - R3-2 — D15(AC-006, 부분)·D16(게이트 표식, 완전) 라벨 정정.
+  - R3-3 — `plan.md` §2 끝 "2회차 뒤 디스패치" → "3회차 뒤".
+- **R3 반영은 재감사를 받지 않았다** — 회차 상한 3에 닿았다. 감사자 판정: 넣든 안 넣든 판정 불변.
+- 감사자가 확인하지 못한 것: `pgrep -lf besir`의 판별(감사 시점에 besir 프로세스가 없었다), 드라이버 동작과 M4 확인 절차의 실제 작동(run M3·M4에서 처음 관측).
 
 - plan_complete_at: 2026-09-24
 - plan_status: audit-ready
