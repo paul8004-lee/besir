@@ -163,6 +163,17 @@ AC의 변경 전 값은 `plan.md` §5 "측정된 기준선"에 명령과 함께 
 - **Gaps**: 파트 A·B의 수치(N₀·X·D·Y·Z)는 운영자가 별도 기록하지 않아 이 파일에 값으로 남지 않는다 — AC-005·006의 "값 기록" 요건과의 차이를 그대로 밝힌다(판정 자체는 관측됐고 전달 경로는 리드 전언). 8번 동일 시간의 원인(생성 시점 위치)은 운영자 가설이며 이 카드가 검증하지 않았다.
 - **잔여 위험**: §3.3 실기기 전용 셋(편집 뒤 출발 알림 실제 수신·구글 캘린더 항목 잔존·macOS 편집 시트)과 VoiceOver 실기기 발화는 Day 닫기 확인 몫이다.
 
+### M4 — AC-002 HEAD판 재실측 + run 종결
+
+- **주장**: 카드가 base `73ceb43`에서 건드린 경로는 허용 집합 안에만 있다(AC-002).
+- **증거(run 종결 커밋 `ce9fa7a`의 HEAD에서 직접 관측, 2026-09-23)**:
+  - `git diff --name-only 73ceb43 HEAD -- . ':!.moai/reports/plan-audit'` → `.moai/specs/SPEC-UIKIT-007/plan.md` · `progress.md` · `spec.md` · `Shared/AddEventView.swift` · 루트 `plan.md` — **허용 집합 밖 경로 0**(루트 `plan.md`은 REQ-007의 계획-실제 갱신 허용 대상)
+  - `git diff -U0 73ceb43 HEAD -- Shared/AddEventView.swift | grep '^@@'` → 헝크 **2개**(`@@ -166 +166 @@` · `@@ -534,3 +534,3 @@`) — `bootstrap`·`prefillOrigin`·`confirmCurrentLocationAsOrigin`에 닿는 헝크 없음
+  - `grep -c 'editing?.origin' Shared/AddEventView.swift` → **1** · `git diff --name-only --diff-filter=A 73ceb43 HEAD -- Shared/` → **무출력**(새 소스 파일 0 → `xcodegen generate` 불필요했음)
+  - 루트 `plan.md` 헝크는 **하나**(`@@ -428,6 +428,7 @@` — Phase 1.7 표의 t7 행 삽입) — REQ-007의 이 카드 항목(§Phase 1.7 표의 t7 행)에만 닿는다. 후속 17·14는 무손대(닫기는 sync 몫, AC-008). 새 후속 항목은 없다(렌즈 관찰은 후속 15 중복이거나 카드 밖 — M3b).
+  - 이 블록을 담는 커밋은 `progress.md`(허용 집합 내 경로)만 추가로 고치므로 위 경로 집합은 그대로다.
+- **Gaps**: `wc -l` = 645·주석 grep 값 등 M2 신호는 커밋 후에도 불변임을 M2·M4 두 차례 측정으로 보였다(위 §M2·§M4). 머지가 없어 기준 `73ceb43`은 그대로 유효하다(AC-002 전제).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 - run_status: **audit-ready**
