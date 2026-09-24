@@ -927,6 +927,8 @@ final class Store: ObservableObject {
     }
 
     /// 기존 일정의 모든 필드를 수정하고, 이동시간·출발시각·알림을 다시 계산한다.
+    /// `travelSecondsHint`는 addEvent의 같은 인자와 같은 역할 — 폼이 이미 보여준 이동시간이
+    /// 있으면 그 값으로 산정하고 저장마다 외부 조회를 다시 하지 않는다.
     func updateEvent(id: UUID,
                      title: String,
                      origin: Place,
@@ -936,6 +938,7 @@ final class Store: ObservableObject {
                      bufferMinutes: Int,
                      notifyLeadMinutes: Int,
                      anchor: ScheduleAnchor = .arrival,
+                     travelSecondsHint: TimeInterval? = nil,
                      notifyEnabled: Bool? = nil,
                      syncToCalendar: Bool? = nil) async {
         guard let idx = events.firstIndex(where: { $0.id == id }) else { return }
@@ -949,9 +952,15 @@ final class Store: ObservableObject {
         event.notifyLeadMinutes = notifyLeadMinutes
         if let notifyEnabled { event.notifyEnabled = notifyEnabled }
         if let syncToCalendar { event.syncToCalendar = syncToCalendar }
-        switch anchor {
-        case .arrival: await applyEstimate(to: &event)
-        case .departure: await applyDepartureAnchoredEstimate(to: &event, departureDate: arrivalDate)
+        // 폼이 이미 보여준 이동시간이 있으면 그 값으로 산정한다(addEvent의 같은 스위치와 같은
+        // 이유 — 외부 API 중복 호출 방지). 힌트가 없을 때만 다시 조회한다.
+        switch (anchor, travelSecondsHint) {
+        case (.arrival, let hint?):
+            applyCachedArrivalEstimate(to: &event, travelSeconds: hint, source: "조회됨")
+        case (.departure, let hint?):
+            applyCachedDepartureEstimate(to: &event, departureDate: arrivalDate, travelSeconds: hint, source: "조회됨")
+        case (.arrival, nil): await applyEstimate(to: &event)
+        case (.departure, nil): await applyDepartureAnchoredEstimate(to: &event, departureDate: arrivalDate)
         }
         // await(이동시간 조회) 사이 동기화·삭제로 배열이 바뀔 수 있으니 쓸 때 id로 다시 찾는다.
         guard let writeIdx = events.firstIndex(where: { $0.id == id }) else { return }

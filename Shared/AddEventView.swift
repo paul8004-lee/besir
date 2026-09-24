@@ -26,6 +26,14 @@ struct AddEventView: View {
     @State private var favoritePlaces: [String: Place] = [:]
     @State private var estimates: [TransportMode: TravelEstimate] = [:]
     @State private var estimating = false
+    /// 지금 떠 있는 estimateAll 호출의 수. estimating은 이 수가 0으로 돌아올 때만 내린다 —
+    /// 먼저 끝난 계산이 내리면 새 계산이 아직 도는 중에도 스피너가 일찍 사라진다.
+    @State private var estimateFlights = 0
+    /// estimates가 어느 출발지·목적지 쌍에 대한 값인지. 저장 힌트는 폼의 좌표가 이 쌍과 같을
+    /// 때만 넘긴다 — 재계산이 도는 창에 저장하면 estimates는 아직 옛 쌍의 값이라, 힌트로 흘러
+    /// 옛 경로의 이동시간이 저장값으로 굳는다(수리 전에는 저장이 항상 새 좌표로 재조회해 이
+    /// 창이 없었다 — code-safety F1).
+    @State private var estimatesFor: (origin: Place, destination: Place)?
     @State private var saving = false
     /// 알림 줄이 토글 꺼짐으로 배열에서 빠져 있는 동안 마지막 값을 기억한다(REQ-022(b)) — 다시
     /// 켜면 이 값으로 되심는다.
@@ -90,7 +98,7 @@ struct AddEventView: View {
         // 카드 뷰는 순수 값 뷰라 외부 상태를 스스로 못 본다 — 진행 깃발을 줄의 busy로 명시적으로
         // 잇는다. 잊으면 동작은 돼도 진행 표시가 조용히 안 뜬다(REQ-021(c), 휴면 계약).
         .onChange(of: estimating) { _, on in setBusy(key: "mode", on) }
-        .onChange(of: location.isLocating) { _, on in setBusy(key: "origin_query", on) }
+        .onChange(of: location.isLocating) { _, _ in syncOriginBusy() }
     }
 
     private var header: some View {
@@ -163,7 +171,8 @@ struct AddEventView: View {
             .init(key: "title", kind: .title, label: "일정 제목", options: [], allowsCustom: true,
                   chosen: editing?.title, startsOpen: fresh),
             .init(key: "origin_query", kind: .place, label: "출발지", options: originOptions,
-                  allowsCustom: true, chosen: editing?.origin?.name, busy: location.isLocating),
+                  allowsCustom: true, chosen: editing?.origin?.name,
+                  busy: location.isLocating && editing?.origin == nil),
             .init(key: "destination_query", kind: .place, label: "목적지",
                   options: store.favorites.map { .init(label: $0.label, value: $0.label) },
                   allowsCustom: true, chosen: editing?.destination.name, startsOpen: fresh),
@@ -176,10 +185,7 @@ struct AddEventView: View {
             // 생긴다(ensureGatedRows). 그때도 이벤트의 값으로 seed한다.
             if let o = e.origin {
                 confirmedPlaces[fields[1].id] = o
-                fields.append(contentsOf: gatedRows(
-                    datetime: editingDatetime(e), mode: e.mode.rawValue,
-                    buffer: String(e.bufferMinutes), notifyOn: String(e.wantsNotification),
-                    lead: String(e.notifyLeadMinutes), calendar: String(e.wantsCalendarSync)))
+                fields.append(contentsOf: gatedRows(seeding: e))
             }
         }
         return EditCard(fields: fields)
@@ -198,10 +204,7 @@ struct AddEventView: View {
         if let e = editing {
             // 늦게 생기는 줄도 편집 대상의 값으로 seed한다 — 기본값으로 덮으면 편집이 값을
             // 조용히 바꾸는 게 된다.
-            c.fields.append(contentsOf: gatedRows(
-                datetime: editingDatetime(e), mode: e.mode.rawValue,
-                buffer: String(e.bufferMinutes), notifyOn: String(e.wantsNotification),
-                lead: String(e.notifyLeadMinutes), calendar: String(e.wantsCalendarSync)))
+            c.fields.append(contentsOf: gatedRows(seeding: e))
         } else {
             // 폼의 문서화된 기본값 — 사용자가 보고 바꾸는 값이다(모델이 조용히 정한 값과 다르다)
             c.fields.append(contentsOf: gatedRows(datetime: nil, mode: TransportMode.transit.rawValue,
@@ -252,6 +255,14 @@ struct AddEventView: View {
         return rows
     }
 
+    /// 편집 씨앗의 여섯 인자 변환은 이 과부하 하나에만 산다 — 변환식이 두 벌이면 필드가 늘 때
+    /// 한쪽만 고치는 날이 온다(BesirMark 기하 상수를 한곳에 두는 것과 같은 이유).
+    private func gatedRows(seeding e: ScheduledEvent) -> [EditField] {
+        gatedRows(datetime: editingDatetime(e), mode: e.mode.rawValue,
+                  buffer: String(e.bufferMinutes), notifyOn: String(e.wantsNotification),
+                  lead: String(e.notifyLeadMinutes), calendar: String(e.wantsCalendarSync))
+    }
+
     private func notifyLeadRow(chosen: String) -> EditField {
         .init(key: "notify_lead_minutes", kind: .notify, label: "알림",
               options: [.init(label: "출발 시각", value: "0"), .init(label: "10분 전", value: "10"),
@@ -297,6 +308,7 @@ struct AddEventView: View {
                 c.fields[i].chosen = nil
                 card = c
                 useCurrentLocationAsOrigin()
+                syncOriginBusy()
             } else {
                 card = c
                 if value == Self.hereMarker {
@@ -305,6 +317,11 @@ struct AddEventView: View {
                     ensureGatedRows()
                     Task { await recomputeEstimates() }
                 }
+                // 목적지가 아직 비어 있으면 ensureGatedRows도 재계산 가드도 여기까지 못 온다
+                // — 그러면 권한 거부 안내가 값을 고른 줄에 남는다(note를 지우는 건
+                // syncFieldExtras뿐이다). 줄 딸린글 조립이 두 자리가 되지 않게 호출로 갚는다.
+                syncFieldExtras()
+                syncOriginBusy()
             }
         case "destination_query":
             card = c
@@ -422,6 +439,12 @@ struct AddEventView: View {
     /// 출발지 nil을 채우는 길이 같다 — 옛 화면 prefillOrigin과 같은 흐름이다.
     private func prefillOrigin() async {
         guard confirmedPlace("origin_query") == nil else { return }
+        // 권한이 거부된 상태에서 위치를 요청하면 영영 오지 않는 값을 5초 기다린다 — 죽은 대기 대신
+        // syncFieldExtras의 권한 안내만 띄운다.
+        if location.authorizationStatus == .denied || location.authorizationStatus == .restricted {
+            syncFieldExtras()
+            return
+        }
         if location.currentLocation == nil { location.useCurrentLocation() }
         for _ in 0..<25 {
             if let c = location.currentLocation {
@@ -457,24 +480,40 @@ struct AddEventView: View {
         }
         ensureGatedRows()
         Task { await recomputeEstimates() }
+        syncOriginBusy()
     }
 
     // MARK: - 이동시간
 
+    // flights 카운터는 증감 사이에 await가 있어, 협력 풀에서 두 계산이 동시에 섞이면 갱신
+    // 분실로 0으로 안 돌아온다(스피너가 이 시트에서 영영 돈다). 주 액터로 묶어 직렬화한다.
+    @MainActor
     private func recomputeEstimates() async {
         guard let origin = confirmedPlace("origin_query"),
               let dest = confirmedPlace("destination_query") else { return }
         estimating = true
+        estimateFlights += 1
         let all = await store.directions.estimateAll(
             from: CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude),
             to: CLLocationCoordinate2D(latitude: dest.latitude, longitude: dest.longitude))
+        estimateFlights -= 1
+        // 도는 사이 출발지·목적지를 바꾸면 두 비동기 작업이 겨루고 늦게 끝난 옛 계산이 이겨, 모드
+        // 칩 소요시간·시각 줄 안내·충돌 배너에 옛 좌표의 값이 남는다. await 뒤 다시 읽어 시작할 때의
+        // 줄 신원·좌표와 같을 때만 쓴다(setLookup과 같은 await 뒤 재확인 규율). 밀린 계산은 값을 버리되
+        // 이것이 마지막 계산이면 estimating을 내린다 — 도중에 출발지가 지워져도 플래그가 true로 남지 않게.
+        guard confirmedPlace("origin_query") == origin,
+              confirmedPlace("destination_query") == dest else {
+            if estimateFlights == 0 { estimating = false }
+            return
+        }
         estimates = all
-        estimating = false
+        estimatesFor = (origin, dest)
+        if estimateFlights == 0 { estimating = false }
         syncFieldExtras()
     }
 
     /// 줄에 붙는 딸린 글을 카드에 다시 맞춘다 — 모드 칩의 소요시간, 출처 캡션, 시각 줄 안내·예상
-    /// 시각. 이 문자열들을 조립하는 곳은 이 함수 하나다(REQ-030(c)).
+    /// 시각, 출발지 줄의 권한 거부 안내. 이 문자열들을 조립하는 곳은 이 함수 하나다(REQ-030(c)).
     private func syncFieldExtras() {
         guard var c = card else { return }
         let currentMode = c.fields.first(where: { $0.key == "mode" })?.chosen
@@ -512,6 +551,17 @@ struct AddEventView: View {
             }
             c.fields[ti].note = note
         }
+        if let oi = c.fields.firstIndex(where: { $0.key == "origin_query" }) {
+            // 권한 거부로 출발지가 비면 이유와 다른 길을 말한다 — 이 시트가 위치 실패를 알리는 유일한
+            // 자리다(lastError를 읽는 곳이 없다). 상태 판정은 authorizationStatus로 하지 문자열
+            // 매칭으로 하지 않는다. note는 줄 라벨 아래에 붙어 편집기를 닫아도 보이고 줄 라벨과
+            // 함께 읽힌다.
+            let blocked = location.authorizationStatus == .denied
+                || location.authorizationStatus == .restricted
+            c.fields[oi].note = blocked && c.fields[oi].chosen == nil
+                ? "위치 권한이 꺼져 있어요. 시스템 설정에서 허용하거나 출발지를 직접 검색해 골라 주세요."
+                : nil
+        }
         card = c
     }
 
@@ -520,6 +570,13 @@ struct AddEventView: View {
               c.fields[i].busy != on else { return }
         c.fields[i].busy = on
         card = c
+    }
+
+    /// 출발지 줄의 스피너는 "줄이 비어 있고 위치를 기다리는 중"일 때만 돈다 — isLocating은 앱 시작
+    /// 프리필 같은 이 줄과 무관한 측위에도 켜지므로, 값이 있는 줄에 걸면 아무도 그 줄에서 일하지
+    /// 않는데 도는 표시가 된다(편집 시트 냉시작에서 관측됨).
+    private func syncOriginBusy() {
+        setBusy(key: "origin_query", location.isLocating && field("origin_query")?.chosen == nil)
     }
 
     // MARK: - 읽기 보조
@@ -532,8 +589,10 @@ struct AddEventView: View {
     /// `chosen == nil`을 먼저 거르는 이유는 실패 방향을 닫아두기 위해서다. 열쇠가 이름이던 시절엔
     /// 이름 없는 줄이 사전을 못 찾아 저절로 nil이 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은
     /// 없는 줄"이 생기면 그 좌표가 조용히 실려 나간다 — 쓰기 자리들이 지금은 이름과 좌표를 늘
-    /// 함께 심지만 그 불변식은 코드가 아니라 규율이 지킨다. 출발지 줄의 nil 읽기는 "없는 장소"로
-    /// 끝나지 않고 프리필(prefillOrigin)을 여는 신호다 — fail-closed만 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다(1b98e14).
+    /// 함께 심지만 그 불변식은 코드가 아니라 규율이 지킨다. 출발지 줄의 nil 읽기는 넷(프리필
+    /// 가드·재계산 가드·originCoord·save 가드)인데 프리필을 여는 것은 prefillOrigin의 가드
+    /// 하나다 — 그 가드에서 이 nil은 "없는 장소"가 아니라 프리필을 여는 신호다. fail-closed만
+    /// 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다(1b98e14).
     private func confirmedPlace(_ key: String) -> Place? {
         field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
     }
@@ -591,18 +650,26 @@ struct AddEventView: View {
             syncToCalendar = calendarDefault
         }
         saving = true
+        // 폼이 이미 보여준 이동시간을 그대로 저장한다 — 저장마다 카카오/ODsay를 다시 부르지 않고,
+        // 폼 표시값과 저장값이 어긋나는 창(재조회 사이 교통상황 변동)도 없어진다. 단 힌트는
+        // estimates가 지금 폼의 출발지·목적지에 대한 값일 때만 넘긴다 — 재계산 왕복이 도는 창의
+        // 옛 쌍이면 nil로 저장 시 한 번 재조회하게 한다(수리 전과 같은 정확성. code-safety F1).
+        var hint: TimeInterval?
+        if let pair = estimatesFor, pair.origin == origin, pair.destination == dest {
+            hint = estimates[mode]?.duration
+        }
         if let e = editing {
             await store.updateEvent(id: e.id, title: title, origin: origin, destination: dest,
                                     arrivalDate: parsed.date, mode: mode,
                                     bufferMinutes: bufferMinutes, notifyLeadMinutes: notifyLeadMinutes,
-                                    anchor: anchor, notifyEnabled: notifyEnabled,
-                                    syncToCalendar: syncToCalendar)
+                                    anchor: anchor, travelSecondsHint: hint,
+                                    notifyEnabled: notifyEnabled, syncToCalendar: syncToCalendar)
         } else {
             await store.addEvent(title: title, origin: origin, destination: dest,
                                  arrivalDate: parsed.date, mode: mode,
                                  bufferMinutes: bufferMinutes, notifyLeadMinutes: notifyLeadMinutes,
-                                 anchor: anchor, notifyEnabled: notifyEnabled,
-                                 syncToCalendar: syncToCalendar)
+                                 anchor: anchor, travelSecondsHint: hint,
+                                 notifyEnabled: notifyEnabled, syncToCalendar: syncToCalendar)
         }
         saving = false
         dismiss()
