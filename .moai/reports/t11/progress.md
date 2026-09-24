@@ -15,7 +15,9 @@
 | E1 | `git fetch origin` 후 `git rev-parse --short origin/master` | `f13ca3c` — 디스패치 베이스와 일치 |
 | E2 | iOS 빌드(최종본): `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` | exit=0 · `** BUILD SUCCEEDED **` · swift 경고 `grep 'warning:' \| grep -c '\.swift'` = **0** |
 | E3 | macOS 빌드(최종본, 같은 형식 `-scheme besir-macOS`) | exit=0 · BUILD SUCCEEDED · swift 경고 **0** |
-| E4 | 드라이버(t9판 조리법 — cat에 `Shared/EditCard.swift` 포함. CLAUDE.md 블록은 그것만 빠진 옛 형태라 못 쓴다): `cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd-t11.swift && swiftc -o /tmp/gd-t11 …(CLAUDE.md 9파일) -parse-as-library && /tmp/gd-t11` | compile-exit=0 · run-exit=0 · `212/212 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 컴파일 경고 12본(DirectionsService 8·LocationManager 3·PlaceSearch 1 — t9 기준선과 동일배분, **Store.swift 0건**) |
+| E4 | 드라이버(워크트리 CLAUDE.md 레시피 — cat에 `Shared/EditCard.swift` 포함): `cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd-t11.swift && swiftc -o /tmp/gd-t11 …(CLAUDE.md 9파일) -parse-as-library && /tmp/gd-t11` | compile-exit=0 · run-exit=0 · `212/212 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 컴파일 경고 12본(DirectionsService 8·LocationManager 3·PlaceSearch 1 — t9 기준선과 동일배분, **Store.swift 0건**) |
+
+> **E4 문구 정정(sync 판정 N4)**: 처음 적은 "CLAUDE.md 블록은 EditCard만 빠진 옛 형태"는 사실이 아니다 — 워크트리·origin/master의 CLAUDE.md는 t1(`f9cd9bb`)부터 cat에 EditCard.swift를 포함한다. 빠진 것은 세션 컨텍스트에 자동으로 실린 **1차 체크아웃의 로컬 master**(`291db49`, origin보다 78커밋 뒤) 판뿐이고, 레인이 실제로 돌린 명령은 워크트리 레시피와 같으므로 게이트 수치는 그대로 유효하다.
 | E5 | proxy: `npm --prefix proxy test` | exit=0 · `7/7 통과` |
 | E6 | 드라이버 샌드박스 잔존: `ls -d $TMPDIR/besir-gd-*` | 0건 |
 | E7 | 구현 경위: swift-impl 1스폰 완결(diff +78/−21, 양 빌드 무경고 관측 보고) → 레인이 diff 전수 대조(처방 일치·범위 밖 변경 0건) → code-safety 1스폰(렌즈 4종 PASS + F1·F2 확정·잔여 4건) → **F1·F2·@MainActor는 레인이 직접 패치** — code-safety가 마지막 스윕 중 429(5시간 한도, 21:15 리셋)로 종료돼 재위임이 막혔고, 패치는 그 검토자가 문서로 처방한 모양 그대로다 | 최종 `git diff --stat` = `2 files changed, 97 insertions(+), 21 deletions(-)` → 커밋 `f0c18da` |
@@ -47,3 +49,23 @@
 1. **병합·done**: 브랜치 `WT-eventview-race-quota`(미푸시), 종결 커밋 `f0c18da`(구현) + 문서 커밋(plan.md 후속 19·20행 닫기·본 progress.md).
 2. 카드 t11 완료 — §4의 시뮬레이터 4항목을 편집 시트 확인 목록에 추가할지는 ux-check/리드 판정.
 3. 하네스 이력: swift-impl·code-safety 1스폰씩 정상. code-safety 종료 직전 429(21:15 리셋) — 이후 카드 스폰 시 같은 한도 주의.
+
+## §7 sync FAIL 수리 (2026-09-24, 판정문 `sync-verdict.md` 처방)
+
+sync 판정 **FAIL(D1·D2·D3 — 문서 인용 드리프트. 코드·게이트는 PASS)** 을 받아 판정문 처방 그대로 수리했다. 수리 커밋: 아래 백필.
+
+- **D1** — CHECKLIST.md 표 10행의 인용 12개를 판정문 표의 새 좌표 그대로 이동(A1 :999 · F4 :1232-1258 · F5 셋(:64-65·:608·:681) · F7 :127 · H2 :1028-1038 · H3 :1204-1228 · K8 :1105-1119 · L1 :1323-1389 · L2 :1397-1453 · L3 :1436-1440). 판정문이 "옮기지 않는 것"으로 지목한 날짜 박힌 기록(L11·L467·L645·L647·L119·t2 기준선)과 AIAssistant 인용은 손대지 않았다.
+- **D2** — 이월 목록 2번 "AddEventView 경합·표시 묶음"을 t10 1번과 같은 형식으로 **처리됨(2026-09-24, 카드 t11)** 표기.
+- **D3** — plan.md 후속 14의 `AddEventView:276` → `:287`(본문 바이트 동일 — 판정문 대조 완료분). 같은 줄의 다른 파일 인용은 불변.
+- **N1** — `@MainActor` 주석을 정정: View 순응으로 이미 주 액터(SDK View 프로토콜 선언)이고 병렬 경합 전제가 틀렸음을 적시, 속성은 문서적 명시로 유지(판정문 권고 문구).
+- **N2** — buildCard의 별도 시드식을 지우고 `card = buildCard()` 직후 `syncOriginBusy()` 호출로 규칙을 실제 한 곳에 둬 "단일 규칙" 문구를 글자 그대로 참으로 만듦.
+- **N4** — §2 E4의 CLAUDE.md 문구 정정(위 인용문 — 낡은 판은 1차 체크아웃 로컬 master 것).
+
+**수리 게이트** (AddEventView가 바뀌어 재실측 — 드라이버는 컴파일 집합 불변이라 판정문 지시대로 생략):
+
+```
+iOS:  exit=0 · BUILD SUCCEEDED · swift 경고 0   (ios-build-5.log)
+macOS: exit=0 · BUILD SUCCEEDED · swift 경고 0   (mac-build-5.log)
+```
+
+커밋 구성: 수리 1개(D1·D2·D3·N1·N2·N4 + 본 절) + SHA 백필 1개.

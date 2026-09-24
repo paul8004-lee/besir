@@ -150,6 +150,9 @@ struct AddEventView: View {
     private func bootstrap() async {
         guard card == nil else { return }
         card = buildCard()
+        // 출발지 줄의 진행 표시 규칙은 syncOriginBusy 한 곳에만 산다 — 카드를 처음 만들 때도
+        // 같은 규칙으로 정한다. 시드를 따로 적으면 뜻이 같아도 규칙이 두 곳이 된다(sync 판정 N2).
+        syncOriginBusy()
         if let e = editing {
             // 줄이 없을 수 있는 값들도 저장에 쓰는 기본값은 이벤트에서 가져온다
             lastNotifyLead = String(e.notifyLeadMinutes)
@@ -171,8 +174,7 @@ struct AddEventView: View {
             .init(key: "title", kind: .title, label: "일정 제목", options: [], allowsCustom: true,
                   chosen: editing?.title, startsOpen: fresh),
             .init(key: "origin_query", kind: .place, label: "출발지", options: originOptions,
-                  allowsCustom: true, chosen: editing?.origin?.name,
-                  busy: location.isLocating && editing?.origin == nil),
+                  allowsCustom: true, chosen: editing?.origin?.name),
             .init(key: "destination_query", kind: .place, label: "목적지",
                   options: store.favorites.map { .init(label: $0.label, value: $0.label) },
                   allowsCustom: true, chosen: editing?.destination.name, startsOpen: fresh),
@@ -485,8 +487,9 @@ struct AddEventView: View {
 
     // MARK: - 이동시간
 
-    // flights 카운터는 증감 사이에 await가 있어, 협력 풀에서 두 계산이 동시에 섞이면 갱신
-    // 분실로 0으로 안 돌아온다(스피너가 이 시트에서 영영 돈다). 주 액터로 묶어 직렬화한다.
+    // View 순응으로 이 함수는 이미 주 액터에 격리된다(SDK의 View 프로토콜이 @MainActor다) —
+    // 병렬 갱신 경합은 애초에 일어날 수 없었다(sync 판정 N1 정정). @MainActor는 그 사실을
+    // 코드 자리에 문서로 못박는 역할만 한다.
     @MainActor
     private func recomputeEstimates() async {
         guard let origin = confirmedPlace("origin_query"),

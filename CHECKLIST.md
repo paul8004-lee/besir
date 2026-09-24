@@ -177,7 +177,7 @@ progress.md).
 
 | # | 사용자 요구 | 상태 | 근거 |
 |---|---|---|---|
-| A1 | "내일 3시까지 강남역 가야 해" | ✅ | `create_schedule(arrival_iso)` — 기준 판정(AIAssistant.swift:1303-1311) 뒤 출발 역산(Store.swift:990 — 산식의 단일 출처, 3중 복제는 @MX:DEBT로 표시됨). 출발지와 목적지가 사실상 같은 곳(50m)이면 등록 거부(`isSamePlace`, AIAssistant.swift:1334-1336). 〔빌드·코드, 미관찰〕 |
+| A1 | "내일 3시까지 강남역 가야 해" | ✅ | `create_schedule(arrival_iso)` — 기준 판정(AIAssistant.swift:1303-1311) 뒤 출발 역산(Store.swift:999 — 산식의 단일 출처, 3중 복제는 @MX:DEBT로 표시됨). 출발지와 목적지가 사실상 같은 곳(50m)이면 등록 거부(`isSamePlace`, AIAssistant.swift:1334-1336). 〔빌드·코드, 미관찰〕 |
 | A2 | "6시에 집에서 바로 출발할래" | ✅ | `create_schedule(departure_iso)` — 출발 기준, 버퍼 개념 없음(:1307-1309, `anchor == .departure`면 buffer 0 강제 :1316·Store.swift:576). 〔드:V절 ①-3〕 |
 | A3 | "8시부터 10시까지 강남에서 친구 만나" (머무는 활동만) | ✅ | `create_activity` — 주황색 활동 블록. **이동을 만들지 않으면 카드에 이동수단 줄이 안 생긴다**(askFields의 `guard outbound \|\| back else break`, :522-523). 〔드:T절 D2〕 |
 | A4 | "가서 놀고 집까지 오는 것도 잡아줘" | ✅ | `create_activity(travel_from_query, return_to_query)` — 활동+이동이 **묶여서** 생성(선언 대칭화 :1122-1123). 카드의 가는 편 출발지 줄(outboundOriginField :603-612, "가는 편 없음" 탈출 칩 — 토큰은 실행부 :1476-1477에서 그 구간을 안 만드는 값으로 품). 〔드:R절 + **관찰(2026-09-16)** — `가는 편 자동차 · 오는 편 대중교통`이 한 호출에 실림(`travel_mode_this_time=car` + `return_mode_this_time=transit`, 서로 다른 값 = 두 줄을 따로 골랐다는 결정적 증거). "가는 편 없음"→편도 전환은 **사용자 보고**(개별 증거 없음) → 확인 목록 (b) 8〕 |
@@ -238,10 +238,10 @@ progress.md).
 | F1 | 기존 일정과 겹치면 알려주기 | ✅ | `Store.conflicts`(Store.swift:501-520) — `create_schedule`이 등록 전에 검사. 결함 C 수정: 첫 호출의 `on_conflict:"ignore"`로 검사가 건너뛰어지던 것을 `ConflictAsk` 게이트(:102-106·:1345-1347 — 앱이 물은 조합만 답으로, 등록 성공 시 소비 :1393)로 막음. 〔드:S절(C1~C3 + 전제·소비) + **사용자 보고(2026-09-16)** — 확인 목록 5 수행·통과 답변(개별 증거 없음) → 확인 목록 (b) 4〕 |
 | F2 | "늦게 도착해도 되니 끝나고 바로 출발" | ✅ | `on_conflict:"late_arrival"` — 겹침 끝 시각 출발 전환(:1360-1364), 늦는 분까지 요약에 명시(:1406-1408). 〔드:S절 C3 + 사용자 보고(같은 목록 5)〕 |
 | F3 | "겹쳐도 그냥 등록해" | ✅ | `on_conflict:"ignore"` — 물은 뒤에만 통과(:1353). 〔드:S절 C2 + 사용자 보고(같은 목록 5)〕 |
-| F4 | 실시간 교통상황 반영 | ✅ | `refreshUpcomingEstimates`(Store.swift:1223-1249) — 출발 2시간 이내 재계산. 반복은 첫 회차만 조회 후 복사(Store.swift:635-665). 〔빌드·코드〕 |
-| F5 | 수동(+ 메뉴)으로 만들 때도 충돌 경고 | ✅ | `AddEventView` 겹침 배너 — `ConflictBanner`(사용 :56-57, `currentConflicts` :549, 선언 :614). 저장은 안 막는다(경고가 선택을 대신하지 않는다). UI통일 Day(t2a)가 이 화면을 EditCard 문법으로 전환한 뒤에도 유지(2026-09-24 좌표 재확인). 〔빌드·코드〕 |
+| F4 | 실시간 교통상황 반영 | ✅ | `refreshUpcomingEstimates`(Store.swift:1232-1258) — 출발 2시간 이내 재계산. 반복은 첫 회차만 조회 후 복사(Store.swift:635-665). 〔빌드·코드〕 |
+| F5 | 수동(+ 메뉴)으로 만들 때도 충돌 경고 | ✅ | `AddEventView` 겹침 배너 — `ConflictBanner`(사용 :64-65, `currentConflicts` :608, 선언 :681). 저장은 안 막는다(경고가 선택을 대신하지 않는다). UI통일 Day(t2a)가 이 화면을 EditCard 문법으로 전환한 뒤에도 유지(2026-09-24 좌표 재확인). 〔빌드·코드〕 |
 | F6 | 활동 블록끼리 겹침 경고 | — | **일부러 넣지 않음**(2026-09-11 사용자 결정). 동시 진행이 정상인 경우가 있어 경고가 방해가 된다. 활동 생성 시 만들어지는 **이동 다리**의 겹침은 알려준다(executeCreateActivity :1545-1558 — 만들기는 막지 않고 문구로). |
-| F7 | 저장 버튼을 빠르게 두 번 눌러도 일정이 두 배로 생기지 않음 | ✅ | **이번 Day 닫기에서 수리(card t9)** — 추가 모드에서 두 번 탭하면 `addEvent`가 결정론적으로 2건 실행되던 구멍(2026-09-24 code-safety 전수 검사 확정: 진입 가드가 `saving` 재진입 검사가 없었다)을 `AddEventView.swift:119` `.disabled(!(card?.isReady ?? false) \|\| saving)` 1줄로 막음. 쌍둥이 `AddActivityView.swift:509`는 원래 온전했다. 〔빌드·코드(수리 전후 무경고) — 이중 탭 화면 실측은 확인 목록 (b) 11〕 |
+| F7 | 저장 버튼을 빠르게 두 번 눌러도 일정이 두 배로 생기지 않음 | ✅ | **이번 Day 닫기에서 수리(card t9)** — 추가 모드에서 두 번 탭하면 `addEvent`가 결정론적으로 2건 실행되던 구멍(2026-09-24 code-safety 전수 검사 확정: 진입 가드가 `saving` 재진입 검사가 없었다)을 `AddEventView.swift:127` `.disabled(!(card?.isReady ?? false) \|\| saving)` 1줄로 막음. 쌍둥이 `AddActivityView.swift:509`는 원래 온전했다. 〔빌드·코드(수리 전후 무경고) — 이중 탭 화면 실측은 확인 목록 (b) 11〕 |
 
 ## G. 요청마다의 값 · 앱 주도 되묻기 카드
 
@@ -278,8 +278,8 @@ progress.md).
 | # | 사용자 요구 | 상태 | 근거 |
 |---|---|---|---|
 | H1 | "출발 30분 전에 알려줘" | ✅ | 발화값은 파서가(:341-342), 안 말했으면 카드 알림 줄(:633-638 — 칩 + 직접입력 0~1440분). "알림 필요 없어"면 줄이 안 생김(:481). 〔빌드·코드 — 실제 수신은 확인 목록 (c) 1〕 |
-| H2 | "이 일정은 알림 필요 없어" | ✅ | `notifyEnabled` + AI `notify_enabled`(:1389) + 토글. 예약 코드 `scheduleDepartureNotification`(Store.swift:1019-1029) 한 곳. 〔빌드·코드〕 |
-| H3 | 반복 일정 뒤쪽 회차 알림 누락 | ✅ | 64건 제한 대응 — `rescheduleNearestNotifications`(60건, Store.swift:1195-1219). 〔빌드·코드〕 |
+| H2 | "이 일정은 알림 필요 없어" | ✅ | `notifyEnabled` + AI `notify_enabled`(:1389) + 토글. 예약 코드 `scheduleDepartureNotification`(Store.swift:1028-1038) 한 곳. 〔빌드·코드〕 |
+| H3 | 반복 일정 뒤쪽 회차 알림 누락 | ✅ | 64건 제한 대응 — `rescheduleNearestNotifications`(60건, Store.swift:1204-1228). 〔빌드·코드〕 |
 | H4 | besir에서만 알림(캘린더 앱 중복 제거) | ✅ | `reminders` 해제 + PATCH 정리(GoogleCalendarService.swift:78·:123-124·:170). 〔빌드·코드 — 캘린더 앱 모습은 확인 목록 (c) 2〕 |
 
 ## I. 연동
@@ -323,7 +323,7 @@ t3(2026-09-22)가 ActivityDetailView를 EditCard 크롬으로 전환했는데 "�
 | K5 | 블록 탭 → 상세 | ✅ | 히트테스트와 렌더링이 `span(for:on:)`(ContentView.swift:542·557) 공유 — 계약 5의 원래 사례. 〔빌드·코드〕 |
 | K6 | 겹친 블록 중 짧은 것 선택 | ✅ | 지속시간 최소 우선. 〔빌드·코드〕 |
 | K7 | 꾹 눌러 드래그로 시간 이동 | ✅ | 반복이면 "전체/이 일정만"(ContentView.swift:780-788). 〔빌드·코드〕 |
-| K8 | 활동을 옮기면 묶인 이동도 이동 | ✅ | `linkedActivityId`(Models.swift:190) + `linkedLegs`(Store.swift:1096-1110). 〔빌드·코드〕 |
+| K8 | 활동을 옮기면 묶인 이동도 이동 | ✅ | `linkedActivityId`(Models.swift:190) + `linkedLegs`(Store.swift:1105-1119). 〔빌드·코드〕 |
 | K9 | 자정을 넘기는 블록 표시 | ✅ | 결함 G·G-2 수정: 겹침 나열(ContentView.swift:92·:105, `Store.overlapsDay` Store.swift:38) + 그리는 날로 자르기(`span(for:on:)` :542·557) + 점 같은 판정(`recomputeDaysWithSchedule` Store.swift:132·`dayKeys` :157). 〔드:X절 10건 + W3 종단 1건 + **사용자 보고(2026-09-16)** — 확인 목록 6 수행·통과 답변. **커버리지 경계**: 드라이버가 재는 건 "어느 날에 나열되고 점이 켜지는가"까지 — 잘린 블록의 높이·위치는 ContentView 산술이라 기기 영역이고, 개별 증거는 없음 → 확인 목록 (b) 6〕 |
 | K10 | 빠르게 연속 스와이프 | ⚠️ | `asyncAfter(0.22)` 경합 가능 — 재현 안 됨. 〔빌드·코드〕 |
 
@@ -331,9 +331,9 @@ t3(2026-09-22)가 ActivityDetailView를 EditCard 크롬으로 전환했는데 "�
 
 | # | 상황 | 상태 | 근거 |
 |---|---|---|---|
-| L1 | 구글 캘린더 등록·삭제 전파 | ✅ | `syncWithGoogle`(Store.swift:1314-1380) + 묘비. 〔빌드·코드〕 |
-| L2 | 캘린더에 중복 생성 | ✅ | `reconcileActivities`(Store.swift:1388-1444) + `fetchBesirItems`. 〔빌드·코드〕 |
-| L3 | 캘린더 앱에서 알림 중복 | ✅ | `reminders` 해제 + PATCH(GoogleCalendarService.swift:123-124·Store.swift:1427-1431). 〔빌드·코드〕 |
+| L1 | 구글 캘린더 등록·삭제 전파 | ✅ | `syncWithGoogle`(Store.swift:1323-1389) + 묘비. 〔빌드·코드〕 |
+| L2 | 캘린더에 중복 생성 | ✅ | `reconcileActivities`(Store.swift:1397-1453) + `fetchBesirItems`. 〔빌드·코드〕 |
+| L3 | 캘린더 앱에서 알림 중복 | ✅ | `reminders` 해제 + PATCH(GoogleCalendarService.swift:123-124·Store.swift:1436-1440). 〔빌드·코드〕 |
 | L4 | 삭제한 일정이 되살아남 | ✅ | `deleted_gcal_ids.json`(Store.swift:83). 〔빌드·코드〕 |
 | L5 | 앱 안 켜도 동기화 | ⚠️ | 백그라운드 시점은 iOS 몫(I3와 같은 사실, App.swift:20-43). 〔빌드·코드〕 |
 | L6 | 다른 앱에서 텍스트·이미지 공유 | ✅ | Share Extension → `handleShared`〔관찰(2026-09-10)〕 |
@@ -492,7 +492,7 @@ N₀·X·D 수치 로그 없이 수용). G10·G15의 모델 동작 갭도 수용
 1. **드라이버 위생 — 처리됨(2026-09-24, 카드 t10)**: O-1 시작 블록에서 `proxyBaseURL`·`appToken`을
    비워 프록시 경로 차단 + O-2 절마다 파일 백업 9쌍 제거(favorites 메모리 쌍은 절 격리 기능이라
    유지). 재게이트 결과는 아래 기준선 블록(t10 행) 참조.
-2. **AddEventView 경합·표시 묶음** — 후속 20① recomputeEstimates await 경합(:464-474 — 늦게 끝난 옛
+2. **AddEventView 경합·표시 묶음 — 처리됨(2026-09-24, 카드 t11)**: 후속 20① recomputeEstimates await 경합(:464-474 — 늦게 끝난 옛
    좌표의 값이 모드 소요시간·예상 문구·배너에 남음, 저장값은 Store가 재계산해 무결) · 후속 20④
    gatedRows 인자 여섯 2벌(:179-182 ↔ :201-204) · N1 save()가 travelSecondsHint를 안 넘김(저장마다
    조회 1회 추가 + 폼 예상/저장값 어긋남 창 — AI 경로는 이미 넘긴다) · 후속 19 셋(값 있는 줄의
