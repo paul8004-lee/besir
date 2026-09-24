@@ -319,7 +319,8 @@ struct Drv {
         // 내장 기본값을 돌려주는데 그 둘은 살아 있는 값이다(Config.swift bundledDefaults).
         // 이대로 두면 절들이 회당 몇 회 카카오·ODsay 프록시를 경유할 수 있었다(2026-09-24
         // code-safety 추적). 비워 두면 hasProxy가 거짓이 되어 proxyRequest·proxyPOSTRequest가
-        // nil을 돌려 모든 조회가 로컬 MapKit 폴백으로 끝난다. 판정은 그대로다 — P-4의 검색어는
+        // nil을 돌려 모든 조회는 MapKit 폴백으로 간다 — 프록시는 안 타지만 MapKit 자체도
+        // Apple 서버로 가는 요청이라 "로컬"은 아니다. 판정은 그대로다 — P-4의 검색어는
         // 폴백에서도 0건이고, Y-2·Z O-2·P-1은 transit 초록 여부에 단언이 걸려 있지 않으며,
         // S·J는 walk이라 애초에 무관하다.
         store.config.proxyBaseURL = ""
@@ -340,7 +341,7 @@ struct Drv {
                         !store.config.autoAddToCalendar
                             && store.config.proxyBaseURL.isEmpty
                             && store.config.appToken.isEmpty,
-                        "켜져 있거나 프록시 주소·앱 토큰이 차 있다 — 이 시점 이후 절들이 실제 캘린더에 쓰거나 카카오·ODsay 외부 API를 부를 수 있다")
+                        "autoAdd=\(store.config.autoAddToCalendar) proxyURL비움=\(store.config.proxyBaseURL.isEmpty) token비움=\(store.config.appToken.isEmpty) — 이 시점 이후 절들이 실제 캘린더에 쓰거나 카카오·ODsay 외부 API를 부를 수 있다")
             // 키체인 게이트(clientID)도 같이 잰다 — 게이트가 열려 있으면 단락 평가가
             // Keychain.get까지 가고, 이 드라이버 환경에서 그 호출은 멈춤이었다(2026-09-23).
             ai.drvCheck("불변식: \(where_) 뒤에도 구글 캘린더 게이트는 닫혀 있다",
@@ -1690,7 +1691,8 @@ struct Drv {
                       store.events.filter { $0.title == "P-겹침" }.isEmpty,
                       "events=\(store.events.filter { $0.title == "P-겹침" }.count)")
         // P-4: 0건이 조용히 넘어가지 않는다. 머리말에서 프록시를 비웠으므로 검색은 MapKit
-        //      단독으로 돈다 — 이 어지러운 질의의 결과는 0건으로 정해져 있다.
+        //      단독으로 돈다 — 오프라인(.empty)이든 온라인(어지러운 질의 0건)이든 판정은
+        //      같지만, MapKit도 Apple 서버로 가는 요청이라 온라인 동작까지 "정해져 있다"고는 못 한다.
         let aiPS4 = fresh()
         let ps4Ask = aiPS4.drvAsk("create_schedule", ["title": "P-빈결과", "destination_query": "회사",
                                                     "origin_query": "집", "arrival_iso": "2027-03-12T12:00:00"])
@@ -1703,7 +1705,7 @@ struct Drv {
                             && aiPS4.drvLiveAsk()?.isReady == false,
                           "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            aiPS4.drvCheck("P-4: 0건이면 '찾지 못함'이 줄에 남는다 — 조용히 넘어가지 않는다 〔MapKit 단독〕",
+            aiPS4.drvCheck("P-4: 0건이면 '찾지 못함'이 줄에 남는다 — 조용히 넘어가지 않는다 〔MapKit 단독 — 네트워크 의존〕",
                           AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "empty",
                           "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
             // P-5: 같은 질의를 연달아 부르면 다시 부르지 않는다(묶음의 관측 가능한 계약) —
