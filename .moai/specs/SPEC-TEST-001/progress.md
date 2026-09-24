@@ -175,10 +175,164 @@
 - run_complete_at: 2026-09-24
 - run_status: audit-ready
 
+## §E.4 Sync-phase Audit-Ready Signal
+
+- **sync_status: closed** — 문서 수명주기가 닫혔다(`spec.md` frontmatter `completed`, 0.1.3). AC 여덟 개 모두 증거가 붙었고,
+  이 레인이 드라이버를 직접 다시 돌려 AC-001~003·008의 실행 신호를 새로 관측했다.
+- sync_complete_at: 2026-09-24
+- sync_commit_sha: pending-backfill — 다음 커밋에서 채운다(SPEC-UIKIT-001~007과 같은 스키마 필드·같은 방식). 커밋은 자기
+  sha를 담을 수 없고, amend로 적으면 그 순간 다시 어긋난다.
+- 커밋: `08c1a1b`(plan) · `18d62ae`(착수 게이트·감사 2·3회차) · `cf76902`(M1) · `de8fd77`(M2 드라이버 머리말) · `8265ea9`(M3) ·
+  `4da237e`(M4) · `18773e1`(M5·run 종결) · sync 종결 · sha 백필. 드라이버 코드 커밋은 `de8fd77` 하나다.
+- 이 sync가 만진 파일: 루트 `plan.md`(Phase 1.7 표 t8 행) · 루트 `CHECKLIST.md`(드라이버 인용 끝점 7개, 물리 줄 4) · `CLAUDE.md`
+  (`:70` 한 구절) · `spec.md`(frontmatter + HISTORY 0.1.3) · 이 파일. **`CHECKLIST.md`와 `CLAUDE.md`는 REQ-008의 sync 범위 밖이고,
+  운영자가 이 세션에서 직접 승인한 예외다**(§E.4.3). `Shared/`·`Tools/`·`proxy/` 변경 0건 — 드라이버는 `de8fd77` 그대로다.
+- 작업 주체: sync 레인 오케스트레이터가 인용 대조·드라이버 재실행·문서를 직접 했다. 독립 `--deep` 렌즈만 `code-safety`
+  서브에이전트(읽기 전용)에 맡겼다.
+- 트리 접근: 워크트리 잠금을 plan 세션(pid 57319 — 이 트리를 만든 세션, 유휴)이 쥐고 있어 `EnterWorktree`가 거부됐다. 절대 경로와
+  셸 `cd`·`git -C`로 작업했다(잠금은 삭제만 막는다). git 밖에 쓴 것: `/tmp/gd-t8-sync.swift`·`/tmp/gd-t8-sync`(연결 소스·바이너리),
+  드라이버 자신의 샌드박스(정상 종료로 삭제 확인), git 무시 경로 `.moai/state/verify/t8-sync/`(스크립트 1 · 기록 4). 그 밖의 경로는 없다.
+
+### §E.4.1 Claim — 이 sync가 주장하는 것
+
+1. 가드 드라이버가 **이 레인의 신선 컴파일·실행으로** exit 0 · `212/212 통과` · 불변식 9줄 전부 ✓였다. 실제 지원 디렉터리는
+   드라이버의 자기 보고(대조 통과)와 바깥 기록(실행 전후 `ls -la`·`shasum -a 256`·`pgrep -x besir`) 양쪽에서 무변경이고, 샌드박스는
+   정상 종료대로 지워졌다. 운영자는 실행 중 키체인 대화상자가 뜨지 않았다고 답했다. 212는 run M3 ②와 같은 값이다 — 이 병합부터의
+   기준선을 다른 손이 확인했다.
+2. iOS·macOS 빌드와 프록시 테스트는 돌리지 않았다. 빌드·프록시 입력이 t7 sync가 그것들을 잰 트리(`c9a4abd`) 이후 바이트 동일하고
+   `Tools/`는 빌드 대상이 아니라서, 그 측정(swift 경고 0/0 · 7/7)에 귀속한다.
+3. 인용 드리프트: 루트 `plan.md`·`STATUS.md`는 0이다. `CHECKLIST.md`의 드라이버 인용 끝점 20개(8곳) 가운데 이 카드가 민 7개를 새 좌표로
+   옮겼다. 옛 트리에서부터 −95줄 틀려 있던 11개와 t1 기준선 문단의 2개는 옮기지 않았다.
+4. 독립 `--deep` 렌즈가 결함 0 · note 4를 판정했다(§E.4.7). 새 지적 하나(`CLAUDE.md`의 "마지막 줄" 문구)를 이 레인이 로그 셋에서
+   관측으로 확인했고, 운영자 승인으로 한 구절 고쳤다.
+5. 루트 `plan.md` Phase 1.7 표에 t8 행을 넣었다.
+
+### §E.4.2 Evidence — 돌린 명령과 관측된 출력
+
+증거 파일과 스크립트는 `.moai/state/verify/t8-sync/`(git 무시 — `git check-ignore -v` → `.gitignore:28`)에 있다. 명령은 전부 이 워크트리에서
+HEAD `18773e1`(sync 편집 전)에 대고 돌렸다.
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `git fetch origin master` · `git rev-parse --short origin/master` · `git rev-list --count --left-right origin/master...HEAD` | `2a37673` · `0 7` — 병합 없음, 기준 `2a37673` 유효 |
+| `git diff --quiet 2a37673 HEAD -- Shared/ project.yml proxy/ ShareExtension/ Resources/` | exit 0 |
+| `git diff --quiet c9a4abd HEAD -- Shared/ project.yml ShareExtension/ Resources/ proxy/` · `grep -c 'Tools' project.yml` | exit 0 · `0` |
+| `git diff --quiet de8fd77 HEAD -- Tools/ Shared/` | exit 0 — run M3가 컴파일한 드라이버·컴파일 집합 그대로 |
+| 바깥 기록(전, 13:04:17) `pgrep -x besir` · `ls -la "$HOME/Library/Application Support/besir/"` · `find … -mindepth 1 -maxdepth 1 ! -type f` · `find … -type f -exec shasum -a 256 {} +` → `outer-pre.txt` | pgrep exit 1(빈 출력) · 파일 셋(`activities.json` 2B · `config.json` 288B · `events.json` 2B), 파일 아닌 항목 없음 · 해시 `4f53cda1…`(events)·`e2698db8…`(config)·`4f53cda1…`(activities) — M1과 같다 |
+| `cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd-t8-sync.swift && swiftc -o /tmp/gd-t8-sync /tmp/gd-t8-sync.swift <CLAUDE.md 블록의 나머지 9파일> -parse-as-library` | exit 0 · 경고 12건 전부 이 카드가 안 바꾼 `Shared/` 파일의 macOS 26 지원 중단(`DirectionsService` 8 · `LocationManager` 3 · `PlaceSearch` 1) · 연결 소스(드라이버·`AIAssistant`·`EditCard`) 경고 0 · `error:` 0 |
+| `/tmp/gd-t8-sync > .moai/state/verify/t8-sync/full-run.log 2>&1` — 인자 없음(기본 기한 900초), `sleep`·`kill`·`perl` 없음 | **exit 0** · 13:04:38 → 13:04:55(17초, 기한 미도달) · 로그 276줄 · 첫 두 줄이 샌드박스 홈 `…/T/besir-gd-5B5E3F0A-…`와 그 아래의 지원 디렉터리 · 끝 두 줄 `212/212 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · `grep -c '불변식'` 9, 그중 ✓ 아닌 줄 0 · `grep -c '✗'` 0 |
+| 바깥 기록(후) → `outer-post.txt` · 시각 줄을 뺀 두 파일의 `diff` | **exit 0** — 이름·크기·시각·해시·pgrep 전부 같다 |
+| `test -e …/T/besir-gd-5B5E3F0A-C2DB-4F7B-9C40-9E4F8F37EE8B` | exit 1 — 정상 종료 가지가 샌드박스를 지웠다 |
+| 운영자 확인(이 세션 AskUserQuestion, 실행 직후) | "안 떴다" — 키체인 대화상자 없음 |
+| AC-001 (1) `grep -n 'CFFIXED_USER_HOME'` · `grep -n 'let store = Store('` | `262:` setenv · `305:` — 262 < 305 |
+| AC-003 (1)~(3) `grep -n 'googleClientID = ""'` · `calSavedClientID` 줄 `diff`(HEAD ↔ `2a37673`) · 불변식 호출부 `grep -v 'func '` | `:315`(머리말)·`:1421`(N-1) · exit 0 · `:346`·`:1500`·`:1775` 정확히 3줄 |
+| AC-005 (1)(2) `git diff -U0 2a37673 HEAD -- CLAUDE.md \| grep '^@@'` · `grep -n '^## ' CLAUDE.md` · `grep -n '124' CLAUDE.md` | `@@ -66,0 +67,7 @@` · § 빌드 · 배포 `:45`~`:87` · `:72` |
+| AC-006 `grep -n 'updateMeal' <주 체크아웃 스킬 파일>` · `diff <편집 전 사본> <스킬 파일>` | `:243`(유지 문단)만 · `233d232` · `243a243,247` |
+| AC-007 `git diff --name-only 2a37673 HEAD -- . ':!.moai/reports/plan-audit'` · 새 파일(SPEC·감사 제외) · 지운 `drvCheck(` 줄 | SPEC 셋 · `CLAUDE.md` · `Tools/GuardDriver.swift` · 0 · 0 (sync 편집 전) |
+| `grep -n 'GuardDriver' CHECKLIST.md plan.md STATUS.md` · `git grep -nE 'CLAUDE\.md:[0-9]{2,3}' -- ':!.moai/specs' ':!.moai/reports'` · 주 체크아웃 하네스 스킬·에이전트·명령에 같은 grep | `plan.md` 3줄(줄번호 인용 없음) · `CHECKLIST.md` 드라이버 인용 8곳 · 0 · 0 |
+| `python3 .moai/state/verify/t8-sync/gdmap.py` — `git diff -U0 2a37673 HEAD -- Tools/GuardDriver.swift`의 헝크 여섯으로 옛→새 사상 | 헝크 `(164,+79)`·`(168,+57)`·`(173,+6)`·`(187,+12)`·`(189,+4)`·`(1620,−1+4)` · 옮긴 끝점 17개 **전부 SAME**(옛 줄 본문 = 새 줄 본문) |
+| `git show 2a37673:Tools/GuardDriver.swift \| sed -n '<옛 끝점+95>p'` · 그 줄의 HEAD 좌표와 본문 대조 | 11개 모두 주장에 맞는 줄이다(`:1353`·`:1488` 재설정 · `:1342`·`:1617` 불변식 호출 · `:1334-1336`·`:1349-1351` 사고 서술 주석 · `:1262-1263`·`:1337` N-1 비움·되돌림). HEAD 좌표(`:1511`·`:1646`·`:1500`·`:1775`·`:1492-1494`·`:1507-1509`·`:1420-1421`·`:1495`)도 전부 SAME |
+| 편집 뒤 `git diff --numstat -- CHECKLIST.md` · 새 좌표 `sed -n` · 판정 기호 수(HEAD ↔ 작업 트리) | `4 4` · `:309`·`:318`·`:325`·`:326`·`:342`·`:1406`·`:1782`가 옛 줄 본문과 같다 · ✅113·⚠️22·❌9 ↔ 같음 |
+| `tail -1` — `t8-sync/full-run.log` · `t8/m3-full-run.log` · `t8/m3-short-run.log` | 대조 통과 줄 · 대조 통과 줄 · `[시한] 샌드박스는 그대로 둔다: …` — 세 로그 모두 마지막 줄이 `P/T 통과`가 아니다(렌즈 n4의 관측 확인) |
+| `CLAUDE.md` 편집 뒤 `git diff --numstat -- CLAUDE.md` · `wc -l` | `1 1` · 157 — 줄 수 불변, 인용 드리프트 없음 |
+| `git grep -noE 'plan\.md:(4[3-9][0-9]\|5[0-9][0-9])'`(t8 행이 루트 `plan.md` 432줄 뒤를 한 줄 민다) | SPEC-UIKIT-007 문서 3곳의 `plan.md:533` — 그날 좌표로 기록된 인용이다(t7 sync가 Day 닫기로 넘김). 지금은 `:535` |
+
+### §E.4.3 Baseline-attribution — 무엇에 대고 쟀나
+
+- 인용 대조의 옛 트리는 **`2a37673`**이다(이 카드의 베이스 = `origin/master`). 사상은 헝크에서 만들었고 어림 오프셋을 쓰지 않았다.
+- **드라이버 수치는 이 레인의 실행이다** — run M3 ②를 인용하지 않았다. 바이너리는 고유 이름 `/tmp/gd-t8-sync`로 새로 컴파일했다. 명령은
+  워크트리 `CLAUDE.md` 블록에서 이름만 바꿨다.
+- 빌드·프록시는 **t7 sync(`83bf259`)의 측정에 귀속**했다 — 이 레인의 실행이 아니다. 그 레인이 잰 트리 `c9a4abd` 이후 입력이 바이트 동일하다.
+- 키체인 관측은 운영자가 이 세션에서 직접 답한 것이다.
+- **REQ-008 예외 둘.** REQ-008은 sync의 저장소 편집을 루트 `plan.md`와 이 SPEC 디렉터리로 한정한다.
+  - `CHECKLIST.md` — 이 레인이 충돌(REQ-008 대 "드리프트를 만든 카드가 sync에서 고친다"는 관례와 디스패치의 CHECKLIST 점검)을 운영자에게
+    올렸고, 운영자가 "이 카드가 민 7개만"을 골랐다. 판정·문장은 건드리지 않았다. 머리말에 카드별 기준선 문단은 더하지 않았다 — 승인 범위가
+    끝점 7개였고, 기록은 이 절이 맡는다.
+  - `CLAUDE.md:70` — 렌즈 n4를 관측으로 확인한 뒤 운영자에게 올렸고, 운영자가 "지금 한 구절 고침"을 골랐다. 이 응답이 REQ-006의 확인
+    수단(운영자 직접 입력)이다. 컴파일·실행 명령은 바뀌지 않았다.
+- **줄 표기 정정.** 리드 보고와 운영자 질문에서 이 레인은 대상을 "`:452`·`:455`·`:476` 세 줄", 옛 트리부터 틀린 쪽을 "`:453`·`:454`·`:460`·`:461`"로
+  적었다. 파일을 열어 보니 `:176-183`은 `:453`에 이어져 있었고 뒤의 둘은 `:458`·`:459`였다. 끝점 수(7·11)와 승인 내용은 같다.
+
+### §E.4.4 AC 판정 (sync 레인 기준)
+
+- **AC-001 ✅ 재관측** — (1) `:262` < `:305` (2) 로그 첫 두 줄 (3) 샌드박스 삭제(exit 1). (4)는 run M5와 이 레인 렌즈의 코드 읽기(§E.4.7).
+  거부 가지(exit 2)는 여전히 코드 읽기뿐이다.
+- **AC-002 ✅ 재관측** — (1) 바깥 기록 전후 diff exit 0, pgrep 전후 빈 출력 (2) 대조 통과 줄 · exit 0. (3)은 렌즈의 코드 읽기(쓰기·삭제·
+  디렉터리 생성 22줄, 실제 경로 대상 0).
+- **AC-003 ✅ 재관측** — (1)~(3) 신호 동일 (4) 불변식 9줄 ✓ (5) 운영자 "안 떴다".
+- **AC-004 ✅(run 관측 인용)** — 짧은 기한 실행은 이 레인이 돌리지 않았다. run M3 ①(exit 124 · 4초)을 인용한다. (6)은 렌즈가 독립 판정했다.
+- **AC-005 ✅ 재확인** — (1)(2) 신호 동일. (2)의 문구 하나를 이 sync가 고쳤다(§E.4.3). (3) 레시피는 무변경이다. (4)는 run §E.2 M4.
+- **AC-006 ✅ 재확인** · **AC-007 ✅ 재확인(run 범위)** — sync 편집은 REQ-008 sync 범위 + 운영자 승인 예외 둘이다.
+- **AC-008 ✅ 재관측** — exit 0 · P = T = 212 = 205 + 7(렌즈가 코드로 k = 7을 독립 확인) · run M3 ②와 같은 총계. 빌드·프록시는 선택이고
+  귀속으로 갈음했다.
+
+### §E.4.5 Gaps — 돌리지 않은 것 (증거 없음 ≠ 통과)
+
+- **짧은 기한 가지(AC-004)** — 이 레인은 돌리지 않았다. run M3 ①의 인용이다.
+- **exit 2 거부 · exit 3 실제 변화 가지** — 만들 방법이 없어 관측하지 않았다. 코드 읽기뿐이다.
+- **iOS·macOS 빌드와 `npm test`** — 이 레인이 돌리지 않았다. 귀속이다(§E.4.3).
+- **`CHECKLIST.md`의 나머지.** 옛 트리부터 틀린 11개(`:453` `:1258`·`:1393` · `:454` `:1247`·`:1522` · `:458` `:1239-1241`·`:1254-1256` ·
+  `:459` `:1167-1168`·`:1242`)는 옮기지 않았다. 지금 맞는 좌표는 §E.4.2 표에 있다(본문 대조 SAME). t1 기준선 문단 `:67`은 그날의 기록이다.
+  **사실과 어긋난 문장 둘**도 그대로다 — `:452`의 "세 겹의 안전장치(현재)"는 이 카드의 격리·게이트·기한이 빠진 서술이고, `:463-466`의
+  "드라이버는 이 맥의 실제 앱 데이터에 쓴다 … '격리된 테스트'로 오해하지 말 것"은 이 카드 뒤로 거짓이다.
+- **공용 메모리의 "t8 전까지" 절차** — 병합 뒤 리드 몫(O-4).
+- **렌즈 1차 시도** — `code-safety` 서브에이전트가 API 주간 한도(HTTP 429)로 결과 없이 끝났다. 그 시도의 판정은 없다. 2차(Sonnet)가 §E.4.7이다.
+
+### §E.4.6 Residual-risk — 관측하고도 남는 위험
+
+- 17초 완주는 run의 16초와 같은 규모이고, 실제 데이터를 씨앗으로 쓴 기록(433초)보다 훨씬 짧다. 빈 샌드박스에서 네트워크 조회가 줄었을
+  가능성(O-1 가설)은 이 레인도 재지 않았다.
+- 바깥 대조는 실행 전후 두 시점만 본다. 그 사이에 쓰였다가 같은 바이트로 돌아온 경우는 잡지 못한다(드라이버의 대조도 같은 한계).
+- `CFFIXED_USER_HOME` 거동은 macOS 26.6.2에서만 관측됐다. 무시되는 날엔 exit 2로 멈춘다(fail-closed — 코드 읽기).
+- 증거 로그와 스크립트는 git 무시 경로라 워크트리를 정리하면 사라진다. 명령은 §E.4.2에 있다.
+
+### §E.4.7 sync 게이트 `--deep` 렌즈 (독립 패스, 2026-09-24)
+
+읽기 전용 `code-safety` 패스를 카드의 코드 diff(`2a37673..HEAD -- Tools/GuardDriver.swift CLAUDE.md`)에 돌렸다. run M5와 **같은 렌즈지만 다른
+손**이다. M5는 구현한 레인이 자기 출력을 판정한 것이라 게이트로 세지 않는다. 렌즈는 자기 판정을 다 적은 뒤에야 M5를 읽고 비교했다. 드라이버
+실행·컴파일(`swiftc -typecheck` 포함)·`xcodebuild`·`npm`·`~/Library`·키체인·파일 쓰기를 금지했고, 렌즈는 지켰다고 보고했다. 1차 시도는 API 한도로
+결과 없이 끝났고, 2차는 모델을 Sonnet으로 바꿔 돌렸다. **판정은 전부 코드 읽기이고 관측이 아니다** — n4만 이 레인이 로그로 관측했다.
+
+**blocker 0 · should-fix 0 · note 4.**
+
+| # | 내용 | 도입 | 처리 |
+|---|---|---|---|
+| n1 | 시한·크래시로 남은 샌드박스(`besir-gd-<uuid>`)를 다음 실행이 치우지 않는다 — `NSTemporaryDirectory()` 아래 누적(H3). 생성 `:254-256`, 삭제 경로 `:196-215` | 이 카드 | run M5 (n2)와 같다. REQ-001이 의도한 설계다. Day 닫기 이월(디스패치의 note n2). 지금 남은 것은 run M3 ①의 `besir-gd-B5B669A3-…` 하나다(`ls -d` 관측) |
+| n2 | `"besir-gd-"` 리터럴이 생성 1곳·확인 2곳(`:206`·`:207`·`:255`)에 중복(H4) | 이 카드 | run M5 (n1)과 같다. 한쪽만 어긋나도 삭제 거부 쪽으로 실패한다 — 기록만 |
+| n3 | 기한 인자 `0`·음수는 파싱에 성공하고 범위 검사에서 떨어지는데, 문구는 "초로 읽지 못한다"다(`:287-295`) | 이 카드 | run M5 (n3)과 같다. 거동은 안전 방향 — 기록만 |
+| n4 | `CLAUDE.md:70`의 "마지막 줄 `P/T 통과`가 있을 때만"이 실제 출력과 다르다 — 종료 루틴(`:224-230`)이 `P/T 통과`(`:1777-1781`) 뒤에 대조 결과를 한 줄 더 찍고 끝낸다 | 이 카드(M4) | **M5에 없던 지적.** 이 레인이 로그 셋의 마지막 줄로 관측 확인 → 운영자 승인으로 "`P/T 통과` 줄이 찍혔을 때만"으로 고쳤다 |
+
+**렌즈가 독립으로 재서 run과 같은 결론을 낸 것**: `removeItem` 11줄(기존 10 + 샌드박스 삭제 `:212`, 그 앞 `:205-210`의 세 겹 확인 — `NSTemporaryDirectory()`
+접두사 ∧ `besir-gd-` 접두사 ∧ UUID 파싱) · 쓰기·삭제·디렉터리 생성 22줄 전부 샌드박스 파생, 실제 경로 대상 0 · `AppConfig.supportDirectory` 첫 접근이
+`setenv`(`:262`) 뒤 `:267` fail-closed 가드이고 `Store(`(`:305`) 앞 · 종료 잠금(`drvFinishGate`)을 이긴 쪽이 풀지 않고 exit · 타이머는
+`DispatchQueue.global()`이고 값 타입만 포획 · 종료 코드 3 > 124 > 1 > 0 · `grep -c '\.drvCheck('` 200 → 202, 호출 자리 2 → 3, 실행 델타 1 + 2 × 3 = 7 ·
+신규 블록에 강제 언래핑·`fatalError` 0 · 머리말 레시피와 `CLAUDE.md` 블록이 명령 단위로 같다.
+
+**렌즈 보고를 이 레인이 바로잡은 자리**(판정을 바꾸는 것은 없다).
+1. "키체인에 닿는 두 지점(`Store.swift:481`·`:1315`)이 전부 `hasGoogleCalendar`로 단락 평가된다"는 서술은 실제보다 좁다. 게이트 밖 갈래 둘이 있다 —
+   `removeFromCalendar`의 `gcal.deleteEvent`(`Store.swift:101` → `GoogleCalendarService.swift:131` `guard isConnected`)와 `updateActivity`의 `gcal.createEvent`
+   (`:273` → `:49` `accessToken(allowInteractive: true)`). 이 레인이 grep으로 확인했다. spec §1.3이 적은 그대로이고, REQ-004의 전제 단언(gid 레코드 0)이
+   맡는 몫이다.
+2. 렌즈의 "검사하지 않은 것" 가운데 AC-007 (2)의 정확한 명령, AC-006, 맥 앱 미실행은 이 레인이 따로 쟀다(§E.4.2).
+
+**렌즈가 검사하지 않은 것**: 실행·컴파일(금지) · exit 2 실동작 · `CFFIXED_USER_HOME`과 키체인의 관계(O-3) · 네트워크 격리(O-1).
+
+### §E.4.8 리드에게 넘기는 것
+
+1. **REQ-008 예외 둘(운영자 승인)** — 병합하면 이 카드 diff에 `CHECKLIST.md`(4줄)와 `CLAUDE.md`(M4의 7줄 + sync의 1줄 교체)가 들어간다.
+2. **Day 닫기 입력** — `CHECKLIST.md` 나머지 11끝점(지금 좌표는 §E.4.2)과 사실이 달라진 문장 둘 · O-1(네트워크 가설 · `CLAUDE.md`의 "(API 할당량 안 씀)") ·
+   O-2(백업 7곳) · note n2(렌즈 n1 — 남은 샌드박스 하나 포함). 모두 디스패치대로 이 카드에 끌어들이지 않았다.
+3. **SPEC-UIKIT-007 문서의 `plan.md:533`** — t7 sync가 넘긴 좌표 드리프트가 t8 행으로 한 줄 더 밀려 지금은 `:535`다.
+4. **워크트리 잠금** — plan 세션(pid 57319)이 t8 트리 생성 잠금을 쥐고 있다. 병합 뒤 트리를 정리하려면 그 세션의 종료(또는 `/clear`)나
+   `git worktree unlock`이 필요하다.
+5. O-4(공용 메모리 갱신)는 병합 뒤 리드 몫이다.
+
 ## §F Phase 4 Mode Selection
 
 - 선택: **serial**(서브에이전트 없이 오케스트레이터 직접 작성 + 독립 감사 한 채널). 근거: Tier S, 문서 셋, 수치 대조가 작성과 한 손에 있어야 한다.
 - run 단계(2026-09-24): **serial** — 구현 위임(`swift-impl`) 1회와 렌즈(`code-safety`) 1회를 순차로. 근거: Tier S·코딩 중심 작업이라 순차가 기본(`orchestration-mode-selection.md` §B), 드라이버 실행은 어느 에이전트도 맡지 않고 run 레인 오케스트레이터가 직접(`plan.md` §4).
+- sync 단계(2026-09-24): **serial** — 인용 대조·드라이버 재실행·문서는 sync 레인 오케스트레이터가 직접, 독립 렌즈(`code-safety`, 읽기 전용) 1회만
+  위임했다(1차는 API 한도로 결과 없이 종료 → 모델을 Sonnet으로 바꿔 재시도). 드라이버 실행은 이번에도 어느 에이전트에게도 맡기지 않았다.
 
 ## §F.1 Phase 11 — 독립 감사
 

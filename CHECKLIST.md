@@ -449,10 +449,10 @@ G15(① 도달 — 프롬프트 전용, 수용된 갭), G17 한계(스냅숏 불
   `autoAddToCalendar=true`가 머리말이 세운 불변식(:173)을 조용히 되돌렸다. 그 뒤 모든 절이 만든
   시험용 일정이 **실제 캘린더 업로드 경로**를 탔다. 사용자 캘린더 확인 결과 **실제 피해는
   없었으나**(사용자 확인: "없음"), 막은 이유가 우리가 세운 안전장치가 아니었다.
-- **세 겹의 안전장치(현재).** ① 머리말 불변식 `autoAddToCalendar = false`(GuardDriver.swift:173
-  + 근거 주석 :176-183) ② N·Z·P절 머리의 재설정(:1258·:1393 — 봉쇄: 되돌린 clientID는 그대로
+- **세 겹의 안전장치(현재).** ① 머리말 불변식 `autoAddToCalendar = false`(GuardDriver.swift:309
+  + 근거 주석 :318-325) ② N·Z·P절 머리의 재설정(:1258·:1393 — 봉쇄: 되돌린 clientID는 그대로
   두고 자동 업로드만 다시 끈다) ③ 절 경계 단언 2건(:1247 N절 뒤·:1522 꼬리 backstop — **탐지**,
-  `drvAssertNoCalendarPush` :184-188). ③은 **일부러 복구하지 않는다** — 스스로 고치면 breach가
+  `drvAssertNoCalendarPush` :326-342). ③은 **일부러 복구하지 않는다** — 스스로 고치면 breach가
   또 안 보인다. 복구는 각 절의 방어선(②)이 맡는다.
 - **근절 확인(ux-check 직접 grep, 이번 회차)**: 파일 전체에서 `AppConfig.load()` **호출**과
   `store.config` **통째 대입은 0건**(남은 것은 사고 서술 주석 :1239-1241·:1254-1256뿐).
@@ -473,7 +473,7 @@ G15(① 도달 — 프롬프트 전용, 수용된 갭), G17 한계(스냅숏 불
   `unknownPlace` AIAssistant.swift:571-574·캡션 :2415-2417·`searchPlaces` :799-820(지연 상수 EditCard.swift:294)·
   `confirmedPlaces` :52·`choose(field:place:)` :761-765·`[장소 검색]` 칩 EditCardView.swift:125-128.
   기존 행의 좌표도 전부 현재 트리로 다시 맞췄다(각 행 참조).
-- GuardDriver N·Z·P절(:1248-1621) 열람 — N-1~N-4·O-1~O-8·P-1~P-7 단언 확인.
+- GuardDriver N·Z·P절(:1406-1782) 열람 — N-1~N-4·O-1~O-8·P-1~P-7 단언 확인.
 - grep: `AppConfig.load()`·`store.config` 통째 대입 0건(위), `remember_fact`/`forget_fact` 코드
   참조 0건(주석 1건, AIAssistant.swift:1857), reminders PATCH GoogleCalendarService.swift:123-124,
   ContentView span :542·:557·overlapsDay 호출 :92·:105·SwipePager :799, AddEventView.swift 존재.
