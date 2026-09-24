@@ -144,9 +144,11 @@ extension AIAssistant {
     /// Drv 구조체에서 못 부르므로 판정에 필요한 만큼만 통과시킨다(값은 그대로).
     static func drvWhen(_ d: Date) -> String { when(d) }
 
-    /// REQ-040 — 보류 카드가 saveHistory가 쓰는 본문에 담기지 않는지 본다. 이 디렉터리는 개발
-    /// 기기의 진짜 besir 데이터다(O절이 events.json을 쓰는 것과 같은 자리) — 원본 바이트를
-    /// 백업해 두고 검사 뒤 그대로 되돌리며, 원본이 없었으면 파일을 지운다.
+    /// REQ-040 — 보류 카드가 saveHistory가 쓰는 본문에 담기지 않는지 본다. t8부터 이 경로는
+    /// 실행마다 새로 만드는 샌드박스 안에서 풀린다(실제 데이터는 종료 시 바이트 대조가 지킨다).
+    /// 그래도 원본 바이트를 백업해 두고 검사 뒤 그대로 되돌린다 — init의 loadHistory가 이
+    /// 파일을 다시 읽으므로(fresh()마다), 이 쓰기가 다음 절의 출발 상태를 바꾸면 안 된다.
+    /// 원본이 없었으면 파일을 지운다.
     func drvPersistedPayload(card: PendingAsk?) -> [String: Any] {
         let url = AppConfig.supportDirectory.appendingPathComponent("ai_history.json")
         let backup = try? Data(contentsOf: url)
@@ -313,20 +315,32 @@ struct Drv {
         // 수 있다. N절은 자기가 저장한 값(여기선 빈 문자열)을 그대로 되돌리므로 이 불변식은
         // 절이 지나도 깨지지 않는다.
         store.config.googleClientID = ""
+        // 프록시 주소·앱 토큰도 비운다 — 샌드박스엔 config.json이 없어 AppConfig.load()가
+        // 내장 기본값을 돌려주는데 그 둘은 살아 있는 값이다(Config.swift bundledDefaults).
+        // 이대로 두면 절들이 회당 몇 회 카카오·ODsay 프록시를 경유할 수 있었다(2026-09-24
+        // code-safety 추적). 비워 두면 hasProxy가 거짓이 되어 proxyRequest·proxyPOSTRequest가
+        // nil을 돌려 모든 조회가 로컬 MapKit 폴백으로 끝난다. 판정은 그대로다 — P-4의 검색어는
+        // 폴백에서도 0건이고, Y-2·Z O-2·P-1은 transit 초록 여부에 단언이 걸려 있지 않으며,
+        // S·J는 walk이라 애초에 무관하다.
+        store.config.proxyBaseURL = ""
+        store.config.appToken = ""
         func fresh() -> AIAssistant { AIAssistant(store: store, location: LocationManager()) }
 
-        // 위 한 줄은 **전역 불변식**이다 — 드라이버가 도는 내내 거짓이어야 한다. 한 번 깨지면
-        // 그 뒤 모든 절이 만든 시험용 일정이 사용자의 진짜 구글 캘린더로 올라가고, 그건
-        // 이 파일이 복원해 주는 events.json과 달리 **되돌릴 수가 없다**(2026-09-16 실제 발생:
-        // N절이 `AppConfig.load()`로 설정을 통째로 되돌리면서 디스크의 autoAddToCalendar=true를
-        // 같이 끌고 왔고, 사용자 캘린더에 Z-단발·P-확정이 등록됐다).
+        // 위 설정 줄들은 **전역 불변식**이다 — 드라이버가 도는 내내 그대로여야 한다. 캘린더
+        // 푸시가 한 번 켜지면 그 뒤 모든 절이 만든 시험용 일정이 사용자의 진짜 구글 캘린더로
+        // 올라간다. 파일 쓰기는 샌드박스가 받아 주지만 캘린더는 샌드박스 밖의 실제 서비스라
+        // **되돌릴 수가 없다**(2026-09-16 실제 발생: N절이 `AppConfig.load()`로 설정을 통째로
+        // 되돌리면서 디스크의 autoAddToCalendar=true를 같이 끌고 왔고, 사용자 캘린더에
+        // Z-단발·P-확정이 등록됐다).
         //
         // 조용히 깨진 게 문제였으므로, 깨졌는지 **재는** 자리를 만든다. 복구는 하지 않는다 —
         // 스스로 고치면 breach가 또 안 보이게 된다. 복구는 각 절의 방어선이 맡는다.
-        func drvAssertNoCalendarPush(_ ai: AIAssistant, _ where_: String) {
-            ai.drvCheck("불변식: \(where_) 뒤에도 autoAddToCalendar는 꺼져 있다",
-                        !store.config.autoAddToCalendar,
-                        "켜져 있다 — 이 시점 이후 절들이 실제 캘린더에 쓴다")
+        func drvAssertGlobalInvariants(_ ai: AIAssistant, _ where_: String) {
+            ai.drvCheck("불변식: \(where_) 뒤에도 캘린더 푸시는 꺼져 있고 프록시 설정은 비어 있다",
+                        !store.config.autoAddToCalendar
+                            && store.config.proxyBaseURL.isEmpty
+                            && store.config.appToken.isEmpty,
+                        "켜져 있거나 프록시 주소·앱 토큰이 차 있다 — 이 시점 이후 절들이 실제 캘린더에 쓰거나 카카오·ODsay 외부 API를 부를 수 있다")
             // 키체인 게이트(clientID)도 같이 잰다 — 게이트가 열려 있으면 단락 평가가
             // Keychain.get까지 가고, 이 드라이버 환경에서 그 호출은 멈춤이었다(2026-09-23).
             ai.drvCheck("불변식: \(where_) 뒤에도 구글 캘린더 게이트는 닫혀 있다",
@@ -343,7 +357,7 @@ struct Drv {
 
         // 세팅 직후 머리말에서 바로 한 번 잰다 — 시작부터 불변식이 깨진 형태는 절이 하나라도
         // 돌기 전에 붉게 나와야 그 뒤 절들의 결과를 읽을 이유가 없다.
-        drvAssertNoCalendarPush(fresh(), "머리말")
+        drvAssertGlobalInvariants(fresh(), "머리말")
 
         // ── A. 현재 값이 0이 아닐 때
         print("\nA. 현재 여유 10분인 시리즈에 buffer 0이 올 때")
@@ -786,12 +800,10 @@ struct Drv {
                      Set(q2?.fields.map(\.key) ?? []).isSuperset(of: ["mode_this_time", "buffer_minutes"]),
                      "keys=\(q2?.fields.map(\.key) ?? [])")
         // 새 대화도 값의 범위 밖이다 — 병합 유지가 옛 대화까지 새어 들어가면 안 된다.
-        // resetConversation이 saveHistory를 불러 진짜 파일을 건드리므로 백업·복원한다(drvPersistedPayload 방식).
-        let qHistURL = AppConfig.supportDirectory.appendingPathComponent("ai_history.json")
-        let qHistBackup = try? Data(contentsOf: qHistURL)
+        // resetConversation의 saveHistory는 샌드박스의 ai_history.json에 인사말만 남기는데,
+        // init은 히스토리가 비면 스스로 같은 인사말을 붙이므로 파일이 남은 채나 없거나 다음
+        // 절의 출발 상태가 같다 — 되돌림은 필요 없다(t10, 파일 백업 9쌍 정리의 마지막 쌍).
         aiQ.resetConversation()
-        if let qHistBackup { try? qHistBackup.write(to: qHistURL) }
-        else { try? FileManager.default.removeItem(at: qHistURL) }
         let q3 = aiQ.drvAsk("create_schedule", qArgs)
         aiQ.drvCheck("새 대화를 시작하면 다시 묻는다(대화 밖 유출 없음)",
                      Set(q3?.fields.map(\.key) ?? []).isSuperset(of: ["mode_this_time", "buffer_minutes"]),
@@ -1278,11 +1290,10 @@ struct Drv {
         //      늦은 회차—를 집어 요약이 남의 시각을 알렸다. 같은 제목·같은 목적지가 설계상 자연스러워진
         //      지금(① 카드가 제목을 직접 받는다) 잠자던 위험이 깨어난 자리다.
         //      출발지·목적지는 즐겨찾기 정확 매치로 풀리고(S절과 같은 도보 추정) 이동시간은 MapKit
-        //      단독이라 결정적으로 돈다. addEvent의 save는 개발 기기 macOS 앱의 진짜 events.json에
-        //      쓰므로(drvPersistedPayload와 같은 결) J절은 검사 뒤 원본 바이트를 되돌린다.
+        //      단독이라 결정적으로 돈다. addEvent의 save는 events.json에 쓰지만 t8부터 드라이버의
+        //      모든 쓰기는 샌드박스 안에 떨어진다 — 되돌림은 필요 없고, 실제 데이터는 종료 시
+        //      바이트 대조(drvFinishOnce → drvDiffSupportDir)가 한 번으로 지킨다.
         print("\nJ. 등록 요약 — 같은 이름의 늦은 회차가 있어도 방금 만든 것을 말한다 (결함 J)")
-        let jEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
-        let jEventsBackup = try? Data(contentsOf: jEventsURL)
         let aiJ2 = fresh()
         store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.47, longitude: 126.95)),
                            FavoritePlace(label: "J-강남역", place: Place(name: "J-강남역", address: "", latitude: 37.498, longitude: 127.028))]
@@ -1310,20 +1321,13 @@ struct Drv {
                      !jReply.contains(AIAssistant.drvWhen(sDay(2027, 3, 12, 17, 0)))
                      && !jReply.contains(AIAssistant.drvWhen(sDay(2027, 3, 12, 18, 0))),
                      "reply=\(jReply)")
-        // 되돌리기 — 파일만 원본으로(메모리 배열은 이미 검사에 썼고 프로세스는 여기서 끝난다).
-        if let jEventsBackup { try? jEventsBackup.write(to: jEventsURL) }
-        else { try? FileManager.default.removeItem(at: jEventsURL) }
         store.favorites = []
 
         // ── Y. 일반명사 장소·조용한 이동 실패(2026-09-16 결함 K·M). 즐겨찾기에 없는 '회사'가
         //      검색 첫 결과('농업회사법인 화조원')로 조용히 해석돼 118건이 엉뚱한 곳에 등록됐고,
-        //      왕복 이동 다리가 0개인데 요약은 성공 문구만 남겼다. 이 절의 실행은 진짜 파일을
-        //      쓰므로(events·activities) J절 방식으로 백업·복원한다.
+        //      왕복 이동 다리가 0개인데 요약은 성공 문구만 남겼다. 이 절도 events·activities에
+        //      쓰지만 전부 샌드박스 안이다 — J절과 같은 이유로 중간 백업·복원은 하지 않는다.
         print("\nY. 일반명사 장소 해석·이동 실패 가시화 (K·M)")
-        let yEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
-        let yActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
-        let yEventsBackup = try? Data(contentsOf: yEventsURL)
-        let yActsBackup = try? Data(contentsOf: yActsURL)
         let aiY = fresh()
         let yHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
         let yOffice = FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))
@@ -1391,10 +1395,6 @@ struct Drv {
         aiY.drvCheck("L: '빈 인자로 호출·말로 되묻지 마라' 지시가 프롬프트에 있다(문자열 존재)",
                      aiY.drvSystemPrompt().contains("말로 되묻지 말고")
                         && aiY.drvSystemPrompt().contains("빈 인자"), "규칙 8 원문 확인")
-        if let yEventsBackup { try? yEventsBackup.write(to: yEventsURL) }
-        else { try? FileManager.default.removeItem(at: yEventsURL) }
-        if let yActsBackup { try? yActsBackup.write(to: yActsURL) }
-        else { try? FileManager.default.removeItem(at: yActsURL) }
         store.favorites = [yHome, yOffice]
 
         // ── N. 캘린더 업로드 가드 + 업로드 상태의 영속성
@@ -1404,10 +1404,6 @@ struct Drv {
         // 58건짜리 반복을 만들면 건마다 로그인 시도 + 네트워크 호출이 나가고 전부 실패했는데,
         // 그 실패가 조용히 버려져 사용자는 오래 기다린 뒤 "등록 완료"만 봤다.
         print("\nN. 캘린더 업로드 가드와 상태 기록")
-        let calEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
-        let calActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
-        let calEventsBackup = try? Data(contentsOf: calEventsURL)
-        let calActsBackup = try? Data(contentsOf: calActsURL)
         let aiCal = fresh()
 
         // N-1) 캘린더를 쓸 수 없는 상태에서는 업로드를 **시도조차** 하지 않는다.
@@ -1493,11 +1489,7 @@ struct Drv {
         // 설정을 통째로 다시 읽은 것이고, 그 바람에 autoAddToCalendar=true가 딸려 들어와
         // 뒤 절들의 시험 일정이 실제 캘린더로 나갔다. 비워둔 필드만 되돌린다.
         store.config.googleClientID = calSavedClientID
-        if let calEventsBackup { try? calEventsBackup.write(to: calEventsURL) }
-        else { try? FileManager.default.removeItem(at: calEventsURL) }
-        if let calActsBackup { try? calActsBackup.write(to: calActsURL) }
-        else { try? FileManager.default.removeItem(at: calActsURL) }
-        drvAssertNoCalendarPush(aiCal, "N절")
+        drvAssertGlobalInvariants(aiCal, "N절")
 
         // ── Z. 못 푸는 장소는 **카드가 묻는다**(결함 O). K가 막은 자리의 다음 걸음이다 — K는
         //      "검색 첫 결과로 때우지 않는다"까지였고, 그 결과 대화가 "즐겨찾기에 추가해 주세요"에서
@@ -1510,10 +1502,6 @@ struct Drv {
         //    되돌린 clientID는 그대로 두고 자동 업로드만 다시 끈다.
         store.config.autoAddToCalendar = false
         print("\nZ. 앱이 못 푸는 장소는 카드가 묻는다 (결함 O)")
-        let zEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
-        let zActsURL = AppConfig.supportDirectory.appendingPathComponent("activities.json")
-        let zEventsBackup = try? Data(contentsOf: zEventsURL)
-        let zActsBackup = try? Data(contentsOf: zActsURL)
         let zFavBackup = store.favorites
         let aiZ = fresh()
         let zHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
@@ -1634,10 +1622,6 @@ struct Drv {
                       "keys=\(aiZ2.drvAsk("create_recurring_schedule", z8Args)?.fields.map(\.key) ?? [])")
         store.events = []
         store.activities = []
-        if let zEventsBackup { try? zEventsBackup.write(to: zEventsURL) }
-        else { try? FileManager.default.removeItem(at: zEventsURL) }
-        if let zActsBackup { try? zActsBackup.write(to: zActsURL) }
-        else { try? FileManager.default.removeItem(at: zActsURL) }
         store.favorites = zFavBackup
 
         // ── P. 장소 줄의 직접입력이 그냥 빈 칸이라, 틀린 값은 **카드를 다 채우고 확인을 누른 뒤에야**
@@ -1645,8 +1629,6 @@ struct Drv {
         //      좌표까지 확정된다. 여기 단언은 전부 그 확정값이 실행부까지 그대로 가는지를 본다.
         store.config.autoAddToCalendar = false   // Z절과 같은 이유(N절의 설정 되돌리기 뒤에 있다)
         print("\nP. 장소 줄 검색 — 고른 후보의 좌표가 실행부까지 간다 (결함 P)")
-        let psEventsURL = AppConfig.supportDirectory.appendingPathComponent("events.json")
-        let psEventsBackup = try? Data(contentsOf: psEventsURL)
         let psFavBackup = store.favorites
         let psHome = FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000))
         store.favorites = [psHome]
@@ -1707,8 +1689,8 @@ struct Drv {
         aiPS3.drvCheck("P-3: 확정 장소와 즐겨찾기 이름이 겹치면 즐겨찾기가 이긴다(출발지=목적지로 막힌다)",
                       store.events.filter { $0.title == "P-겹침" }.isEmpty,
                       "events=\(store.events.filter { $0.title == "P-겹침" }.count)")
-        // P-4: 0건이 조용히 넘어가지 않는다. **네트워크 의존** — 다만 온라인이든 오프라인이든
-        //      이 질의의 결과는 0건이라 판정은 양쪽에서 같다(J절 라벨 선례).
+        // P-4: 0건이 조용히 넘어가지 않는다. 머리말에서 프록시를 비웠으므로 검색은 MapKit
+        //      단독으로 돈다 — 이 어지러운 질의의 결과는 0건으로 정해져 있다.
         let aiPS4 = fresh()
         let ps4Ask = aiPS4.drvAsk("create_schedule", ["title": "P-빈결과", "destination_query": "회사",
                                                     "origin_query": "집", "arrival_iso": "2027-03-12T12:00:00"])
@@ -1721,7 +1703,7 @@ struct Drv {
                             && aiPS4.drvLiveAsk()?.isReady == false,
                           "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
             try? await Task.sleep(nanoseconds: 2_500_000_000)
-            aiPS4.drvCheck("P-4: 0건이면 '찾지 못함'이 줄에 남는다 — 조용히 넘어가지 않는다 〔네트워크 의존〕",
+            aiPS4.drvCheck("P-4: 0건이면 '찾지 못함'이 줄에 남는다 — 조용히 넘어가지 않는다 〔MapKit 단독〕",
                           AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "empty",
                           "lookup=\(AIAssistant.drvLookup(aiPS4.drvLiveAsk()?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
             // P-5: 같은 질의를 연달아 부르면 다시 부르지 않는다(묶음의 관측 가능한 계약) —
@@ -1765,14 +1747,12 @@ struct Drv {
                          aiPS.drvCalendarNote([psDone.id]))
         }
         store.events = []
-        if let psEventsBackup { try? psEventsBackup.write(to: psEventsURL) }
-        else { try? FileManager.default.removeItem(at: psEventsURL) }
         store.favorites = psFavBackup
 
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
-        // drvAssertNoCalendarPush를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
-        drvAssertNoCalendarPush(fresh(), "전체 실행")
+        // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
+        drvAssertGlobalInvariants(fresh(), "전체 실행")
 
         print("\n\(drvPass)/\(drvPass + drvFail) 통과")
         // 대조·종료 코드·샌드박스 정리까지 전부 이 루틴 하나가 한다 — 단언 실패의 exit 1
