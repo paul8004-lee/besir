@@ -35,7 +35,7 @@ struct ActivityDetailView: View {
     @State private var loadingNearby = false
     @State private var nearbyLoaded = false
     /// 지금 떠 있는 주변 조회. 종류를 연달아 바꾸면 취소 없이는 카카오 조회가 한 벌씩 쌓이고,
-    /// 취소된 조회는 try?로 삼켸진 빈 배열로 정상 돌아와 늦은 옛 빈 결과가 새 결과를 덮는다
+    /// 취소된 조회는 try?로 삼켜진 빈 배열로 정상 돌아와 늦은 옛 빈 결과가 새 결과를 덮는다
     /// (day-close §6 후속 12).
     @State private var nearbyTask: Task<Void, Never>?
 
@@ -186,6 +186,10 @@ struct ActivityDetailView: View {
         if key == "location_query", previous != value {
             // 좌표가 달라질 장소를 골랐다는 뜻이다 — 비우지 않으면 저장 뒤 새 장소 이름 아래
             // 옛 장소의 식당이 남는다(§1.2의 결함이 형태만 바꿔 살아남는 경로, REQ-021).
+            // 도는 중인 옛 장소 조회도 취소한다 — 놔두면 착지해서 막 비운 목록을 옛 결과로 다시
+            // 채운다. 취소를 여기 더해도 거짓 "찾지 못함"이 안 생기는 건 가드가 이미 앞이라
+            // 취소된 조회가 빈 결과를 쓸 길이 없기 때문이다(t12 sync N2·N3).
+            nearbyTask?.cancel()
             nearby = []
             nearbyLoaded = false
         }
@@ -420,16 +424,21 @@ struct ActivityDetailView: View {
     }
 
     private func loadNearby() async {
-        guard let coord = placeCoord else { return }
+        // 취소 가드가 플래그를 마지막 조회에만 맡기는 이상(아래) 조기 반환에서도 내린다.
+        guard let coord = placeCoord else {
+            loadingNearby = false
+            return
+        }
         loadingNearby = true
         let found = await store.placeSearch.nearbyPlaces(category: nearbyCategory, near: coord)
-        // 스피너 내림을 취소 가드보다 먼저 — 취소된 작업이 가드에서 return하면 loadingNearby가
-        // true로 남아 버튼이 잠긴 채 영영 풀리지 않는다.
+        // 취소 가드를 스피너 해제·nearbyLoaded보다 앞에 둔다 — 종류를 연달아 바꾸면(B→C) 취소된
+        // B가 곧바로 돌아와 C가 도는 중에 스피너를 내리고 새로고침이 다시 눌리게 한다. 취소된
+        // 조회는 아무것도 쓰지 않고 플래그는 새 조회가 끝날 때 내린다. 그래도 플래그가 켜진 채
+        // 남는 길은 placeCoord nil(섹션 자체가 숨는다)과 onDisappear(시트가 사라진다)뿐이라
+        // 걸려 있어도 화면에 남지 않는다.
+        guard !Task.isCancelled else { return }
         loadingNearby = false
         nearbyLoaded = true
-        // 취소된 조회는 빈 배열로 정상 돌아온다(try? 삼킴) — 재확인 없이 쓰면 옛 빈 결과가 새
-        // 결과를 덮는다.
-        guard !Task.isCancelled else { return }
         nearby = found
     }
 }

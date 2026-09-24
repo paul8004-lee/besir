@@ -87,7 +87,12 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         timeoutTask = Task { @MainActor in
             // GPS(iOS)는 첫 측위에 시간이 걸리므로 충분히 기다린 뒤, 그래도 안 오면 IP 폴백.
             try? await Task.sleep(nanoseconds: UInt64(Self.locateTimeoutSeconds * 1_000_000_000))
-            guard self.isLocating, self.currentLocation == nil else { return }
+            // 취소된 태스크는 아무것도 쓰지 않게 여기서 돌려보낸다 — sleep은 취소에 즉시 깨는데
+            // 이어서 폴백을 돌리면, 취소된 URLSession 요청이 서버에 닿기 전 -999로 끝나 폴백이
+            // 조용히 실패하고 isLocating=false와 실패 lastError가 ~0.05초에 쓰인다(프리필 이중
+            // 호출 경로의 실제 증상 — IP 폴백이 죽고 출발지 스피너가 일찍 꺼진다. 대략 위치가
+            // 확정되는 일은 없다. t12 sync D4·N1).
+            guard !Task.isCancelled, self.isLocating, self.currentLocation == nil else { return }
             await self.ipLocationFallback()
             if self.currentLocation == nil {
                 self.isLocating = false
