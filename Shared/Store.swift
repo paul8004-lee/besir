@@ -261,19 +261,28 @@ final class Store: ObservableObject {
     }
 
     /// 활동 블록 정보를 수정한다(제목·장소·시간). 구글 캘린더에 이미 올라가 있었다면 지우고 새로 등록한다.
+    ///
+    /// 재등록은 인라인 `try? createEvent`가 아니라 업로드 큐로 보낸다 — 인라인은 실패를 그냥 삼켜서
+    /// 편집 자리에 아무 신호가 없었다(2026-09-24 전수 검사 결함 C4). 큐는 pending/failed를 레코드에
+    /// 남기고 성공의 gid도 스스로 채운다(updateEvent·updateRecurringSeries와 같은 I1·N2 패턴).
+    /// gid는 저장 *전에* 비운다 — 큐는 gid 없는 레코드만 올리므로 죽은 gid가 남어 있으면 재등록이
+    /// 누락되고, 원격에서 지워진 gid를 붙잡고 있으면 다음 동기화가 매핑 어긋남으로 중복을 만든다.
+    /// 연결됐을 때만 건드린다 — 미연결이면 원격 삭제가 어차피 실패하는데 gid만 비우면 재연결 뒤
+    /// 매핑 상실로 중복이 생긴다(updateRecurringSeries와 같은 이유).
     func updateActivity(_ updated: ActivityBlock) {
         guard let idx = activities.firstIndex(where: { $0.id == updated.id }) else { return }
         let old = activities[idx]
-        activities[idx] = updated
+        var toStore = updated
+        let reRegister = googleConnected && old.googleEventId != nil
+        if reRegister { toStore.googleEventId = nil }
+        activities[idx] = toStore
         activities.sort { $0.startDate < $1.startDate }
         saveActivities()
-        if let gid = old.googleEventId {
+        if reRegister, let gid = old.googleEventId {
             Task {
                 await removeFromCalendar([gid])
-                if let newGid = try? await gcal.createEvent(for: updated),
-                   let i = activities.firstIndex(where: { $0.id == updated.id }) {
-                    activities[i].googleEventId = newGid
-                    saveActivities()
+                if config.autoAddToCalendar {
+                    enqueueCalendarUpload(activityIDs: [updated.id])
                 }
             }
         }
@@ -1448,6 +1457,9 @@ final class Store: ObservableObject {
             // await 뒤에는 배열이 바뀌었을 수 있으니 인덱스를 다시 찾는다.
             guard let writeIdx = activities.firstIndex(where: { $0.id == id }) else { continue }
             activities[writeIdx].googleEventId = gid
+            // 성공의 단일 출처는 gid다(위 업로드 큐와 같은 원칙) — 여기만 해제를 빼먹으면,
+            // 큐가 남긴 pending을 2-5가 먼저 올려 치웠을 때 "올리는 중"이 영구 좌초한다.
+            activities[writeIdx].calendarUpload = nil
         }
         saveActivities()
     }
