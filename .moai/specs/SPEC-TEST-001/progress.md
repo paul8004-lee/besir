@@ -134,7 +134,24 @@
 
 **git 밖 산출물 추가**(REQ-008 목록 이어서): `/tmp/gd-t8-m3a.swift`·`/tmp/gd-t8-m3a`·`/tmp/gd-t8-m3a-compile.log` 및 `m3b` 동일 세트(컴파일마다 고유 이름 — 낡은 바이너리 재사용 없음) · `.moai/state/verify/t8/m3-short-run.log`·`m3-full-run.log`.
 
-(M4부터: CLAUDE.md 편집 확인 수단·결과, 스킬 사본·diff)
+### M4 — CLAUDE.md + 스킬 파일 (2026-09-24)
+
+**CLAUDE.md (REQ-006, D-4 승인 항목의 실행)**
+
+- **편집 직전 운영자 확인 — 수단: run 세션 직접 응답.** 2026-09-24 run 세션 AskUserQuestion("CLAUDE.md 드라이버 블록 곁 편집을 승인하시나요? … 이 질문에 답하시는 것 자체가 그 확인입니다")에 운영자가 **"승인 (권장)"**으로 응답. REQ-006이 인정하는 두 수단(운영자 직접 입력 · 편집 권한 프롬프트 승인) 중 첫째. 권한 프롬프트는 따로 뜨지 않았다(세션 추가 디렉터리 경로라 무프롬프트 편집) — 확인은 직접 응답 하나로 성립했다.
+- 편집: 드라이버 코드 블록 뒤 7줄 — 자기 격리(임시 홈 · 빈 클라이언트 ID · 내부 기한 기본 900초/인자 덮음), 실제 지원 디렉터리는 시작·종료 바이트 대조만, 종료 코드 **0·1·2·3·124**(1은 마지막 줄 `P/T 통과`가 있을 때만 단언 실패 — 그 앞의 1은 `&&` 연쇄상 컴파일 실패), 외부 감시자 불필요 — 굳이 두면 `wait` 직후 거둔다.
+- AC-005 (1): `git diff -U0 2a37673 -- CLAUDE.md \| grep '^@@'` → 헝크 하나 `@@ -66,0 +67,7 @@`. § 빌드 · 배포는 `:45`부터 다음 `## `(`:88`) 앞까지(`grep -n '^## '`로 실측) — 삽입 줄 67-73이 전부 그 안이다.
+- AC-005 (2): 종료 코드 다섯 개와 감시자 문장이 `:71-72`에 있다(`grep -n '124'` → `:72`).
+- AC-005 (3): 드라이버 머리말 레시피(`Tools/GuardDriver.swift:3-9`)는 무변경 — 컴파일·실행 명령이 바뀌지 않았으므로 `CLAUDE.md` 블록과 명령 단위로 그대로 같다.
+- `(API 할당량 안 씀)` 문구는 손대지 않았다(O-1 — 리드 판정 Day 닫기 이월, REQ-006 편집 범위 밖).
+
+**스킬 파일 (REQ-007 — git 밖, 편집 전 사본이 유일한 변경 기록)**
+
+- 편집 전 사본: `.moai/state/verify/t8/hazards-SKILL-pre-edit.md`(249줄) — M3 착수 전에 확보.
+- 편집: 주 체크아웃 `.claude/skills/hns-besir-app-hazards/SKILL.md` — 후보 목록에서 `Store.updateMeal(_:)` 한 줄 제거, `RouteMode.car` 문단 뒤 유지 문단 추가(영어 4줄+빈 줄, `:244-246` 선례 모양). **워크트리에서 주 체크아웃 편집이 막히지 않았다** — `ExitWorktree(keep)` 절차는 불필요했다(리드가 예비해 둔 지시).
+- AC-006 (1): `grep -n 'updateMeal'` → `:243`(유지 문단)만. 목록 마커 `:229`(Dead code candidates)·`:235`(RouteMode.car removed) 사이가 아니다.
+- AC-006 (2): 문단이 `SPEC-FULL-001`·`REQ-003`·`SPEC-UIKIT-006`·`D-2 (a) (2026-09-23)`·`Shared/Store.swift:408`을 모두 담는다.
+- AC-006 (3): `diff .moai/state/verify/t8/hazards-SKILL-pre-edit.md <스킬 파일>` = `233d232`(목록 한 줄 제거) + `243a243,247`(유지 문단 추가)만.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
