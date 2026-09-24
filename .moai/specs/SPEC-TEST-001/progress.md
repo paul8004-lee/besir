@@ -180,10 +180,10 @@
 - **sync_status: closed** — 문서 수명주기가 닫혔다(`spec.md` frontmatter `completed`, 0.1.3). AC 여덟 개 모두 증거가 붙었고,
   이 레인이 드라이버를 직접 다시 돌려 AC-001~003·008의 실행 신호를 새로 관측했다.
 - sync_complete_at: 2026-09-24
-- sync_commit_sha: pending-backfill — 다음 커밋에서 채운다(SPEC-UIKIT-001~007과 같은 스키마 필드·같은 방식). 커밋은 자기
+- sync_commit_sha: a1e6537 — 다음 커밋에서 백필했다(SPEC-UIKIT-001~007과 같은 스키마 필드·같은 방식). 커밋은 자기
   sha를 담을 수 없고, amend로 적으면 그 순간 다시 어긋난다.
 - 커밋: `08c1a1b`(plan) · `18d62ae`(착수 게이트·감사 2·3회차) · `cf76902`(M1) · `de8fd77`(M2 드라이버 머리말) · `8265ea9`(M3) ·
-  `4da237e`(M4) · `18773e1`(M5·run 종결) · sync 종결 · sha 백필. 드라이버 코드 커밋은 `de8fd77` 하나다.
+  `4da237e`(M4) · `18773e1`(M5·run 종결) · `a1e6537`(sync 종결) · 본 커밋(sha 백필). 드라이버 코드 커밋은 `de8fd77` 하나다.
 - 이 sync가 만진 파일: 루트 `plan.md`(Phase 1.7 표 t8 행) · 루트 `CHECKLIST.md`(드라이버 인용 끝점 7개, 물리 줄 4) · `CLAUDE.md`
   (`:70` 한 구절) · `spec.md`(frontmatter + HISTORY 0.1.3) · 이 파일. **`CHECKLIST.md`와 `CLAUDE.md`는 REQ-008의 sync 범위 밖이고,
   운영자가 이 세션에서 직접 승인한 예외다**(§E.4.3). `Shared/`·`Tools/`·`proxy/` 변경 0건 — 드라이버는 `de8fd77` 그대로다.
