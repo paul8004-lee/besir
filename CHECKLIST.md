@@ -239,9 +239,9 @@ progress.md).
 | F2 | "늦게 도착해도 되니 끝나고 바로 출발" | ✅ | `on_conflict:"late_arrival"` — 겹침 끝 시각 출발 전환(:1360-1364), 늦는 분까지 요약에 명시(:1406-1408). 〔드:S절 C3 + 사용자 보고(같은 목록 5)〕 |
 | F3 | "겹쳐도 그냥 등록해" | ✅ | `on_conflict:"ignore"` — 물은 뒤에만 통과(:1353). 〔드:S절 C2 + 사용자 보고(같은 목록 5)〕 |
 | F4 | 실시간 교통상황 반영 | ✅ | `refreshUpcomingEstimates`(Store.swift:1232-1258) — 출발 2시간 이내 재계산. 반복은 첫 회차만 조회 후 복사(Store.swift:635-665). 〔빌드·코드〕 |
-| F5 | 수동(+ 메뉴)으로 만들 때도 충돌 경고 | ✅ | `AddEventView` 겹침 배너 — `ConflictBanner`(사용 :64-65, `currentConflicts` :608, 선언 :681). 저장은 안 막는다(경고가 선택을 대신하지 않는다). UI통일 Day(t2a)가 이 화면을 EditCard 문법으로 전환한 뒤에도 유지(2026-09-24 좌표 재확인). 〔빌드·코드〕 |
+| F5 | 수동(+ 메뉴)으로 만들 때도 충돌 경고 | ✅ | `AddEventView` 겹침 배너 — `ConflictBanner`(사용 :71-72, `currentConflicts` :646, 선언 :719). 저장은 안 막는다(경고가 선택을 대신하지 않는다). UI통일 Day(t2a)가 이 화면을 EditCard 문법으로 전환한 뒤에도 유지(2026-09-24 좌표 재확인). 〔빌드·코드〕 |
 | F6 | 활동 블록끼리 겹침 경고 | — | **일부러 넣지 않음**(2026-09-11 사용자 결정). 동시 진행이 정상인 경우가 있어 경고가 방해가 된다. 활동 생성 시 만들어지는 **이동 다리**의 겹침은 알려준다(executeCreateActivity :1545-1558 — 만들기는 막지 않고 문구로). |
-| F7 | 저장 버튼을 빠르게 두 번 눌러도 일정이 두 배로 생기지 않음 | ✅ | **이번 Day 닫기에서 수리(card t9)** — 추가 모드에서 두 번 탭하면 `addEvent`가 결정론적으로 2건 실행되던 구멍(2026-09-24 code-safety 전수 검사 확정: 진입 가드가 `saving` 재진입 검사가 없었다)을 `AddEventView.swift:127` `.disabled(!(card?.isReady ?? false) \|\| saving)` 1줄로 막음. 쌍둥이 `AddActivityView.swift:509`는 원래 온전했다. 〔빌드·코드(수리 전후 무경고) — 이중 탭 화면 실측은 확인 목록 (b) 11〕 |
+| F7 | 저장 버튼을 빠르게 두 번 눌러도 일정이 두 배로 생기지 않음 | ✅ | **이번 Day 닫기에서 수리(card t9)** — 추가 모드에서 두 번 탭하면 `addEvent`가 결정론적으로 2건 실행되던 구멍(2026-09-24 code-safety 전수 검사 확정: 진입 가드가 `saving` 재진입 검사가 없었다)을 `AddEventView.swift:138` `.disabled(!(card?.isReady ?? false) \|\| saving)` 1줄로 막음. 쌍둥이 `AddActivityView.swift:509`는 원래 온전했다. 〔빌드·코드(수리 전후 무경고) — 이중 탭 화면 실측은 확인 목록 (b) 11〕 |
 
 ## G. 요청마다의 값 · 앱 주도 되묻기 카드
 
@@ -363,7 +363,7 @@ M절은 비었다 — 결함 M의 행은 L15에 있다.)*
 | # | 사용자 요구 | 상태 | 근거 |
 |---|---|---|---|
 | N1 | 일정 등록이 즉시 끝난다 (58건 반복도 기다리지 않음) | ✅ | 등록은 로컬에서 끝내 즉시 응답하고(`addEvent` 저장 뒤 반환 Store.swift:593-596), 업로드는 `enqueueCalendarUpload`가 **뒤에서 직렬**로 돈다(Store.swift:804-839 — 전용 Task가 앞 작업을 기다린다 :787·:832-838). 〔드:N절(간접) + **관찰(2026-09-16)** — 사용자: **"눈에 띄게 빨라졌어요"**〕 |
-| N2 | 올라가는 중·실패가 보이고 다시 시도할 수 있다 | ✅ | 상태가 보이는 자리 둘: 일정 상세 — pending 라벨·failed 문구 + "구글 캘린더에 추가" 버튼(EventDetailView.swift:108-144, 재시도 :146-151); 설정 — 대기·실패 합계 + "다시 시도"(SettingsView.swift:51-69, `retryFailedCalendarUploads` Store.swift:853-856). 등록 요약의 대기 문구 `calendarPendingNote`(AIAssistant.swift:1420-1424 — 판정의 단일 출처는 레코드의 pending 표시, 세 생성 경로에 붙임 :1409·:1562-1564·:1697-1699). 〔드:N절 N-3·P절 P-7. 화면 전환(올리는 중→등록됨) 목격은 개별 증거 없음 → 확인 목록 (b) 10〕 |
+| N2 | 올라가는 중·실패가 보이고 다시 시도할 수 있다 | ✅ | 상태가 보이는 자리 둘: 일정 상세 — pending 라벨·failed 문구 + "구글 캘린더에 추가" 버튼(EventDetailView.swift:121-157, 재시도 :159-164); 설정 — 대기·실패 합계 + "다시 시도"(SettingsView.swift:51-69, `retryFailedCalendarUploads` Store.swift:853-856). 등록 요약의 대기 문구 `calendarPendingNote`(AIAssistant.swift:1420-1424 — 판정의 단일 출처는 레코드의 pending 표시, 세 생성 경로에 붙임 :1409·:1562-1564·:1697-1699). 〔드:N절 N-3·P절 P-7. 화면 전환(올리는 중→등록됨) 목격은 개별 증거 없음 → 확인 목록 (b) 10〕 |
 | N3 | 계정이 연결돼 있지 않으면 쓰기를 시도하지 않음 | ✅ | 모든 쓰기 경로가 `googleConnected`(Store.swift:481 = `hasGoogleCalendar && gcal.isConnected`)로 막힌다: enqueue :805·push :867·:902·수정 :764·:963. 예전엔 `hasGoogleCalendar`(= 클라이언트 ID 유무, 항상 참)만 봐서 미연결 기기에서 건마다 로그인 시도 + 조용한 실패였다(push 주석 :864-866). 연결 진입점·상세의 수동 추가 버튼·설정 UI는 의도적으로 제외(사용자 동작 경로 — 자동 쓰기 경로와 달리 사용자가 결과를 직접 본다). 〔드:N절 N-1. 단 "ID는 있는데 계정만 없다" 반쪽은 드라이버가 clientID 비움으로만 시험하므로 기기 확인 영역〕 |
 | N4 | 상태의 진실 — 성공은 어디에 기록되나 | ✅ | `CalendarUploadState`는 **pending·failed 두 case뿐**(Models.swift:132-151), 성공의 단일 출처는 `googleEventId`다(계약 5 — 성공 시 상태를 nil로 되돌림 Store.swift:879·:912). 필드는 Optional이라 **calendarUpload 키가 없는 옛 JSON이 그대로 읽힌다**(Models.swift:180-183 — 비-Optional 기본값이면 옛 파일이 통째로 디코딩 실패해 일정이 사라진다). pending은 디스크에 먼저 남는다(Store.swift:816 — 여기서 죽어도 "안 올라감"이 보인다). 〔드:N절 N-3·N-4(사용자 시뮬레이터에 실제로 저장돼 있던 레코드 키 구성으로 검증)〕 |
 
@@ -497,14 +497,14 @@ N₀·X·D 수치 로그 없이 수용). G10·G15의 모델 동작 갭도 수용
    gatedRows 인자 여섯 2벌(:179-182 ↔ :201-204) · N1 save()가 travelSecondsHint를 안 넘김(저장마다
    조회 1회 추가 + 폼 예상/저장값 어긋남 창 — AI 경로는 이미 넘긴다) · 후속 19 셋(값 있는 줄의
    스피너·권한 거부 시 출발지 줄 실종에 안내 없음·주석 범위).
-3. **무취소 Task 부류** — 후속 12 nearby onChange(ActivityDetailView :362) + 이번 전수 검사 신규
+3. **무취소 Task 부류 — 처리됨(2026-09-25, 카드 t12)**: 후속 12 nearby onChange(ActivityDetailView :362) + 이번 전수 검사 신규
    EventDetailView.loadTransitPath(:72·:153-168) — 늦게 도착한 옛 경로가 지도 폴리라인·환승 안내를
    덮어 마지막 상태와 어긋남. 표시만 틀리는 부류지만 "화면이 거짓말하는" 계열.
 4. **Store.updateActivity 조용한 실패**(:270-279) — 활동 편집 뒤 재등록 실패가 상태 기록 없이
    삼켜짐(다음 동기화 reconcileActivities가 치유할 수 있으나 그 자리에서는 무신호). enqueue 경로로
    이동(updateEvent :963-968이 본보기).
-5. **Theme/계약 6 묶음(ui-design)** — ConflictBanner 우회 3건(AddEventView :627·:630·:635) +
-   AddActivityView :574 + ActivityDetailView 다섯 줄(:366·:374·:388·:391·:395) + 후속 16
+5. **Theme/계약 6 묶음(ui-design)** — ConflictBanner 우회 3건(AddEventView :732·:735·:740) +
+   AddActivityView :574 + ActivityDetailView 다섯 줄(:376·:384·:398·:401·:405) + 후속 16
    AIChatView:114.
 6. **문구·주석 묶음** — 후속 18(주석 과적용 2건)·19③(주석 범위)·B5 "이동 수단/이동수단" 표기·
    **D-3 고지**("과거 일정에는 알림이 안 걸린다"는 사실을 화면이 말하게 하기 — 사용자가 (i)를
@@ -578,7 +578,7 @@ N₀·X·D 수치 로그 없이 수용). G10·G15의 모델 동작 갭도 수용
 돌렸다(프록시는 안 탄다 — MapKit 자체는 Apple 서버로 가는 요청이다. 단언 판정은 그대로 — P-4
 라벨은 〔MapKit 단독 — 네트워크 의존〕로 정리). 남는 프록시 밖 경로는
 ipwho.is 직접 폴백 하나다(`fresh()`의 `useCurrentLocation`,
-LocationManager.swift:83-110 — 유효 표집(양성 대조 확인)과 sync 재실측 모두 관측 0건, 이론상 가능).
+LocationManager.swift:95-123 — 유효 표집(양성 대조 확인)과 sync 재실측 모두 관측 0건, 이론상 가능).
 모델 API(OpenAI)는 구조적으로
 0회다(callAI를 부르는 경로가 드라이버에 없다). 빨간 J절을 코드 결함으로 오진하지 말 것(환경
 변화 신호).
