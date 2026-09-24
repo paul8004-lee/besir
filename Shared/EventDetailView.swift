@@ -28,6 +28,11 @@ struct EventDetailView: View {
     @State private var showingDeleteMenu = false
     @State private var showingDeleteConfirm = false
     @State private var addingToCalendar = false
+    /// 지금 떠 있는 경로 조회. 출발지 좌표가 GPS 정밀화로 계속 미세하게 바뀌면 키가 다시
+    /// 불리고, 취소 없이 두면 조회가 한 벌씩 쌓여 카카오·ODsay 할당량이 타며(t11 sync N5),
+    /// 취소된 조회는 서비스가 try?로 삼키기 때문에 빈 결과로 정상 돌아와 늦은 옛 결과가 새
+    /// 결과를 덮는다.
+    @State private var transitTask: Task<Void, Never>?
 
     /// 38pt 고정은 큰 글씨를 무시한다(D-4 9번) — 출발 숫자가 본문과 함께 자라게 한다.
     @ScaledMetric(relativeTo: .largeTitle) private var departureTimeSize: CGFloat = 38
@@ -68,8 +73,16 @@ struct EventDetailView: View {
         }
         .background(Theme.bg)
         .navigationTitle(event.title)
-        // 처음 표시 + 일정의 수단·출발지·목적지가 바뀔 때마다 경로 재로딩.
-        .onChange(of: transitTaskKey, initial: true) { Task { await loadTransitPath() } }
+        // 처음 표시 + 일정의 수단·출발지·목적지가 바뀔 때마다 경로 재로딩. 이전 조회는 취소하고
+        // 새로 띄운다(LocationManager.startTimeout과 같은 취소-교체) — 취소는 URLSession의 진행
+        // 중 요청까지 끊어, 바뀌어버린 옛 조회를 끝까지 태우지 않는다.
+        .onChange(of: transitTaskKey, initial: true) {
+            transitTask?.cancel()
+            transitTask = Task { await loadTransitPath() }
+        }
+        // 사라진 화면의 결과를 위해 네트워크를 태우지 않는다(AddEventView의 정리 계약과 같은
+        // 판단) — 상세를 닫아도 진행 중인 조회는 계속 도는 게 지금까지의 모습이었다.
+        .onDisappear { transitTask?.cancel() }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button { showingEdit = true } label: { Label("편집", systemImage: "pencil") }
@@ -158,12 +171,19 @@ struct EventDetailView: View {
         case .transit:
             guard store.config.hasProxy else { return }
             let plan = await store.directions.transitPlan(from: origin, to: destCoord)
+            // 취소된 조회는 에러가 아니라 빈 결과로 돌아온다(서비스가 try?로 삼킨다) — await 뒤
+            // 재확인 없이 쓰면 옛 조회의 빈 결과가 새 조회의 결과를 덮는다(setLookup과 같은 규율).
+            guard !Task.isCancelled else { return }
             routeSegments = plan.segments
             transitSteps = plan.steps
         case .car:
-            routeSegments = await store.directions.carRouteSegments(from: origin, to: destCoord)
+            let segments = await store.directions.carRouteSegments(from: origin, to: destCoord)
+            guard !Task.isCancelled else { return }
+            routeSegments = segments
         case .walk:
-            routeSegments = await store.directions.walkRouteSegments(from: origin, to: destCoord)
+            let segments = await store.directions.walkRouteSegments(from: origin, to: destCoord)
+            guard !Task.isCancelled else { return }
+            routeSegments = segments
         }
     }
 

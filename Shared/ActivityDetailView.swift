@@ -34,6 +34,10 @@ struct ActivityDetailView: View {
     @State private var nearbyCategory: MealCategoryFilter = .restaurant
     @State private var loadingNearby = false
     @State private var nearbyLoaded = false
+    /// 지금 떠 있는 주변 조회. 종류를 연달아 바꾸면 취소 없이는 카카오 조회가 한 벌씩 쌓이고,
+    /// 취소된 조회는 try?로 삼켸진 빈 배열로 정상 돌아와 늦은 옛 빈 결과가 새 결과를 덮는다
+    /// (day-close §6 후속 12).
+    @State private var nearbyTask: Task<Void, Never>?
 
     /// "장소 없음" 칩의 값. 장소 없는 활동도 편집할 수 있어야 하는데 isReady는 모든 줄의 chosen을
     /// 전수로 보므로, 이 칩이 없으면 장소를 지운 편집을 저장할 수 없다. Store에는 절대 흘러가지
@@ -108,6 +112,8 @@ struct ActivityDetailView: View {
             var d = placeDebounce
             d.cancelAll()
             placeDebounce = d
+            // 진행 중인 주변 조회도 끊는다 — 위 검색과 같은 정리 계약, 취소는 진행 중 요청까지 끊는다.
+            nearbyTask?.cancel()
         }
     }
 
@@ -346,7 +352,7 @@ struct ActivityDetailView: View {
                 Spacer()
                 if loadingNearby { ProgressView().controlSize(.small) }
                 Button(nearbyLoaded ? "새로고침" : "추천 보기") {
-                    Task { await loadNearby() }
+                    startNearby()
                 }
                 .buttonStyle(.borderless)
                 .disabled(loadingNearby)
@@ -359,7 +365,7 @@ struct ActivityDetailView: View {
                     }
                 }
                 .pickerStyle(.segmented)
-                .onChange(of: nearbyCategory) { Task { await loadNearby() } }
+                .onChange(of: nearbyCategory) { startNearby() }
 
                 if nearby.isEmpty && !loadingNearby {
                     Text("주변 1km 안에서 찾지 못했어요.")
@@ -406,11 +412,24 @@ struct ActivityDetailView: View {
         .padding(.vertical, 4)
     }
 
+    /// 주변 조회는 언제나 여기를 거쳐 띄운다(취소-교체) — 두 발화 지점이 각자 Task를 만들면 이전
+    /// 조회를 취소할 손잡이가 없다. nearbyCategory는 @State라 새 작업이 제 값을 읽는다.
+    private func startNearby() {
+        nearbyTask?.cancel()
+        nearbyTask = Task { await loadNearby() }
+    }
+
     private func loadNearby() async {
         guard let coord = placeCoord else { return }
         loadingNearby = true
-        nearby = await store.placeSearch.nearbyPlaces(category: nearbyCategory, near: coord)
+        let found = await store.placeSearch.nearbyPlaces(category: nearbyCategory, near: coord)
+        // 스피너 내림을 취소 가드보다 먼저 — 취소된 작업이 가드에서 return하면 loadingNearby가
+        // true로 남아 버튼이 잠긴 채 영영 풀리지 않는다.
         loadingNearby = false
         nearbyLoaded = true
+        // 취소된 조회는 빈 배열로 정상 돌아온다(try? 삼킴) — 재확인 없이 쓰면 옛 빈 결과가 새
+        // 결과를 덮는다.
+        guard !Task.isCancelled else { return }
+        nearby = found
     }
 }

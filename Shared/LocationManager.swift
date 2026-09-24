@@ -71,15 +71,22 @@ final class LocationManager: NSObject, ObservableObject, CLLocationManagerDelega
         }
     }
 
+    /// 측위가 이 시한 안에 오지 않으면 IP 폴백으로 넘어간다. prefillOrigin의 대기 시한도 여기서
+    /// 파생한다 — 두 시한이 어긋나면 측위가 늦게(5~8초) 왔을 때 빈 출발지 줄을 채우지 못한다
+    /// (t11 sync N5).
+    static let locateTimeoutSeconds: TimeInterval = {
+        #if os(iOS)
+        8
+        #else
+        3
+        #endif
+    }()
+
     private func startTimeout() {
         timeoutTask?.cancel()
         timeoutTask = Task { @MainActor in
             // GPS(iOS)는 첫 측위에 시간이 걸리므로 충분히 기다린 뒤, 그래도 안 오면 IP 폴백.
-            #if os(iOS)
-            try? await Task.sleep(nanoseconds: 8_000_000_000)
-            #else
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            #endif
+            try? await Task.sleep(nanoseconds: UInt64(Self.locateTimeoutSeconds * 1_000_000_000))
             guard self.isLocating, self.currentLocation == nil else { return }
             await self.ipLocationFallback()
             if self.currentLocation == nil {

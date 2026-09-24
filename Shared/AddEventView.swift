@@ -43,6 +43,13 @@ struct AddEventView: View {
     /// 상태 래퍼로 감싼 이유: gate·arm·noteDone은 구조체를 고치는 호출이라, 래퍼 저장소를 향해
     /// 복사해 내보냈다 도로 반영해야 이 화면 안에서 정책 상태가 산다.
     @State private var placeDebounce = PlaceSearchDebouncer()
+    /// 지금 떠 있는 이동시간 재계산. 출발지·목적지가 바뀔 때마다 이전 계산을 취소하고 새로 띄운다
+    /// — 취소가 없으면 장소를 바꿀 때마다 카카오·ODsay·MapKit 조회가 한 벌씩 더 나간다(t11 sync
+    /// N5). 취소는 URLSession의 진행 중 요청까지 끊는다.
+    @State private var estimateTask: Task<Void, Never>?
+    /// "현재 위치" 칩의 측위 대기 루프. 칩을 다시 타면 이전 대기를 취소한다 — 대기가 둘 나란히
+    /// 돌면 같은 확정이 두 번 일어난다.
+    @State private var prefillTask: Task<Void, Never>?
 
     /// "현재 위치" 칩의 값. AIAssistant.currentLocationToken과 같은 사정(빈 값과의 구분)으로
     /// 내부 토큰을 쓰되, 이 화면의 값은 모델로 흘러가지 않으므로 여기 private로 따로 둔다.
@@ -68,7 +75,7 @@ struct AddEventView: View {
                     // 없는 버튼이어서 글자 라벨을 얻었다(REQ-022(d)).
                     if hasTimeRow {
                         Button {
-                            Task { await recomputeEstimates() }
+                            restartEstimates()
                         } label: {
                             Label("소요시간 다시 계산", systemImage: "arrow.clockwise")
                         }
@@ -94,6 +101,10 @@ struct AddEventView: View {
             var d = placeDebounce
             d.cancelAll()
             placeDebounce = d
+            // 진행 중인 재계산·측위 대기도 끊는다 — 사라진 화면의 결과를 위해 네트워크를 태우지
+            // 않는다는 위와 같은 정리 계약. 취소는 URLSession의 진행 중 요청까지 끊는다.
+            estimateTask?.cancel()
+            prefillTask?.cancel()
         }
         // 카드 뷰는 순수 값 뷰라 외부 상태를 스스로 못 본다 — 진행 깃발을 줄의 busy로 명시적으로
         // 잇는다. 잊으면 동작은 돼도 진행 표시가 조용히 안 뜬다(REQ-021(c), 휴면 계약).
@@ -317,7 +328,7 @@ struct AddEventView: View {
                     useCurrentLocationAsOrigin()
                 } else {
                     ensureGatedRows()
-                    Task { await recomputeEstimates() }
+                    restartEstimates()
                 }
                 // 목적지가 아직 비어 있으면 ensureGatedRows도 재계산 가드도 여기까지 못 온다
                 // — 그러면 권한 거부 안내가 값을 고른 줄에 남는다(note를 지우는 건
@@ -328,7 +339,7 @@ struct AddEventView: View {
         case "destination_query":
             card = c
             ensureGatedRows()
-            Task { await recomputeEstimates() }
+            restartEstimates()
         default:
             card = c
             // 여유는 반대쪽 예상 시각에, 수단은 그 계산에 직접 닿는다 — 줄 캡션을 다시 맞춘다
@@ -433,22 +444,32 @@ struct AddEventView: View {
             confirmCurrentLocationAsOrigin(c)
         } else {
             location.useCurrentLocation()
-            Task { await prefillOrigin() }
+            // 대기도 취소-교체로 건다 — 칩을 다시 타면 이전 대기가 새 대기와 나란히 돌게 두지 않는다.
+            prefillTask?.cancel()
+            prefillTask = Task { await prefillOrigin() }
         }
     }
 
-    /// 출발지가 비어 있으면 현재 위치로 채운다(최대 5초 대기). 새 일정의 자동 프리필과 옛 일정의
-    /// 출발지 nil을 채우는 길이 같다 — 옛 화면 prefillOrigin과 같은 흐름이다.
+    /// 출발지가 비어 있으면 현재 위치로 채운다(측위 시한+1초까지 대기 — 아래 파생식 참조). 새 일정의
+    /// 자동 프리필과 옛 일정의 출발지 nil을 채우는 길이 같다 — 옛 화면 prefillOrigin과 같은 흐름이다.
     private func prefillOrigin() async {
         guard confirmedPlace("origin_query") == nil else { return }
-        // 권한이 거부된 상태에서 위치를 요청하면 영영 오지 않는 값을 5초 기다린다 — 죽은 대기 대신
+        // 권한이 거부된 상태에서 위치를 요청하면 영영 오지 않는 값을 기다린다 — 죽은 대기 대신
         // syncFieldExtras의 권한 안내만 띄운다.
         if location.authorizationStatus == .denied || location.authorizationStatus == .restricted {
             syncFieldExtras()
             return
         }
         if location.currentLocation == nil { location.useCurrentLocation() }
-        for _ in 0..<25 {
+        // 대기 시한은 LocationManager의 측위 시한에서 파생한다(계약 5: 같은 값이 두 곳에 살지
+        // 않는다) — 여기가 5초인데 측위가 8초까지 기다리면 5~8초에 오는 위치가 빈 출발지 줄을
+        // 채우지 못했다(t11 sync N5). +1초는 시한 직후에 도착하는 값을 받는 여유고, max(5, ·)는
+        // 측위 시한이 짧은 macOS의 오늘 행동(5초)을 그대로 지킨다.
+        let waitSeconds = max(5, LocationManager.locateTimeoutSeconds + 1)
+        for _ in 0..<Int(waitSeconds / 0.2) {
+            // sleep은 취소되면 즉시 반환한다 — 대기가 태깅돼 취소가 실제로 닿게 된 지금, 재확인
+            // 없이 돌면 0.2초 간격을 잃고 폴링이 빠르게 돈다.
+            if Task.isCancelled { break }
             if let c = location.currentLocation {
                 confirmCurrentLocationAsOrigin(c)
                 return
@@ -481,7 +502,7 @@ struct AddEventView: View {
             card = c2
         }
         ensureGatedRows()
-        Task { await recomputeEstimates() }
+        restartEstimates()
         syncOriginBusy()
     }
 
@@ -502,9 +523,13 @@ struct AddEventView: View {
         estimateFlights -= 1
         // 도는 사이 출발지·목적지를 바꾸면 두 비동기 작업이 겨루고 늦게 끝난 옛 계산이 이겨, 모드
         // 칩 소요시간·시각 줄 안내·충돌 배너에 옛 좌표의 값이 남는다. await 뒤 다시 읽어 시작할 때의
-        // 줄 신원·좌표와 같을 때만 쓴다(setLookup과 같은 await 뒤 재확인 규율). 밀린 계산은 값을 버리되
-        // 이것이 마지막 계산이면 estimating을 내린다 — 도중에 출발지가 지워져도 플래그가 true로 남지 않게.
-        guard confirmedPlace("origin_query") == origin,
+        // 줄 신원·좌표와 같을 때만 쓴다(setLookup과 같은 await 뒤 재확인 규율). 취소된 계산도 같은
+        // 이유로 버린다 — 취소된 estimateAll은 빈 추정으로 정상 돌아오는데, 재계산 버튼 두 연타처럼
+        // 시작과 재시작이 같은 좌표로 붙으면 신원 대조만으로는 그 빈 값이 진짜 값을 덮는 걸 막지 못한다.
+        // 밀린 계산은 값을 버리되 이것이 마지막 계산이면 estimating을 내린다 — 도중에 출발지가
+        // 지워져도 플래그가 true로 남지 않게.
+        guard !Task.isCancelled,
+              confirmedPlace("origin_query") == origin,
               confirmedPlace("destination_query") == dest else {
             if estimateFlights == 0 { estimating = false }
             return
@@ -513,6 +538,14 @@ struct AddEventView: View {
         estimatesFor = (origin, dest)
         if estimateFlights == 0 { estimating = false }
         syncFieldExtras()
+    }
+
+    /// 이동시간 재계산은 언제나 여기를 거쳐 띄운다(취소-교체) — 네 발화 지점이 각자 Task를 만들면
+    /// 이전 계산을 취소할 손잡이가 없다. bootstrap의 구조적 .task 안 직접 await는 그대로 둔다
+    /// (화면 생명주기가 취소를 소유한다).
+    private func restartEstimates() {
+        estimateTask?.cancel()
+        estimateTask = Task { await recomputeEstimates() }
     }
 
     /// 줄에 붙는 딸린 글을 카드에 다시 맞춘다 — 모드 칩의 소요시간, 출처 캡션, 시각 줄 안내·예상
