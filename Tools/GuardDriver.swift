@@ -162,15 +162,157 @@ extension AIAssistant {
 
 }
 
+// ── SPEC-TEST-001: 드라이버 자기 격리의 공용 부품(샌드박스·실제 데이터 대조·시간 제한).
+//    main()이 @MainActor라 여기 있는 함수·값은 전부 파일 범위 비격리다 — 시한 타이머
+//    스레드에서도 불리므로 파일 읽기 외에 앱 상태를 건드리지 않는다.
+//
+// 내부 시간 제한(초). 기록된 온전한 완주는 2026-09-23 t5 run의 약 433초 하나뿐이라 그
+// 2.1배로 잡았다 — 실행 편차를 감싸되 묶어 두지는 않는다. 무한정 도는 드라이버가 이
+// 카드가 없애려는 실패(외부 감시자가 도구 호출을 붙잡던 일)를 그대로 되살린다.
+let drvDeadlineDefaultSeconds = 900
+
+// 끝내는 일은 한 루틴이 한 번만 한다 — 정상 종료(주 스레드)와 시한(타이머 스레드)이
+// 각자 exit하면 동시 종료라 정의되지 않은 동작이다.
+let drvFinishGate = NSLock()
+
+/// 실제 지원 디렉터리를 {파일 이름: 바이트}로 읽는다. 이 함수는 **읽기만** 한다 —
+/// 드라이버의 모든 쓰기는 샌드박스로 가야 하고, 실제 디렉터리에 쓰는 순간 2026-09-23의
+/// 덮어쓰기가 재현된다. 디렉터리가 없어도 죽지 않는다 — "없음"도 기록할 상태고, 앱 데이터
+/// 바이트가 0개라는 점에서 "비어 있음"과 같은 상태로 센다. 읽기에 실패한 항목(디렉터리
+/// 등)은 nil 바이트로 남겨 대조에서 생겼다/사라졌다가 드러나게 한다.
+func drvReadSupportDir(_ dir: URL) -> [String: Data?] {
+    var out: [String: Data?] = [:]
+    for name in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] {
+        out[name] = try? Data(contentsOf: dir.appendingPathComponent(name))
+    }
+    return out
+}
+
+/// 두 읽기 사이에 달라진 파일 이름 전부. 정렬한다 — 전부 찍을 때 순서가 흔들리면 실행할
+/// 때마다 다른 로그가 나와 차이 비교가 어려워진다.
+func drvDiffSupportDir(_ a: [String: Data?], _ b: [String: Data?]) -> [String] {
+    var names = Set(a.keys)
+    names.formUnion(b.keys)
+    return names.filter { (a[$0] ?? nil) != (b[$0] ?? nil) }.sorted()
+}
+
+/// 샌드박스를 지운다 — 단, 대상이 이번 실행이 만든 경로임을 확인한 뒤에만. 지우는 건
+/// 파괴적 조작이라 확인이 없으면 실제 홈을 가리키는 오탈자 하나로 끝난다. 확인 조건은
+/// 지우는 호출과 같은 함수의 바로 위에 둔다 — 떨어져 있으면 이 코드를 읽는 판정자가
+/// 대응 관계를 확인할 수 없다.
+func drvRemoveSandboxIfOurs(_ sandbox: URL) {
+    let name = sandbox.lastPathComponent
+    guard sandbox.path.hasPrefix(NSTemporaryDirectory()),
+          name.hasPrefix("besir-gd-"),
+          UUID(uuidString: String(name.dropFirst("besir-gd-".count))) != nil
+    else {
+        print("[샌드박스] 지울 대상이 이번 실행이 만든 경로가 아니다 — 남겨둔다: \(sandbox.path)")
+        return
+    }
+    do { try FileManager.default.removeItem(at: sandbox) }
+    catch { print("[샌드박스] 삭제에 실패했다 — 남겨둔다: \(sandbox.path) (\(error.localizedDescription))") }
+}
+
+/// 드라이버의 유일한 종료 루틴 — 정상 종료와 시한이 같이 쓴다. 실제 디렉터리를 다시 읽어
+/// 시작 상태와 대조하고 종료 코드를 정해 exit한다. 잠금을 풀지 않는 게 핵심이다: 먼저 온
+/// 쪽이 exit할 때까지 잠금을 쥐고 있으면 늦은 쪽은 잠금에서 기다리다 프로세스와 함께
+/// 끝난다. 풀고 들어가는 모양이면 늦은 쪽이 루틴 밖으로 새어 나가 main의 끝까지 달려
+/// 잘못된 코드로 exit할 수 있다.
+func drvFinishOnce(start: [String: Data?], realSupport: URL, sandbox: URL,
+                   deadlineFired: Bool, removeSandbox: Bool) -> Never {
+    drvFinishGate.lock()
+    let end = drvReadSupportDir(realSupport)
+    let diffs = drvDiffSupportDir(start, end)
+    if diffs.isEmpty {
+        print("[실제 데이터] 대조 통과 — 시작 \(start.count)개, 끝 \(end.count)개의 이름·바이트가 같다")
+    } else {
+        for name in diffs { print("[실제 데이터] 달라졌다: \(name)") }
+    }
+    // 시한 가지는 지우지 않는다 — 주 스레드가 아직 샌드박스 안에 쓰는 중일 수 있고,
+    // Store.save는 디렉터리를 다시 만들므로(Store.swift save) 지운 샌드박스가 되살아난다.
+    if removeSandbox { drvRemoveSandboxIfOurs(sandbox) }
+    else { print("[시한] 샌드박스는 그대로 둔다: \(sandbox.path)") }
+    let code: Int32
+    if !diffs.isEmpty { code = 3 }
+    else if deadlineFired { code = 124 }
+    else { code = drvFail > 0 ? 1 : 0 }
+    // _exit이 아니라 exit을 쓴다 — 시한·대조 줄이 stdout 버퍼에 남은 채 죽으면 로그에서
+    // 124·3의 이유를 볼 수 없다. exit은 버퍼를 비우고 끝낸다.
+    exit(code)
+}
+
 @main
 struct Drv {
     @MainActor
     static func main() async {
+        // ── SPEC-TEST-001 REQ-001: 이 프로세스의 홈을 실행마다 새로 만드는 임시 디렉터리로
+        //    돌린다. AppConfig.supportDirectory는 static let이라 **처음 읽는 순간** 고정되고,
+        //    드라이버의 첫 읽기는 바로 아래 Store 생성이므로 재지정은 그 앞에서 끝나야 한다.
+        //    실제 홈은 재지정 전에 먼저 읽어 둔다 — 먼저 읽어도 재지정이 막히지 않는다는 것은
+        //    2026-09-24 탐침으로 잤다.
+        let realHome = NSHomeDirectory()
+        let sandbox = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("besir-gd-" + UUID().uuidString, isDirectory: true)
+        do { try FileManager.default.createDirectory(at: sandbox, withIntermediateDirectories: true) }
+        catch {
+            // 샌드박스 없이 도는 건 실제 데이터 위에서 도는 것이다 — 조용히 넘어가지 않는다.
+            print("[샌드박스] 임시 홈을 만들지 못했다 — 시작을 거부한다(exit 2): \(error.localizedDescription)")
+            exit(2)
+        }
+        setenv("CFFIXED_USER_HOME", sandbox.path, 1)
+        // 재지정 변수는 문서화가 얕고, 앞으로의 macOS가 이를 무시하면 드라이버의 모든 쓰기가
+        // 실제 홈에 떨어진다. 그래서 확인은 fail-closed다 — 지원 디렉터리가 샌드박스 **안**을
+        // 가리키지 않으면 Store를 만들기도 전에 끝낸다. 끝에 "/"를 붙이는 건 형제 샌드박스
+        // 이름이 접두사로 우연히 겹치는 일을 막는다.
+        guard AppConfig.supportDirectory.path.hasPrefix(sandbox.path + "/") else {
+            print("[샌드박스] 지원 디렉터리가 샌드박스 안을 가리키지 않는다 — 시작을 거부한다(exit 2)")
+            print("  실제로 풀린 지원 디렉터리: \(AppConfig.supportDirectory.path)")
+            drvRemoveSandboxIfOurs(sandbox)
+            exit(2)
+        }
+        print("[샌드박스] 이번 실행의 홈: \(sandbox.path)")
+        print("[샌드박스] 이번 실행의 지원 디렉터리: \(AppConfig.supportDirectory.path)")
+        // 실제 지원 디렉터리는 '실제 홈 + 지원 디렉터리의 샌드박스 기준 상대 경로'로 만든다.
+        // 절대 경로를 두 번째 리터럴로 적으면 두 표기가 어긋나는 날 조용히 실제 데이터를
+        // 잘못 읽게 된다 — 같은 계산은 한 곳에서만(계약 5).
+        let realSupport = URL(fileURLWithPath: realHome
+            + String(AppConfig.supportDirectory.path.dropFirst(sandbox.path.count)))
+        // 시작 상태는 절이 하나라도 돌기 전에 딱 한 번 읽는다 — 끝의 대조 기준은 이 읽기다.
+        let startSnapshot = drvReadSupportDir(realSupport)
+        print("[실제 데이터] 시작 상태 \(startSnapshot.count)개 파일 — \(realSupport.path)")
+
+        // 시한은 명령줄 인자 하나로 덮는다(짧은 기한 시험용). 해석이 안 되는 값으로 시험을
+        // 중단시키는 대신 기본값으로 돈다 — 시험 편의를 위해 기본 보증(시간이 묶여 있다)을
+        // 깨는 방향이면 안 되기 때문이다.
+        let deadlineArg = CommandLine.arguments.dropFirst().first
+        let drvDeadlineSeconds: Int
+        if let s = deadlineArg.flatMap({ Int($0) }), s > 0 { drvDeadlineSeconds = s }
+        else {
+            if let a = deadlineArg {
+                print("[시한] 인자 '\(a)'를 초로 읽지 못한다 — 기본 \(drvDeadlineDefaultSeconds)초로 돈다")
+            }
+            drvDeadlineSeconds = drvDeadlineDefaultSeconds
+        }
+        // 타이머는 메인 액터 밖에서 돈다 — 주 스레드가 동기 호출에 묶여 있어도(2026-09-23의
+        // SecItemCopyMatching) 시한은 흘러야 한다. 클로저는 잡은 값만 쓰고 공유 상태를
+        // 건드리지 않는다.
+        DispatchQueue.global().asyncAfter(deadline: .now() + Double(drvDeadlineSeconds)) {
+            print("[시한] \(drvDeadlineSeconds)초를 넘겼다 — 샌드박스: \(sandbox.path)")
+            drvFinishOnce(start: startSnapshot, realSupport: realSupport, sandbox: sandbox,
+                          deadlineFired: true, removeSandbox: false)
+        }
+
         let store = Store(notifications: NotificationManager())
         // 캘린더 푸시를 끈다 — 개발 기기의 실제 config.json엔 구글 연동이 켜져 있어,
         // 시험용 이벤트 하나를 pushToCalendar하다 OAuth 대화상자(키체인)에서 무기한 멈춘
         // 적이 있다. 캘린더 등록 결과를 보는 단언은 없으므로 꺼도 판정이 변하지 않는다.
         store.config.autoAddToCalendar = false
+        // 구글 클라이언트 ID도 비운다 — 샌드박스에는 config.json이 없어 AppConfig.load()가
+        // 내장 기본값을 주는데 그 ID는 차 있다. ID가 살아 있으면 googleConnected의 단락
+        // 평가가 Keychain.get까지 흘러 2026-09-23처럼 SecItemCopyMatching에서 무기한 멈출
+        // 수 있다. N절은 자기가 저장한 값(여기선 빈 문자열)을 그대로 되돌리므로 이 불변식은
+        // 절이 지나도 깨지지 않는다.
+        store.config.googleClientID = ""
         func fresh() -> AIAssistant { AIAssistant(store: store, location: LocationManager()) }
 
         // 위 한 줄은 **전역 불변식**이다 — 드라이버가 도는 내내 거짓이어야 한다. 한 번 깨지면
@@ -185,7 +327,23 @@ struct Drv {
             ai.drvCheck("불변식: \(where_) 뒤에도 autoAddToCalendar는 꺼져 있다",
                         !store.config.autoAddToCalendar,
                         "켜져 있다 — 이 시점 이후 절들이 실제 캘린더에 쓴다")
+            // 키체인 게이트(clientID)도 같이 잰다 — 게이트가 열려 있으면 단락 평가가
+            // Keychain.get까지 가고, 이 드라이버 환경에서 그 호출은 멈춤이었다(2026-09-23).
+            ai.drvCheck("불변식: \(where_) 뒤에도 구글 캘린더 게이트는 닫혀 있다",
+                        !store.config.hasGoogleCalendar,
+                        "clientID가 차 있다 — googleConnected가 Keychain.get까지 갈 수 있다")
+            // 게이트 밖 삭제·수정 경로는 googleEventId를 가진 레코드에서만 불린다. 드라이버는
+            // 지금 그 경로를 부르지 않지만, 뒤에 추가될 절이 gid 레코드와 함께 들어오면
+            // 키체인 대화상자로 드러나기 전에 여기서 붉게 드러나야 한다.
+            ai.drvCheck("불변식: \(where_) 뒤에도 googleEventId를 가진 레코드가 없다",
+                        !store.events.contains { $0.googleEventId != nil }
+                            && !store.activities.contains { $0.googleEventId != nil },
+                        "gid 레코드가 있으면 게이트 밖 경로가 키체인을 건드릴 수 있다")
         }
+
+        // 세팅 직후 머리말에서 바로 한 번 잰다 — 시작부터 불변식이 깨진 형태는 절이 하나라도
+        // 돌기 전에 붉게 나와야 그 뒤 절들의 결과를 읽을 이유가 없다.
+        drvAssertNoCalendarPush(fresh(), "머리말")
 
         // ── A. 현재 값이 0이 아닐 때
         print("\nA. 현재 여유 10분인 시리즈에 buffer 0이 올 때")
@@ -1617,6 +1775,9 @@ struct Drv {
         drvAssertNoCalendarPush(fresh(), "전체 실행")
 
         print("\n\(drvPass)/\(drvPass + drvFail) 통과")
-        exit(drvFail == 0 ? 0 : 1)
+        // 대조·종료 코드·샌드박스 정리까지 전부 이 루틴 하나가 한다 — 단언 실패의 exit 1
+        // 가지도 여기로 접혔다(우선순위: 실제 디렉터리 차이 3 > 시한 124 > 단언 실패 1 > 0).
+        drvFinishOnce(start: startSnapshot, realSupport: realSupport, sandbox: sandbox,
+                      deadlineFired: false, removeSandbox: true)
     }
 }

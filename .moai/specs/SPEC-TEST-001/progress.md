@@ -99,6 +99,18 @@
 - 감사 보고서 3부(`.moai/reports/plan-audit/SPEC-TEST-001-review-1·2·3.md`) 존재 확인. Phase 1 게이트 소비 방식: plan 3회차 PASS 0.89(회차 상한 도달, 감사자 "R3 반영은 판정 불변" 서술)를 최종 판정으로 삼고 재실행하지 않았다 — 리드가 3회차 뒤 run을 디스패치했다(`plan.md` §2 끝).
 - 키체인 고지·맥 앱 금지 안내(AC-002·AC-003 전제)는 M3 직전 운영자에게 별도로 한다.
 
+### M2 — 드라이버 머리말 경화 (2026-09-24, swift-impl 전문가 위임 + run 레인 검증)
+
+- 위임: `hns-besir-app-swift-impl-specialist`(contracts·hazards 스킬 주입). 금지 — 드라이버 실행, `Tools/GuardDriver.swift` 밖 변경, 기존 단언 수정. 준수 보고.
+- 결과: `Tools/GuardDriver.swift` **+162/−1**. 삭제 1줄은 꼬리의 `exit(drvFail == 0 ? 0 : 1)` — 종료 코드 결정이 단일 종료 루틴으로 접혔다.
+- 핵심 줄(편집 후): 시한 상수 `:172`(900초) · 종료 루틴 `drvFinishOnce` `:218-241`(잠금 `:223`) · 가드 삭제 `:203-214`(조건 `:205-210`, `removeItem` `:212`) · `realHome` `:253` · `setenv` `:262` < `Store(` `:305`(AC-001 (1)) · 경로 확인 fail-closed `:267-272` · 시작 스냅숏 `:281` · 기한 인자 `:287-295` · 타이머 `DispatchQueue.global().asyncAfter` `:299`(메인 액터 밖, AC-004 (6)) · `googleClientID = ""` `:315`(N-1 기존 `:1421` — AC-003 (1)·(2)) · 불변식 호출 3자리 `:346`·`:1500`·`:1775`(AC-003 (3)).
+- 설계 선택(이유 한 줄씩): `exit` 채택(버퍼를 비운다 — 124·3의 이유가 로그에 남아야 AC가 출력으로 판정한다) · 종료 루틴 잠금을 풀지 않는다(먼저 온 쪽이 exit할 때까지 잠금을 쥐면 늦은 쪽은 잠금에서 프로세스와 함께 끝난다 — 풀면 루틴 밖으로 새어 나가 잘못된 exit를 할 수 있다) · 기한 인자 해석 실패 → 한 줄 고지 후 기본값(시험 편의를 위해 기본 보증을 깨는 방향이면 안 된다) · 900초 = 기록된 완주 433초의 약 2.1배 · 셈법 **205 + 7 = 212**(k=7 — 머리말 자리 3 + 기존 두 자리에 2씩; REQ-002 대조는 drvCheck를 거치지 않는다).
+- 전문가 검증: 연결 타입체크(`swiftc -typecheck`, 바이너리 없음) **exit 0** — 드라이버 파일 경고 0·동시성 진단 0(`-strict-concurrency=complete`에서도 신규 코드 진단 0, 기존 `drvPass/drvFail` 선언 2건만). 탐침 `probe_home_m2`로 `/var`→`/private/var` 심볼링크 정규화가 `hasPrefix` 가드를 우회하지 않음을 실측.
+- run 레인 재검증(직접): `git status --short` = ` M Tools/GuardDriver.swift` 유일 · `git diff --quiet 2a37673 -- Shared/ project.yml proxy/` exit 0 · `CFFIXED_USER_HOME` grep 1줄 · 불변식 호출부 grep 정확히 3줄 · `googleClientID = ""` 2줄 · 지워진 `drvCheck(` 0줄 · 새 코드 영역(`:165-324`)과 꼬리(`:1760-1783`) 직독.
+- IDE 진단 주석: SourceKit이 이 파일을 단독 분석해 `Cannot find type 'AIAssistant'` 등을 띄우는데, 이 파일은 원래 Shared 소스와 이어붙여야 컴파일되는 설계다(머리말 `:11-16`) — 기대된 노이즈. 실제 판정은 연결 타입체크와 M3 신선 컴파일이 한다.
+- 렌즈 행감 예고(M5): `drvDiffSupportDir`은 "있으나 읽기 실패(nil 바이트)"와 "없음"을 같은 상태로 센다 — 읽을 수 있는 파일의 생성·삭제·변경은 전부 잡히고, 실제 디렉터리에는 하위 디렉터리·읽기 불가 항목이 없다(M1 관측). 이 미세한 간극을 `code-safety` 렌즈가 판정한다.
+- git 밖 산출물(REQ-008 목록): `/tmp/gd-t8-m2-typecheck.swift`(바이너리 미생성) · `.moai/state/verify/t8/probe_home_m2.swift`·동명 바이너리 · `.moai/state/verify/t8/hazards-SKILL-pre-edit.md`(M4 편집 전 사본).
+
 (M3부터: 드라이버 실행마다 명령 원문·종료 코드·출력 꼬리·바깥 대조·운영자 키체인 답을 이어 붙인다)
 
 ## §E.3 Run-phase Audit-Ready Signal
