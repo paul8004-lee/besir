@@ -116,7 +116,7 @@ struct AddEventView: View {
             // 저장 중에는 라벨이 스피너로 접혀 이름이 사라진다 — VoiceOver는 여전히 무슨 버튼인지
             // 알아야 한다.
             .accessibilityLabel(editing == nil ? "추가" : "저장")
-            .disabled(!(card?.isReady ?? false))
+            .disabled(!(card?.isReady ?? false) || saving)
         }
         .padding()
     }
