@@ -9,7 +9,7 @@
 > 아래는 세션 `Besir 앱 세션 동기화`(로컬 세션, cwd `~/Projects/besir`)의 실제 진행 내역을 읽어 갱신한 최신 상태다. **Phase 0(AI 파이프라인)은 최초 계획과 다른 아키텍처로 이미 완료됐고, 그 사이 계획에 없던 be on-time sir 고도화 작업이 상당량 추가로 진행됐다.**
 
 - **be on-time sir**: 완성 + 고도화 진행 중. 일정 등록→이동시간 역산→출발알람→카카오맵 경로선→구글 캘린더 양방향 동기화까지 안정 동작. 여기에 더해 **즐겨찾기 장소, 출퇴근 왕복+점심 이동을 포함한 복합 반복 일정, AI 대화 기록 영구 저장, 월/주/일 통합 스와이프 캘린더 UI(드래그로 5분단위 일정 이동 포함)**까지 이번 세션에서 추가됨(§6 Phase 0.5 참고).
-- **be full sir**: Phase 1 Day 6·7·9·10 완료, **Day 8(배달/요리 조사)만 남음**. 전용 화면 `FullSirView`(기준 위치=현재 위치 또는 오늘 일정의 목적지 → 카카오 로컬 검색 → 고른 식당을 "식사 활동 블록 + 왕복 이동"으로 등록), 일정 상세의 "목적지 주변" 섹션, AI 툴 `recommend_meal`까지 동작. **Day 9·10은 계획과 다른 방식으로 구현됐다**(§6 Phase 1 표에 사유 기록) — 신규 `MealSuggestionService` 없이 기존 `PlaceSearch`/`Store.addActivityWithTravel`을 재사용했고, 연결 필드는 `scheduledEventId`가 아니라 `activityId`다. 아직 실기기 확인(Day 12)·코드 검사(Day 11) 전이다.
+- **be full sir**: Phase 1 Day 6·7·9·10·8 전원 완료 — Day 8(배달/요리 조사)은 2026-09-24 종결(결론은 §6 Day 8 행). 전용 화면 `FullSirView`(기준 위치=현재 위치 또는 오늘 일정의 목적지 → 카카오 로컬 검색 → 고른 식당을 "식사 활동 블록 + 왕복 이동"으로 등록), 일정 상세의 "목적지 주변" 섹션, AI 툴 `recommend_meal`까지 동작. **Day 9·10은 계획과 다른 방식으로 구현됐다**(§6 Phase 1 표에 사유 기록) — 신규 `MealSuggestionService` 없이 기존 `PlaceSearch`/`Store.addActivityWithTravel`을 재사용했고, 연결 필드는 `scheduledEventId`가 아니라 `activityId`다. 아직 실기기 확인(Day 12)·코드 검사(Day 11) 전이다.
 - **AI 파이프라인(카카오톡 등에서 공유 텍스트/이미지 → 일정 자동 등록) — 완료, 아키텍처가 최초 계획과 다름**:
   - ~~Anthropic Claude API 배포~~ → **Google Gemini 시도 후 폐기** → Cloudflare Workers AI(`@cf/mistralai/mistral-small-3.1-24b-instruct`) → **현재 OpenAI `gpt-5.6-luna`로 확정(2026-09-12)**.
   - **와이어 포맷은 의도적으로 Gemini `generateContent` 형식을 그대로 유지** — 앱(`AIAssistant.swift`)은 백엔드가 뭐든 몰라도 되고, 백엔드 전환은 프록시의 번역 함수만 고치면 됨. **이 계약을 앞으로도 지킬 것.** 실제로 이번 OpenAI 전환에서 앱 코드는 한 줄도 안 고쳤다 — 계약이 값을 한 첫 사례다.
@@ -205,12 +205,22 @@
 |---|---|---|---|
 | 6 | ✅ **완료(2026-09-10)** — `Models.swift`에 `MealCategory`(외식/배달/요리, `title`·`systemImage`는 `TransportMode`와 같은 형태) + `MealLog` 추가. `Store`에 `@Published var meals` + `meals.json` 로드/저장(`activities` 패턴 그대로) + `addMeal`/`updateMeal`/`deleteMeal`/`recentMeals(limit:)` 추가. `meals`는 시간표 블록이 아니라 이력이므로 `daysWithSchedule`에 넣지 않음(식당까지 가는 이동은 별도 `ScheduledEvent` 담당) | `Shared/Models.swift`, `Shared/Store.swift` | iOS·macOS 빌드 무경고 통과. JSON 왕복은 `Models.swift`를 직접 컴파일한 검증 스크립트로 12항목 확인(빈 배열, 세 카테고리, place/estimatedCost/scheduledEventId의 nil·비nil, loggedAt, 최신 우선 정렬, 모르는 카테고리는 디코드 실패 → 기존 값 유지) |
 | 7 | ✅ **완료(2026-09-11)** — 프록시 `/kakao/local/keyword`에 `category_group_code`·`x`·`y`·`radius`·`sort`·`page` 전달 추가(배포 완료). `PlaceSearch.nearbyPlaces(category:near:radius:limit:)` — FD6(음식점)/CE7(카페) 거리순. `EventDetailView`에 "목적지 주변" 섹션(펼쳤을 때만 조회 — 상세 열 때마다 장소 API를 쓰지 않으려고). 강남역 좌표로 프록시 직접 호출해 결과 확인. **신규 파일 없이** `PlaceSearch.swift`/`Models.swift`에 넣어 xcodegen 재생성(서명 리셋)을 피함. *(원래 계획은 `DirectionsService`와 같은 레벨의 신규 `MealSuggestionService`를 만드는 것이었다 — 위 서명 리셋 문제 때문에 기존 파일에 넣는 쪽으로 바꿨고, Day 10도 같은 이유로 이 결정을 따라갔다.)* | `Shared/PlaceSearch.swift`, `Shared/Models.swift`, `Shared/EventDetailView.swift`, `proxy/src/index.js` | 일정 상세에서 목적지 주변 맛집 리스트 3~5개 표시 확인 |
-| 8 | ⬜ **미완 — Phase 1에서 유일하게 남은 항목(2026-09-12 확인)**. (조사 Day, 구현 없음) 배달/요리 카테고리 조사: 요기요·배민 공식 오픈 API가 개인 개발자에게 열려있는지 웹 검색으로 확인 → 없을 경우 URL scheme 딥링크(`yogiyo://`, `baemin://` 등 존재 여부) 방식으로 결론. 조사 결과를 이 plan.md의 Day 9 항목 아래에 메모로 추가. **현재 `MealCategory.delivery`·`.cooking`은 `Models.swift`에 정의만 돼 있고 이걸 만드는 UI·AI 경로가 없다** — 이 Day의 결론이 나와야 죽은 코드인지 아닌지 판정된다 | `plan.md`(조사 결과 기록) | 배달 카테고리 구현 방식이 확정되어 다음 세션 프롬프트에 바로 쓸 수 있음 |
+| 8 | ✅ **완료(2026-09-24, 조사만 하고 구현 없음)** — 결론: **양사 모두 개인 개발자용 공식 API 없음 → "앱/웹 열어주기(유니버설 링크)" 방식으로 확정**. 배달의민족은 공개 개발자 포털 자체가 없고(배달대행 표준 API·POS 연동은 B2B 파트너 전용), 요기요도 공개 API가 없다(모회사 Delivery Hero의 Restaurant Integration API는 파트너 제한). 커스텀 스킴 `baemin://`·`yogiyo://`은 공식 문서화된 적이 없어 앱 버전이 바뀌면 조용히 끊길 수 있어 채택하지 않는다. 대신 유니버설 링크를 **실측** 확인했다(각 도메인의 `.well-known/apple-app-site-association`): 배민 — 앱 `com.jawebs.baedal`, `/shopDetail` 경로가 앱 오픈 등록; 요기요 — 앱 `com.yogiyo.yogiyoapp`, `/mobile/*` 전 경로가 앱 오픈 등록. 상세 결론은 바로 아래 "Day 8 조사 메모" | `plan.md`(조사 결과 기록) | 배달 카테고리 구현 방식이 확정되어 다음 세션 프롬프트에 바로 쓸 수 있음 |
 | 9 | ✅ **완료(2026-09-12)** — `AIAssistant`에 `recommend_meal` 툴 추가(선언 `AIAssistant.swift:604`, 실행 `executeRecommendMeal`). Day 7의 `PlaceSearch.nearbyPlaces`를 그대로 재사용하고 **Gemini 형식 툴 선언 계약 유지**(§3). **인자가 계획과 다르다**: 계획의 `budget`은 넣지 않았다 — `expenses`는 Phase 3라 주입할 데이터가 아직 없다. 최근 `meals` 이력 주입도 하지 않았다(요청당 고정 토큰을 10,701→5,804로 줄인 직후라 되늘리지 않으려고). 대신 `keyword`/`category`(restaurant·cafe)/`at_iso`/`place_query`/`radius_meters`로 갔고, 기준 위치는 `place_query` → `at_iso`(그 시각에 있을 장소) → 현재 위치 순으로 떨어진다 — 실사용에서 "이따 강남 갔을 때 근처" 형태가 예산보다 훨씬 자주 나왔다 | `Shared/AIAssistant.swift` | AI 채팅에 "저녁 뭐 먹을까"로 물으면 추천 응답 1회 성공 |
 | 10 | ✅ **완료(2026-09-12)** — 계획의 `MealSuggestionService`+`Store.addEvent` 대신 **신규 화면 `FullSirView.swift`** + 기존 `Store.addActivityWithTravel`로 구현. Day 7 직후 들어온 수정 요청(UI 분리·이동수단 분리)을 같이 받느라 경로가 바뀌었다: 식당을 고르면 "식사 활동 블록 + 왕복 이동"이 한 번에 생기고 출발·복귀 이동수단을 각각 고른다. 연결 필드도 계획의 `MealLog.scheduledEventId`가 아니라 **`activityId`** — 묶이는 대상이 이동 일정이 아니라 활동 블록이라서다. 일정을 지우면 아직 안 먹은 기록도 같이 사라진다(`Store.removeUpcomingMeals` → `ScheduleLogic.mealsToRemove`, 이미 지난 식사는 실제 먹은 기록이라 남긴다) | `Shared/FullSirView.swift`(신규), `Shared/Store.swift`, `Shared/RootView.swift` | 추천 선택 → 활동+왕복 이동 등록 + `meals.json` 기록 확인 |
 | 11 | ✅ **완료(2026-09-12)** — 아래 전용 항목 확인. `FullSirView.save()`의 `activityId` 항목은 실제 코드에선 이미 `made.activityId`를 직접 받는 방식이라(제목·시각 재검색 아님) 해당 없음(계획 당시 우려였고 구현은 처음부터 안전하게 됨) | `Shared/Models.swift`, `Shared/Store.swift`, `Shared/PlaceSearch.swift`, `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` | 체크리스트 전 항목 확인 완료 |
 | 12 | ✅ **완료(2026-09-12, 실기기 테스트 결과 아래 기록)** | - | 결과 기록 완료 |
-| 13 | 🟡 **진행 중(2026-09-12)** — Day 12에서 나온 진짜 버그 2건은 그 자리에서 수정·빌드 확인 완료(아래). 남은 건 UX 설계 결정 2건(사용자 확인 대기)과 Day 8(배달/요리 조사, 여전히 미완) | `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` | 버그 수정 완료 + 사용자 확인 후 STATUS.md 갱신 |
+| 13 | 🟡 **진행 중(2026-09-12)** — Day 12에서 나온 진짜 버그 2건은 그 자리에서 수정·빌드 확인 완료(아래). 남은 건 UX 설계 결정 2건(사용자 확인 대기). Day 8은 2026-09-24 종결(§6 Day 8 행) | `Shared/FullSirView.swift`, `Shared/AIAssistant.swift` | 버그 수정 완료 + 사용자 확인 후 STATUS.md 갱신 |
+
+**Day 8 조사 메모 (2026-09-24) — 배달/요리 카테고리 구현 방식 결론. 다음 세션 프롬프트에 이 블록을 그대로 쓴다.**
+
+- **공식 오픈 API: 배달의민족·요기요 둘 다 개인 개발자 대상 제공 없음.** 배민은 공개 개발자 포털이 없고 존재하는 API(배달대행 주문 표준 API 2023.11, POS·ERP 연동)는 전부 B2B 파트너용. 요기요는 공개 API가 없고 모회사 Delivery Hero의 Restaurant Integration API도 파트너 제한. 스크래핑 서드파티(유료)는 비공식이라 약관 위험 — 쓰지 않는다.
+- **커스텀 URL 스킴(`baemin://`, `yogiyo://`): 공식 문서화된 적 없음 → 의존하지 않는다.** 무문서 스킴은 앱 업데이트로 조용히 끊길 수 있어 계약 없이 쓸 대상이 아니다.
+- **확정 구현 방식 — 유니버설 링크(웹 URL) 열기.** 실측 근거(각 사이트의 `.well-known/apple-app-site-association`를 2026-09-24에 직접 받아 확인):
+  - 배달의민족: 앱 ID `L2VVJTXV3R.com.jawebs.baedal`, 앱 오픈 등록 경로 `/shopDetail`, `/shopDetail/menuDetail` (도메인 `baemin.com`, 응답 200)
+  - 요기요: 앱 ID `URTQLGEF74.com.yogiyo.yogiyoapp`, 앱 오픈 등록 경로 `/mobile/*` 전체(카카오 OAuth 페이지 제외) (도메인 `yogiyo.co.kr`, 응답 302→/mobile)
+  - 동작: iOS `UIApplication.open` / macOS `NSWorkspace.open`으로 해당 https URL을 열면 앱이 설치돼 있으면 앱이, 없으면 모바일 웹이 뜬다. besir는 메뉴·주문 데이터를 전혀 다루지 않는다(외부 앱으로 보내기만).
+- **`MealCategory.delivery`·`.cooking` 판정**: 죽은 코드가 아니라 **예약 값으로 유지**. `.delivery`는 위 방식(외부 열기)을 붙일 때, `.cooking`은 요리 식사 기록을 붙일 때 쓴다. 지우지 않는다. 배달 카테고리 UI를 언제 붙일지는 별도 기획(Phase 1 완료 기준에는 포함돼 있지 않았다).
 
 **Phase 1 전용 코드 검사 항목(Day 11)** — *구현이 계획과 달라져 항목도 실제 코드 기준으로 교체함(2026-09-12)*:
 - [ ] `PlaceSearch.nearbyPlaces`가 `DirectionsService`와 같은 프록시 호출 관례(`config.proxyRequest`)를 따르는지 — 계획의 `MealSuggestionService`는 만들지 않았다(xcodegen 재생성=서명 리셋을 피하려고 기존 파일에 넣음)
@@ -223,7 +233,7 @@
   `o200k_base`로 인코딩해 합산. 시스템 프롬프트나 툴 선언을 고치면 같은 방법으로 다시 잰다.
   옛 5,804는 **측정 방법이 기록돼 있지 않아 이 숫자와 비교할 수 없다** — 더하거나 빼지 말고 이 기준선을 쓴다.
   (같은 트리를 두 번 쟀을 때 툴 선언이 2,895/2,899로 ±4 갈렸다. 직렬화 방식 차이이며, 위 측정법을 명시한 이유다.)
-- [ ] `MealCategory.delivery`·`.cooking`이 어느 경로로도 생성되지 않는 상태 — Day 8 결론 전까지는 죽은 코드로 지우지 말 것
+- [x] `MealCategory.delivery`·`.cooking` 판정 — Day 8 결론(2026-09-24, 위 메모): 죽은 코드 아님, 예약 값으로 유지. 지우지 않는다
 
 **Phase 1 전용 실기기 테스트 시나리오(Day 12)** — *실제 UI 기준으로 교체함(2026-09-12)*, **사용자가 실기기에서 직접 확인한 결과(2026-09-12)를 반영**:
 - [x] 일정 상세의 "목적지 주변" 섹션 — 정상 동작. **다만 사용자 피드백**: 이동 일정보다 활동 일정 쪽에 있는 게 더 자연스러워 보인다는 의견 → UX 결정 필요(아래 "남은 결정" 참고)
@@ -543,7 +553,7 @@ run 인계 11건 중 하나(§Phase 1.7 t3 행 갱신)는 이 sync에서 처리�
 
 ## 7. 리스크 / 열린 질문
 
-- **배달앱(요기요/배민) 공식 API**: 개인 개발자 개방 여부 미확인 — Day 8에서 조사 후 딥링크 대안으로 스코프를 낮출 가능성 높음.
+- **배달앱(요기요/배민) 공식 API — 종결(2026-09-24, Day 8)**: 양사 모두 개인 개발자 개방 없음 확인. 유니버설 링크로 앱/웹을 여는 방식으로 확정(§6 Day 8 조사 메모). 예상대로 스코프가 낮아졌다.
 - **금융 API(토스 등)**: 마이데이터 사업자 등록 없이는 공식 연동 불가 가능성 높음 — be rich sir는 애초에 "수동 입력 + 분석"으로 스코프를 낮춤(Phase 3 설계에 반영됨).
 - **OpenAI 사용 비용**: 작업당 약 6원(luna, 고정 5,804토큰 기준)까지만 실측됐고 **월 총액은 미실측**. be full/healthy/fun sir의 AI 추천 툴이 추가되면 호출량이 늘어나므로 Phase 5(Day 34)에서 실사용 기준으로 재점검하고 OpenAI 대시보드에 월 한도를 건다. 프록시는 `APP_TOKEN`만 있으면 누구나 부를 수 있어 **레이트리밋이 곧 비용 방어**다.
 - **백엔드가 하나뿐이라 폴백이 없다(2026-09-13~)**: `OPENAI_KEY`가 빠지거나 `OPENAI_MODEL`("gpt-5.6-luna")이 폐지되면 `/ai/chat`이 그대로 끊긴다(키 없음은 503 `openai_key_missing`, 모델 폐지는 `openai_error`). AI 채팅이 안 될 때 **가장 먼저 확인할 지점**이고, 조치는 `proxy/src/index.js`의 `OPENAI_MODEL` 한 줄 교체다.
