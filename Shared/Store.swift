@@ -265,26 +265,30 @@ final class Store: ObservableObject {
     /// 재등록은 인라인 `try? createEvent`가 아니라 업로드 큐로 보낸다 — 인라인은 실패를 그냥 삼켜서
     /// 편집 자리에 아무 신호가 없었다(2026-09-24 전수 검사 결함 C4). 큐는 pending/failed를 레코드에
     /// 남기고 성공의 gid도 스스로 채운다(updateEvent·updateRecurringSeries와 같은 I1·N2 패턴).
-    /// gid는 저장 *전에* 비운다 — 큐는 gid 없는 레코드만 올리므로 죽은 gid가 남어 있으면 재등록이
-    /// 누락되고, 원격에서 지워진 gid를 붙잡고 있으면 다음 동기화가 매핑 어긋남으로 중복을 만든다.
+    /// gid는 원격 삭제가 끝난 뒤에, 레코드가 아직 그 gid일 때만 비운다 — 저장 직후 비우면 sync의
+    /// 묘비 스냅샷(fetch 직후에 고정)이 그 gid를 못 보고 옛 원격 사본을 새 활동으로 되살린다(영구
+    /// 유령 — 2026-09-25 sync 판정 D3). 큐의 "gid 없는 레코드만 올린다" 가드는 enqueue 직전 소거로
+    /// 만난다. 재등록은 autoAdd와 무관하게 한다 — 이미 캘린더에 들어가기로 한 레코드라 autoAdd로
+    /// 막으면 편집이 사본을 지우기만 하고 복구 경로가 없다(같은 판정 D2, 운영자 결정). 큐의
+    /// wantsCalendarSync 가드는 그대로 존중되고 실패는 .failed로 설정 화면에 뜬다.
     /// 연결됐을 때만 건드린다 — 미연결이면 원격 삭제가 어차피 실패하는데 gid만 비우면 재연결 뒤
     /// 매핑 상실로 중복이 생긴다(updateRecurringSeries와 같은 이유).
     func updateActivity(_ updated: ActivityBlock) {
         guard let idx = activities.firstIndex(where: { $0.id == updated.id }) else { return }
         let old = activities[idx]
-        var toStore = updated
-        let reRegister = googleConnected && old.googleEventId != nil
-        if reRegister { toStore.googleEventId = nil }
-        activities[idx] = toStore
+        activities[idx] = updated
         activities.sort { $0.startDate < $1.startDate }
         saveActivities()
-        if reRegister, let gid = old.googleEventId {
-            Task {
-                await removeFromCalendar([gid])
-                if config.autoAddToCalendar {
-                    enqueueCalendarUpload(activityIDs: [updated.id])
-                }
-            }
+        guard googleConnected, let gid = old.googleEventId else { return }
+        Task {
+            await removeFromCalendar([gid])
+            // await 뒤 배열이 바뀌었을 수 있으니 다시 찾는다. 그 사이 gid가 이미 바뀌었다면(다른
+            // 경로가 재등록을 마친 경우 등) 더 손대지 않는다.
+            guard let i = activities.firstIndex(where: { $0.id == updated.id }),
+                  activities[i].googleEventId == gid else { return }
+            activities[i].googleEventId = nil
+            saveActivities()
+            enqueueCalendarUpload(activityIDs: [updated.id])
         }
     }
 
@@ -1387,7 +1391,9 @@ final class Store: ObservableObject {
         for var r in remote.events {
             guard let gid = r.googleEventId else { continue }
             if events.contains(where: { $0.googleEventId == gid }) { continue }
-            if tombstones.contains(gid) { continue }   // besir에서 지운 것은 되살리지 않는다
+            // besir에서 지운 것은 되살리지 않는다 — 스냅샷은 fetch 직후에 고정되므로 이번 라운드
+            // 도중에 적립된 묘비는 실시간 집합에서 본다(2026-09-25 sync 판정 D3).
+            if tombstones.contains(gid) || deletedGoogleEventIds.contains(gid) { continue }
             await applyEstimate(to: &r)   // 출발시각 계산 + 이 기기에 알림 예약
             events.append(r)
         }
@@ -1422,7 +1428,9 @@ final class Store: ObservableObject {
         for r in remote.activities {
             guard let gid = r.googleEventId else { continue }
             if localActivities.contains(where: { $0.googleEventId == gid }) { continue }
-            if tombstones.contains(gid) { continue }   // besir에서 지운 것은 되살리지 않는다
+            // besir에서 지운 것은 되살리지 않는다 — 스냅샷은 fetch 직후에 고정되므로 이번 라운드
+            // 도중에 적립된 묘비는 실시간 집합에서 본다(2026-09-25 sync 판정 D3).
+            if tombstones.contains(gid) || deletedGoogleEventIds.contains(gid) { continue }
             let isDuplicate = localActivities.contains {
                 $0.title == r.title
                     && abs($0.startDate.timeIntervalSince(r.startDate)) < 60
