@@ -339,7 +339,9 @@ struct EventDetailView: View {
             VStack(alignment: .leading, spacing: 10) {
                 row("이동수단", "\(event.mode.title)")
                 row("도착 여유(버퍼)", "\(event.bufferMinutes)분")
-                row("알림", "출발 \(event.notifyLeadMinutes)분 전")
+                // 위 캡션(alarmStatus)은 알림 상태를 사실대로 말하는데 이 행은 무조건 "출발 N분 전"을
+                // 그려 "알림 꺼짐" 캡션과 모순됐다 — 끈 일정에는 받지 않음을 보인다.
+                row("알림", event.wantsNotification ? "출발 \(event.notifyLeadMinutes)분 전" : "받지 않음")
                 if event.recurrenceId != nil {
                     Label("반복 일정", systemImage: "repeat")
                         .font(.caption).foregroundStyle(Theme.muted)

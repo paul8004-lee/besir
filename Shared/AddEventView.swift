@@ -312,6 +312,9 @@ struct AddEventView: View {
                 c.fields.insert(notifyLeadRow(chosen: lastNotifyLead), at: at)
             }
             card = c
+            // 알림 켜짐이 시각 줄 노트(D-3)의 전제라 토글 뒤엔 노트를 다시 조립해야 한다 —
+            // 안 하면 켤 때 경고가 끝까지 안 뜨고 끌 때 경고가 남는다(두 방향을 이 호출이 다 닫는다).
+            syncFieldExtras()
         case "origin_query":
             if value == Self.hereMarker, location.currentLocation == nil {
                 // 위치를 아직 모르는 동안엔 고른 값으로 남기지 않는다 — chosen이 있으면 isReady가
@@ -611,7 +614,7 @@ struct AddEventView: View {
                     depGuess = parsed.date
                 }
                 if depGuess.addingTimeInterval(-lead) <= Date() {
-                    note += " 출발 시각이 이미 지나 출발 알림이 예약되지 않아요."
+                    note += " 알림 시각이 이미 지나 출발 알림이 예약되지 않아요."
                 }
             }
             c.fields[ti].note = note
