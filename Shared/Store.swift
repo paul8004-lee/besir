@@ -1362,6 +1362,9 @@ final class Store: ObservableObject {
             seenActivityGIDs.insert(g); return false
         }
 
+        // 조회 실패(오프라인·토큰 만료·HTTP 오류)는 fetchBesirItems가 예외로 던진다 — 이 조기
+        // 복귀가 로컬 데이터를 지키는 마지노선이다. 실패가 빈 결과로 내려오면 아래 1)이 gid 있는
+        // 일정을 전부 지우고 알림까지 취소한다(2026-09-25 t13 판정 X1).
         guard let remote = try? await gcal.fetchBesirItems() else { save(); return }
         let remoteIDs = Set(remote.events.compactMap { $0.googleEventId })
 

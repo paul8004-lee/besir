@@ -1751,6 +1751,54 @@ struct Drv {
         store.events = []
         store.favorites = psFavBackup
 
+        // ── X2. 캘린더 조회 페이지네이션(카드 t23 X2). fetchBesirItems가 maxResults=250의
+        //    한 페이지만 읽던 탓에 251건째부터는 원격에 있어도 동기화에 보이지 않았다 —
+        //    26주 평일 반복+왕복이면 260건이라 끝 10건이 "없다"로 판정돼 지워진다. collectPages는
+        //    통신을 클로저로 주입받으므로 여기선 통 없이, 결정적으로 검증한다(머리말 규율).
+        //    X1(실패를 빈 결과로 삼키던 것)은 서비스의 통신 경로라 드라이버가 닿지 않는다 —
+        //    빌드와 실기기가 판정한다.
+        let aiX2 = fresh()
+        do {
+            // 250건+nextPageToken → 10건: 쌓이는 양·순서와 토큰의 흐름을 함께 본다.
+            var tokens: [String] = []
+            let big = (1...250).map { ["id": "e\($0)"] as [String: Any] }
+            let tail = (251...260).map { ["id": "e\($0)"] as [String: Any] }
+            let merged = try await GoogleCalendarService.collectPages { tok in
+                tokens.append(tok ?? "nil")
+                return tok == nil ? ["items": big, "nextPageToken": "p2"] : ["items": tail]
+            }
+            aiX2.drvCheck("X2-1: 250+10 두 페이지가 순서 그대로 260건이 된다",
+                          merged.count == 260 && (merged.first?["id"] as? String) == "e1"
+                              && (merged[249]["id"] as? String) == "e250"
+                              && (merged.last?["id"] as? String) == "e260",
+                          "count=\(merged.count) 처음=\(merged.first?["id"] ?? "nil") 끝=\(merged.last?["id"] ?? "nil")")
+            aiX2.drvCheck("X2-4: 페이지 토큰은 nil → p2 순서로만 흐른다",
+                          tokens == ["nil", "p2"], "tokens=\(tokens)")
+            var calls = 0
+            _ = try await GoogleCalendarService.collectPages { _ in
+                calls += 1
+                return ["items": [["id": "one"]]]
+            }
+            aiX2.drvCheck("X2-2: nextPageToken이 없으면 정확히 한 번만 부른다", calls == 1, "calls=\(calls)")
+            // items 키 자체가 없는 200은 실패가 아니라 빈 결과 — 사용자가 원격을 정말 비웠을 때는
+            // 빈 결과로 동기화되어야 한다(X1 fail-closed의 반대 방향 계약).
+            let empty = try await GoogleCalendarService.collectPages { _ in [:] }
+            aiX2.drvCheck("X2-3: items 없는 응답은 빈 결과다(정말 빈 캘린더)", empty.isEmpty, "count=\(empty.count)")
+        } catch {
+            // 위 세 갈래는 어느 쪽도 던질 이유가 없다 — 여기에 오면 collectPages 자체가 깨진 것이다.
+            aiX2.drvCheck("X2-0: 던질 이유 없는 갈래가 오류를 냈다", false, "\(error)")
+        }
+        // 페이지 수집 중 오류는 밖으로 나와야 한다 — 삼키면 '읽다가 실패'와 '뒤 페이지 없음'이
+        // 같아져 X1의 반대편 결함이 다시 생긴다.
+        var propagated = false
+        do {
+            _ = try await GoogleCalendarService.collectPages { tok in
+                if tok == nil { return ["nextPageToken": "boom"] }
+                throw GoogleCalendarService.GoogleError(message: "드라이버 시험용 오류")
+            }
+        } catch { propagated = true }
+        aiX2.drvCheck("X2-5: fetchPage가 던지면 collectPages 밖으로 그대로 나온다", propagated, "오류가 조용히 사라졌다")
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.

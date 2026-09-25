@@ -96,23 +96,51 @@ final class GoogleCalendarService: NSObject {
         let hasReminder: Bool
     }
 
-    /// besir가 만든 캘린더 항목을 한 번의 요청으로 받아, 이동 일정·활동·원본 정보로 함께 돌려준다.
+    /// besir가 만든 캘린더 항목을 페이지를 넘겨가며 받아, 이동 일정·활동·원본 정보로 함께 돌려준다.
     /// (예전엔 이동 일정만 복원했고 활동은 아무도 대조하지 않아, 캘린더에만 남은 활동이 정리되지 않았다.)
+    ///
+    /// 조회 실패(오프라인·토큰 만료·HTTP 오류·깨진 본문)는 빈 결과가 아니라 예외로 던진다 —
+    /// 동기화는 빈 결과를 "원격이 정말 비었다"로 읽어 로컬 일정을 지우고 알림까지 취소하므로
+    /// (2026-09-25 t13 판정 X1), 실패를 빈 척 삼키면 오프라인 콜드스타트 한 번으로 로컬
+    /// 데이터가 통째로 지워진다. 정말 비어 있는 캘린더(200 + items 없음/빈 배열)만 빈 결과다.
     func fetchBesirItems() async throws -> (events: [ScheduledEvent], activities: [ActivityBlock], all: [RemoteItem]) {
-        guard isConnected, let token = try? await accessToken(allowInteractive: false) else { return ([], [], []) }
-        var comps = URLComponents(string: base)!
-        comps.queryItems = [
-            .init(name: "privateExtendedProperty", value: "besir=1"),
-            .init(name: "maxResults", value: "250"),
-            .init(name: "singleEvents", value: "true"),
-            .init(name: "showDeleted", value: "false")
-        ]
-        let (data, resp) = try await send("GET", url: comps.url!, token: token, json: nil)
-        guard (resp as? HTTPURLResponse)?.statusCode == 200,
-              let items = json(data)?["items"] as? [[String: Any]] else { return ([], [], []) }
+        guard isConnected else { throw GoogleError(message: "구글 계정 미연결") }
+        let token = try await accessToken(allowInteractive: false)
+        let items = try await Self.collectPages { pageToken in
+            var comps = URLComponents(string: base)!
+            comps.queryItems = [
+                .init(name: "privateExtendedProperty", value: "besir=1"),
+                .init(name: "maxResults", value: "250"),
+                .init(name: "singleEvents", value: "true"),
+                .init(name: "showDeleted", value: "false")
+            ]
+            if let pageToken { comps.queryItems?.append(.init(name: "pageToken", value: pageToken)) }
+            let (data, resp) = try await send("GET", url: comps.url!, token: token, json: nil)
+            let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+            guard code == 200 else { throw GoogleError(message: "캘린더 조회 실패 (\(code))") }
+            // 200인데 본문을 못 푸는 건 "비어 있다"가 아니라 깨진 응답이다 — 실패로 던진다.
+            guard let obj = json(data) else { throw GoogleError(message: "캘린더 응답 해석 실패") }
+            return obj
+        }
         return (items.compactMap { parse($0) },
                 items.compactMap { parseActivity($0) },
                 items.compactMap { remoteItem($0) })
+    }
+
+    /// 페이지 모으기: `fetchPage`에 페이지 토큰을 넘겨 `nextPageToken`이 끊길 때까지 돌아
+    /// `items`를 쌓는다. 왜 도우미인가 — 26주 평일 반복에 왕복까지 붙으면 260건이라 maxResults
+    /// 250의 한 페이지로는 끝 10건이 아예 조회되지 않았고(t23 X2), 그러면 동기화가 "원격에
+    /// 없다"로 읽어 로컬을 지운다. 통신을 클로저로 주입받는 구조라 가드 드라이버가 통 없이
+    /// 이 루프만은 결정적으로 검증할 수 있다.
+    static func collectPages(_ fetchPage: (String?) async throws -> [String: Any]) async throws -> [[String: Any]] {
+        var items: [[String: Any]] = []
+        var pageToken: String?
+        repeat {
+            let page = try await fetchPage(pageToken)
+            items += (page["items"] as? [[String: Any]]) ?? []
+            pageToken = page["nextPageToken"] as? String
+        } while pageToken != nil
+        return items
     }
 
     /// 이 이벤트의 알림을 모두 끈다(besir 앱에서만 알리기 위함).
