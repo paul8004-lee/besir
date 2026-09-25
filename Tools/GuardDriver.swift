@@ -133,6 +133,17 @@ extension AIAssistant {
     }
     /// 일반명사 목록 snapshot(Y절 — 게이트 범위 확인용).
     static func drvGenericPlaceWords() -> Set<String> { genericPlaceWords }
+    /// t16절 — 검색 첫 결과 채택 판정(정적 술어라 검색 없이 결정적이다).
+    static func drvTopMatches(_ query: String, name: String, address: String = "") -> Bool {
+        searchTopClearlyMatches(query: query,
+                                result: Place(name: name, address: address, latitude: 37.5, longitude: 127.0))
+    }
+    /// t16절 — 애매 후보 되묻기 카드를 검색 없이 직접 연다(후보를 주입해 검증 — 실검색 연동은
+    /// MapKit이라 드라이버에서 결정적일 수 없고 실기기 항목으로 넘긴다).
+    func drvPark(_ tool: String, _ input: [String: Any],
+                 _ unclear: [(key: String, query: String, candidates: [Place])]) -> String {
+        parkForUnclearPlaces(tool: tool, input: input, unclear: unclear)
+    }
     static func drvStated(_ utterance: String) -> [String: Any] { statedArguments(from: utterance) }
     func drvToolsJSON() -> [[String: Any]] { toolsJSON() }
     func drvExecuteTool(_ name: String, _ input: [String: Any]) async -> String {
@@ -1025,10 +1036,18 @@ struct Drv {
                              "mode_this_time": "car", "travel_mode_this_time": "car",
                              "return_mode_this_time": "car", "buffer_minutes": 10,
                              "notify_lead_minutes": 10])
+        // t16(2026-09-24 관측): 모델이 travel_from_query를 채워 보내면 줄이 안 떠 '가는 편 없음'
+        // 칩을 고를 방법이 없었다 — 왕복 호출에서는 값이 차 있어도 출발지 줄을 띄운다.
+        let t3Outbound = t3?.fields.first { $0.key == "travel_from_query" }
         aiT.drvCheck("D2: create_activity도 가는 편·오는 편·여유·알림을 다시 묻는다",
-                     Set(t3?.fields.map(\.key) ?? []) == ["travel_mode_this_time", "return_mode_this_time",
+                     Set(t3?.fields.map(\.key) ?? []) == ["travel_from_query", "travel_mode_this_time",
+                                                          "return_mode_this_time",
                                                           "buffer_minutes", "notify_lead_minutes"],
                      "keys=\(t3?.fields.map(\.key) ?? [])")
+        aiT.drvCheck("D2: 값이 차 있어도 뜬 가는 편 줄에 탈출 칩과 '왜 다시 묻는지' 캡션이 있다",
+                     t3Outbound?.options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true
+                        && t3Outbound?.note?.contains("가는 편 없음") == true,
+                     "options=\(t3Outbound?.options.map(\.value) ?? []) note=\(t3Outbound?.note ?? "nil")")
         aiT.drvCheck("D2: 활동 쪽 모델 값 다섯도 정화된다",
                      Set(AIAssistant.drvCallArgs(t3).keys)
                         .isDisjoint(with: ["mode_this_time", "travel_mode_this_time",
@@ -1798,6 +1817,165 @@ struct Drv {
             }
         } catch { propagated = true }
         aiX2.drvCheck("X2-5: fetchPage가 던지면 collectPages 밖으로 그대로 나온다", propagated, "오류가 조용히 사라졌다")
+
+        // ── AA. t16(C7 1차·AI측) — 장소 해석. 같은 이름이 여러 줄에 오면 줄을 띄워 지점을 고르게
+        //        하고(AC-009 7·9번), 검색 첫 결과가 이름과 맞지 않으면 후보 카드로 되묻는다(U-4),
+        //        출발지=목적지 반복은 머무는 반복 활동으로 만든다('집에서 점심식사'→통근 76건).
+        //        검색 자체(MapKit)에 의존하는 갈래만 빼고 전부 결정적이다 — 토큰 판정은 정적 술어,
+        //        되묻기 카드는 후보를 주입해 연다.
+        print("\nAA. t16 — 같은 이름 줄·채택 판정·머무는 반복·애매 후보 되묻기 (U-4·AC-009 7·9)")
+        store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000)),
+                           FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))]
+        // AA-1: 채택 판정 — 관측 두 사례(홍대점→대학로점, 강남→선릉과정릉)는 물어보고, 접미어가
+        //       다른 같은 지점(홍대역/홍대입구역)은 조용히 채택한다.
+        let aaT = fresh()
+        aaT.drvCheck("AA-1: '스타벅스 홍대점'→'스타벅스 대학로점'은 맞지 않는다(물어본다)",
+                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 대학로점") == false)
+        aaT.drvCheck("AA-1: '강남'→'서울선릉과정릉'은 맞지 않는다(2026-09-24 관측)",
+                     AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉") == false)
+        aaT.drvCheck("AA-1: '스타벅스 홍대점'→'스타벅스 홍대입구역점'은 같은 지점으로 본다",
+                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 홍대입구역점") == true)
+        aaT.drvCheck("AA-1: '홍대역'→'홍대입구역'도 같은 지점으로 본다(접미어 '역'은 뗀다)",
+                     AIAssistant.drvTopMatches("홍대역", name: "홍대입구역") == true)
+        aaT.drvCheck("AA-1: 이름에 없는 낱말이 주소에 있으면 거짓 되묻기하지 않는다",
+                     AIAssistant.drvTopMatches("테헤란로 152", name: "OO빌딩", address: "서울 강남구 테헤란로 152") == true)
+        // AA-2: 같은 이름이 출발지·목적지에 오면 두 줄을 다 띄운다(AC-009 7번 — 예전엔 줄이 안
+        //       떠 첫 결과가 두 줄에 같게 잡히고 isSamePlace가 거절로 끝났다).
+        let aaS = fresh()
+        let aaSame = aaS.drvAsk("create_schedule",
+                                ["title": "AA-동일명", "destination_query": "스타벅스",
+                                 "origin_query": "스타벅스", "arrival_iso": "2027-03-15T15:00:00",
+                                 "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aaS.drvCheck("AA-2: 같은 이름이면 목적지·출발지 줄이 함께 뜬다",
+                     Set(aaSame?.fields.map(\.key) ?? []).isSuperset(of: ["destination_query", "origin_query"]),
+                     "keys=\(aaSame?.fields.map(\.key) ?? [])")
+        aaS.drvCheck("AA-2: 두 줄 모두 '왜 떴는지' 캡션을 단다(값이 차 있는 줄이다)",
+                     ["destination_query", "origin_query"].allSatisfy { key in
+                         (aaSame?.fields.first { $0.key == key })?.note?.contains("같은 이름") == true
+                     },
+                     "notes=\(aaSame?.fields.map { "\($0.key):\($0.note ?? "-")" } ?? [])")
+        // 회귀: 즐겨찾기 이름은 좌표가 고정이라 같은 이름 규칙에 안 걸린다(불필요한 재확인 금지).
+        let aaFav = aaS.drvAsk("create_schedule",
+                               ["title": "AA-즐겨", "destination_query": "회사",
+                                "origin_query": "집", "arrival_iso": "2027-03-15T16:00:00",
+                                "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aaS.drvCheck("AA-2: 즐겨찾기끼리는 같은 이름 줄을 띄우지 않는다",
+                     Set(aaFav?.fields.map(\.key) ?? []).isDisjoint(with: ["destination_query", "origin_query"]),
+                     "keys=\(aaFav?.fields.map(\.key) ?? [])")
+        // AA-3: 세 장소 줄이 같은 이름이면 셋 다 뜬다(AC-009 9번 — 이 경로엔 isSamePlace 가드가
+        //       없어 무너지면 0분 구간이 조용히 생긴다).
+        let aaA = fresh()
+        let aaAct = aaA.drvAsk("create_activity",
+                               ["title": "AA-활동", "place_query": "스타벅스",
+                                "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                                "travel_from_query": "스타벅스", "return_to_query": "스타벅스",
+                                "travel_mode_this_time": "walk", "return_mode_this_time": "walk",
+                                "buffer_minutes": 10, "notify_lead_minutes": 10])
+        aaA.drvCheck("AA-3: 활동 장소·가는 편·오는 편 줄이 셋 다 뜬다",
+                     Set(aaAct?.fields.map(\.key) ?? []).isSuperset(
+                        of: ["place_query", "travel_from_query", "return_to_query"]),
+                     "keys=\(aaAct?.fields.map(\.key) ?? [])")
+        aaA.drvCheck("AA-3: 같은 이름으로 뜬 가는 편 줄에도 탈출 칩이 살아 있다",
+                     (aaAct?.fields.first { $0.key == "travel_from_query" })?
+                        .options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true,
+                     "options=\((aaAct?.fields.first { $0.key == "travel_from_query" })?.options.map(\.value) ?? [])")
+        // AA-4: 머무는 반복(집/집)은 수단·여유·알림을 묻지 않는다 — 쓸 구간이 없다.
+        let aaR = fresh()
+        let aaStay = aaR.drvAsk("create_recurring_schedule",
+                                ["title": "AA-점심", "destination_query": "집", "origin_query": "집",
+                                 "weekdays": ["mon", "tue"], "arrival_time": "12:00",
+                                 "return_time": "13:00"])
+        aaR.drvCheck("AA-4: 출발지=목적지 반복은 기간 줄만 묻는다(수단·여유·알림 안 묻는다)",
+                     Set(aaStay?.fields.map(\.key) ?? []) == ["weeks"],
+                     "keys=\(aaStay?.fields.map(\.key) ?? [])")
+        let aaGo = aaR.drvAsk("create_recurring_schedule",
+                              ["title": "AA-통근", "destination_query": "회사", "origin_query": "집",
+                               "weekdays": ["mon", "tue"], "arrival_time": "09:00",
+                               "return_time": "18:00"])
+        aaR.drvCheck("AA-4: 다른 장소 반복은 수단·여유·알림을 묻는다(회귀 방지)",
+                     Set(aaGo?.fields.map(\.key) ?? []) == ["mode_this_time", "buffer_minutes",
+                                                            "notify_lead_minutes", "weeks"],
+                     "keys=\(aaGo?.fields.map(\.key) ?? [])")
+        // AA-5: 머무는 반복 실행 — 이동 구간 없이 활동 블록만 생긴다(76건 통근 사고의 자리).
+        store.events = []
+        store.activities = []
+        let aaE = fresh()
+        let aaStayMade = await aaE.drvCreateRecurring(["title": "AA-점심실행", "destination_query": "집",
+                                                       "origin_query": "집", "weekdays": ["mon", "tue"],
+                                                       "arrival_time": "12:00", "return_time": "13:00",
+                                                       "start_date": "2027-03-01", "weeks": 4])
+        let aaStayBlocks = store.activities.filter { $0.title == "AA-점심실행" }
+        aaE.drvCheck("AA-5: 활동 블록만 만들어지고 이동 구간은 0건이다",
+                     aaStayBlocks.count > 0 && store.events.isEmpty,
+                     "blocks=\(aaStayBlocks.count) events=\(store.events.count) reply=\(aaStayMade)")
+        aaE.drvCheck("AA-5: 요약이 '이동 구간은 만들지 않았다'고 말한다",
+                     aaStayMade.contains("이동 구간은 만들지") == true, aaStayMade)
+        aaE.drvCheck("AA-5: 블록에 반복 그룹이 묶여 있다(일괄 삭제 통로)",
+                     aaStayBlocks.allSatisfy { $0.recurrenceId != nil },
+                     "rids=\(aaStayBlocks.map { $0.recurrenceId?.uuidString ?? "nil" })")
+        // 끝 시각 없는 호출은 만들지 않고 return_time을 요구한다(블록은 끝이 있어야 성립한다).
+        store.activities = []
+        let aaNoEnd = await aaE.drvCreateRecurring(["title": "AA-끝없음", "destination_query": "집",
+                                                    "origin_query": "집", "weekdays": ["mon"],
+                                                    "arrival_time": "12:00", "start_date": "2027-03-01",
+                                                    "weeks": 4])
+        aaE.drvCheck("AA-5: 끝 시각이 없으면 만들지 않고 return_time을 요구한다",
+                     aaNoEnd.contains("return_time") && store.activities.isEmpty,
+                     "reply=\(aaNoEnd) blocks=\(store.activities.count)")
+        // AA-6: 애매 후보 되묻기 카드 — 후보를 주입해 연다(실검색 연동은 실기기 항목).
+        store.events = []
+        store.activities = []
+        let aaP = fresh()
+        let aaParkInput: [String: Any] = ["title": "AA-후보", "destination_query": "스타벅스 홍대점",
+                                          "origin_query": "집", "arrival_iso": "2027-03-17T15:00:00",
+                                          "mode_this_time": "walk", "buffer_minutes": 10,
+                                          "notify_lead_minutes": 10]
+        let aaCand = [Place(name: "스타벅스 대학로점", address: "서울 종로구 대학로", latitude: 37.582, longitude: 127.002),
+                      Place(name: "스타벅스 홍대입구역점", address: "서울 마포구 양화로", latitude: 37.557, longitude: 126.924)]
+        let aaParkReply = aaP.drvPark("create_schedule", aaParkInput,
+                                      [(key: "destination_query", query: "스타벅스 홍대점", candidates: aaCand)])
+        let aaParkedCard = aaP.drvLiveAsk()
+        aaP.drvCheck("AA-6: 모델에게 '아직 등록하지 않았다'고 돌아간다", aaParkReply.contains("아직 등록하지 않았"),
+                     aaParkReply)
+        aaP.drvCheck("AA-6: 보류 카드가 열리고 후보가 줄에 얹혀 있다",
+                     aaParkedCard != nil
+                        && AIAssistant.drvLookup(aaParkedCard?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle) == "results:2",
+                     "lookup=\(AIAssistant.drvLookup(aaParkedCard?.fields.first { $0.key == "destination_query" }?.lookup ?? .idle))")
+        aaP.drvCheck("AA-6: 모호한 질의만 보류 인자에서 비운다(나머지는 그대로)",
+                     (AIAssistant.drvCallArgs(aaParkedCard)["destination_query"] as? String) == ""
+                        && (AIAssistant.drvCallArgs(aaParkedCard)["origin_query"] as? String) == "집",
+                     "args=\(AIAssistant.drvCallArgs(aaParkedCard))")
+        aaP.drvCheck("AA-6: 카드가 제목을 '말씀하신 대로'에 남긴다(runLoop 카드와 같은 문장)",
+                     aaParkedCard?.stated.contains { $0.contains("AA-후보") } == true,
+                     "stated=\(aaParkedCard?.stated ?? [])")
+        // 모델이 같은 호출을 되풀이하면 카드를 두 장 열지 않는다.
+        let aaDedupe = aaP.drvPark("create_schedule", aaParkInput,
+                                   [(key: "destination_query", query: "스타벅스 홍대점", candidates: aaCand)])
+        aaP.drvCheck("AA-6: 카드가 열려 있으면 두 번째 호출은 카드를 더 열지 않는다",
+                     aaDedupe.contains("이미 같은 질문")
+                        && aaP.bubbles.filter { $0.ask != nil }.count == 1,
+                     "reply=\(aaDedupe) cards=\(aaP.bubbles.filter { $0.ask != nil }.count)")
+        // AA-7: 후보를 고르고 확인하면 고른 지점으로 등록된다 — 대학로가 아니라 홍대로.
+        if let destField = aaParkedCard?.fields.first(where: { $0.key == "destination_query" }) {
+            aaP.choose(field: destField.id, place: aaCand[1])
+        }
+        _ = await aaP.drvResolvePendingAsk()
+        let aaCreated = store.events.first { $0.title == "AA-후보" }
+        aaP.drvCheck("AA-7: 고른 후보(홍대)로 등록된다 — 첫 결과(대학로)가 아니다",
+                     aaCreated?.destination.name == "스타벅스 홍대입구역점",
+                     "dest=\(aaCreated?.destination.name ?? "nil") events=\(store.events.count)")
+        // AA-8: 집→집 단발은 기존 isSamePlace 거절이 그대로 산다(머무는 반복으로 바꾸는 건
+        //       반복 도구만 — 단발엔 '한 장소에 머문다'를 표현할 자리가 없다).
+        store.events = []
+        let aaSamePlace = await aaP.drvCreate(["title": "AA-집집", "destination_query": "집",
+                                               "origin_query": "집", "arrival_iso": "2027-03-18T15:00:00",
+                                               "mode_this_time": "walk", "buffer_minutes": 10,
+                                               "notify_lead_minutes": 10])
+        aaP.drvCheck("AA-8: 단발 집→집은 isSamePlace 거절이 살아 있다",
+                     aaSamePlace.contains("같아요") && store.events.isEmpty,
+                     "reply=\(aaSamePlace) events=\(store.events.count)")
+        store.events = []
+        store.activities = []
 
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
