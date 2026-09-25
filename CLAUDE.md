@@ -136,7 +136,7 @@ besir 작업은 명령 이름(`/moai run`이든 자연어 요청이든)이 아�
 
 전부 `⚠️ 테스트용 임시` 주석이 달려 있다.
 
-- `Store.deleteEverythingForTesting()` + [SettingsView.swift:71](Shared/SettingsView.swift#L71)의 "일정 모두 삭제" 블록
+- `Store.deleteEverythingForTesting()` + [SettingsView.swift:72](Shared/SettingsView.swift#L72)의 "일정 모두 삭제" 블록
 - `AIAssistant.transcriptForDebugging()` + [AIChatView.swift:56](Shared/AIChatView.swift#L56)의 대화 복사 버튼
 
 ## AI 백엔드 (2026-09-13 현재)
