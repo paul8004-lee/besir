@@ -729,15 +729,15 @@ struct ConflictBanner: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(title).font(.subheadline).bold()
                     ForEach(Array(conflicts.enumerated()), id: \.offset) { _, c in
-                        Text(label(for: c)).font(.caption).foregroundStyle(.secondary)
+                        Text(label(for: c)).font(.caption).foregroundStyle(Theme.muted)
                     }
                     Text("그래도 저장할 수 있어요. 겹치지 않게 하려면 시각을 조정하세요.")
-                        .font(.caption2).foregroundStyle(.tertiary)
+                        .font(.caption2).foregroundStyle(Theme.faint)
                 }
                 Spacer()
             }
             .padding(10)
-            .background(Theme.warnFill, in: RoundedRectangle(cornerRadius: 8))
+            .background(Theme.warnFill, in: RoundedRectangle(cornerRadius: Theme.radius))
             // 건별 줄을 따로 읽으면 하나의 겹침으로 안 들린다 — 배너를 한 덩어리로 낭독한다
             .accessibilityElement(children: .combine)
         }

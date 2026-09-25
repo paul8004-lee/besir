@@ -20,14 +20,15 @@ struct SettingsView: View {
                 Text(store.config.hasGoogleCalendar
                      ? "끄면 일정 상세에서 직접 추가할 수 있습니다."
                      : "구글 캘린더 연동이 설정되어 있지 않습니다.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Theme.muted)
             }
 
             if store.config.hasGoogleCalendar {
                 if connected {
                     HStack {
                         Label("구글 계정 연결됨", systemImage: "checkmark.circle.fill")
-                            .foregroundStyle(.green).font(.callout)
+                            // 연결됨은 성공·등록 상태 — 시스템 초록 대신 그 의미를 맡은 세이지를 쓴다.
+                            .foregroundStyle(Theme.travel).font(.callout)
                         Spacer()
                         Button("연결 끊기", role: .destructive) {
                             store.gcal.disconnect(); connected = false

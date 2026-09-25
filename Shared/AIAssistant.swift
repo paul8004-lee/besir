@@ -586,7 +586,7 @@ final class AIAssistant: ObservableObject {
     }
 
     /// 시각 줄. 칩으로 값을 열거하지 않는다 — 날짜·시각은 열거 불가능한 값 공간이고 "오늘/내일" 칩은
-    /// 카드가 떠 있는 동안 자정이 지나면 거짓이 된다. 점선 캡슐 → 네이티브 DatePicker 에디터로
+    /// 카드가 떠 있는 동안 자정이 지나면 거짓이 된다. 칩 → 네이티브 DatePicker 에디터로
     /// 직접입력과 같은 문법을 쓰고, 값은 "arr:"/"dep:" 접두 + ISO로 직렬화된다. 도착/출발 기준 칩은
     /// 모델의 options가 아니라 에디터의 일부라 뷰가 그린다.
     private func timeField() -> AskField {

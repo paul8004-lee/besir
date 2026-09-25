@@ -82,7 +82,7 @@ struct AIChatView: View {
                         if assistant.isThinking {
                             HStack {
                                 ProgressView().controlSize(.small)
-                                Text("생각 중…").foregroundStyle(.secondary).font(.callout)
+                                Text("생각 중…").foregroundStyle(Theme.muted).font(.callout)
                                 Spacer()
                             }
                             .id("thinking")
@@ -109,9 +109,11 @@ struct AIChatView: View {
                 if bubble.role == .user { Spacer(minLength: 40) }
                 Text(bubble.text)
                     .padding(.horizontal, 12).padding(.vertical, 8)
+                    // 말풍선도 면이다 — 시스템 대화 앱의 큰 곡률을 빌리지 않고 이 앱의 각진 면 문법을
+                    // 쓴다. 둥근 모양은 칩(Capsule) 문법에만 남겨둔다.
                     .background(bubble.role == .user ? Theme.travel : Theme.raised,
-                                in: RoundedRectangle(cornerRadius: 14))
-                    .foregroundStyle(bubble.role == .user ? .white : .primary)
+                                in: RoundedRectangle(cornerRadius: Theme.radius))
+                    .foregroundStyle(bubble.role == .user ? Theme.bg : Theme.ink)
                     .textSelection(.enabled)
                 if bubble.role == .assistant { Spacer(minLength: 40) }
             }

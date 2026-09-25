@@ -281,6 +281,8 @@ struct EventDetailView: View {
             VStack(spacing: 0) {
                 Image(systemName: step.systemImage)
                     .font(.system(size: 12, weight: .semibold))
+                    // 뱃지 바탕은 API가 준 노선색(콘텐츠)이라 Theme 의미색이 아니다 — 고정 콘텐츠색
+                    // 위 글자는 Theme.bg(다크 모드에서 거의 검정)보다 흰 쪽이 두 모드 다 읽힌다.
                     .foregroundStyle(.white)
                     .frame(width: 26, height: 26)
                     .background(Color(hex: step.color), in: Circle())

@@ -373,7 +373,7 @@ struct ActivityDetailView: View {
 
                 if nearby.isEmpty && !loadingNearby {
                     Text("주변 1km 안에서 찾지 못했어요.")
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.callout).foregroundStyle(Theme.muted)
                 } else {
                     ForEach(nearby) { item in
                         nearbyRow(item)
@@ -381,7 +381,7 @@ struct ActivityDetailView: View {
                 }
             } else {
                 Text("'\(activity?.location?.name ?? "이 장소")' 주변의 \(nearbyCategory.title)을(를) 찾아드려요.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(.caption).foregroundStyle(Theme.muted)
             }
         }
     }
@@ -395,14 +395,14 @@ struct ActivityDetailView: View {
                 Text(item.place.name).font(.subheadline).bold()
                 HStack(spacing: 6) {
                     if !item.category.isEmpty {
-                        Text(item.category).font(.caption).foregroundStyle(.secondary)
+                        Text(item.category).font(.caption).foregroundStyle(Theme.muted)
                     }
                     if let d = item.distanceText {
-                        Text("· \(d)").font(.caption).foregroundStyle(.secondary)
+                        Text("· \(d)").font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
                 if !item.place.address.isEmpty {
-                    Text(item.place.address).font(.caption2).foregroundStyle(.tertiary).lineLimit(1)
+                    Text(item.place.address).font(.caption2).foregroundStyle(Theme.faint).lineLimit(1)
                 }
             }
             Spacer()

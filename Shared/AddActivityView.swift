@@ -571,7 +571,7 @@ struct PlaceField: View {
                     Button("변경") { place = nil }.buttonStyle(.borderless)
                 }
                 .padding(10)
-                .background(Theme.raised, in: RoundedRectangle(cornerRadius: 8))
+                .background(Theme.raised, in: RoundedRectangle(cornerRadius: Theme.radius))
             } else {
                 if !store.favorites.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -588,10 +588,12 @@ struct PlaceField: View {
                     TextField("장소·주소 검색", text: $query)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit { runSearch() }
+                    // 아이콘만 있는 버튼은 VoiceOver가 읽을 문구가 없다 — 무엇을 여는지 직접 말해준다.
                     Button { runSearch() } label: {
                         if searching { ProgressView().controlSize(.small) }
                         else { Image(systemName: "magnifyingglass") }
                     }
+                    .accessibilityLabel("장소 검색")
                 }
                 // 검색 결과는 이름이 겹칠 수 있어 좌표까지 합쳐 구분한다(같은 이름 두 곳이 한 줄로 합쳐지지 않게).
                 ForEach(results, id: \.self) { found in

@@ -244,7 +244,7 @@ struct FullSirView: View {
                 .controlSize(.small)
             }
             if !status.isEmpty {
-                Text(status).font(.caption2).foregroundStyle(.secondary)
+                Text(status).font(.caption2).foregroundStyle(Theme.muted)
             }
         }
         .padding(.vertical, 6)
@@ -285,13 +285,13 @@ struct FullSirView: View {
                         VStack(alignment: .leading, spacing: 1) {
                             Text(meal.title).font(.subheadline)
                             Text("\(meal.category.title) · \(Self.dayFmt.string(from: meal.loggedAt))")
-                                .font(.caption2).foregroundStyle(.secondary)
+                                .font(.caption2).foregroundStyle(Theme.muted)
                         }
                         Spacer()
                         Button {
                             store.deleteMeal(meal.id)
                         } label: {
-                            Image(systemName: "trash").foregroundStyle(.secondary)
+                            Image(systemName: "trash").foregroundStyle(Theme.muted)
                         }
                         .buttonStyle(.borderless)
                     }
@@ -347,7 +347,7 @@ private struct MealScheduleSheet: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(target.place.name).bold()
                         if !target.place.address.isEmpty {
-                            Text(target.place.address).font(.caption).foregroundStyle(.secondary)
+                            Text(target.place.address).font(.caption).foregroundStyle(Theme.muted)
                         }
                     }
                 }
@@ -365,7 +365,7 @@ private struct MealScheduleSheet: View {
                         // (제안은 앞뒤 일정에서 추정한 것이라 늘 맞지는 않는다).
                         PlaceField(title: "출발지", systemImage: "figure.walk.departure", place: $origin)
                         if !originLabel.isEmpty, origin != nil {
-                            Text(originLabel).font(.caption2).foregroundStyle(.secondary)
+                            Text(originLabel).font(.caption2).foregroundStyle(Theme.muted)
                         }
                         Picker("이동수단", selection: $outboundMode) {
                             ForEach(TransportMode.allCases) { m in Text(m.title).tag(m) }
@@ -378,7 +378,7 @@ private struct MealScheduleSheet: View {
                     if addReturn {
                         PlaceField(title: "도착지", systemImage: "house", place: $destination)
                         if !destinationLabel.isEmpty, destination != nil {
-                            Text(destinationLabel).font(.caption2).foregroundStyle(.secondary)
+                            Text(destinationLabel).font(.caption2).foregroundStyle(Theme.muted)
                         }
                         Picker("이동수단", selection: $returnMode) {
                             ForEach(TransportMode.allCases) { m in Text(m.title).tag(m) }

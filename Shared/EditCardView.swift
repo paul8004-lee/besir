@@ -125,7 +125,7 @@ struct EditCardView: View {
                     if field.allowsCustom {
                         // 장소 줄의 그 칩은 이제 빈 칸이 아니라 검색창을 연다 — 이름을 그렇게 적는다.
                         chip(field.kind == .place ? "장소 검색" : "직접입력",
-                             selected: false, dashed: true) { openCustom(field) }
+                             selected: false) { openCustom(field) }
                     }
                 }
 
@@ -179,7 +179,7 @@ struct EditCardView: View {
         draftBasis[field.id] = basis
     }
 
-    /// 시각 줄 몸통 — 기준 칩 한 줄, 그 아래 (미선택) 점선 캡슐 또는 (커밋) 확정 칩 한 줄. 칩으로
+    /// 시각 줄 몸통 — 기준 칩 한 줄, 그 아래 (미선택) 고르기 칩 또는 (커밋) 확정 칩 한 줄. 칩으로
     /// 값을 열거하지 않는 이유는 시각 줄을 만드는 쪽(timeField) 주석에 있다. 둘을 각기 다른
     /// ChipFlow에 두는 이유: 한 흐름에 있으면 시각 칩이 감기는 위치가 폭의 함수가 되어 같은
     /// 카드가 기기 폭·큰 글씨 설정마다 다르게 읽힌다(2026-09-20 사용자 확인 요청 ③).
@@ -207,7 +207,7 @@ struct EditCardView: View {
                         .lineLimit(nil)
                         .fixedSize(horizontal: false, vertical: true)
                 } else {
-                    chip("날짜·시각 고르기", selected: false, dashed: true) { openCustom(field) }
+                    chip("날짜·시각 고르기", selected: false) { openCustom(field) }
                 }
             }
 
@@ -260,8 +260,9 @@ struct EditCardView: View {
     }
 
     /// 칩 하나. 선택 표시를 색에만 맡기지 않는다(체크 글리프 + 글자 굵기) — 색을 구분 못 하면
-    /// 어느 값을 골랐는지 알 방법이 사라진다. 직접입력 칩은 점선 테두리로 성격이 다름을 보인다.
-    private func chip(_ label: String, selected: Bool, dashed: Bool = false, detail: String? = nil,
+    /// 어느 값을 골랐는지 알 방법이 사라진다. 직접입력 칩도 같은 실선이다(2026-09-24 사용자
+    /// 요청으로 통일 — 칩마다 테두리가 다르면 버튼 문법이 흔들린다).
+    private func chip(_ label: String, selected: Bool, detail: String? = nil,
                       action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 4) {
@@ -281,10 +282,7 @@ struct EditCardView: View {
             .padding(.horizontal, 12)
             .frame(minHeight: chipHeight)
             .background(selected ? Theme.travel : Theme.bg, in: Capsule())
-            .overlay(
-                Capsule().strokeBorder(selected ? Color.clear : Theme.line,
-                                       style: StrokeStyle(lineWidth: 1, dash: dashed ? [3, 3] : []))
-            )
+            .overlay(Capsule().strokeBorder(selected ? Color.clear : Theme.line, lineWidth: 1))
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)

@@ -21,15 +21,16 @@ struct FavoritesView: View {
 
             if store.favorites.isEmpty {
                 Text("아직 즐겨찾기가 없습니다. 아래에서 집·회사 같은 장소를 추가해보세요.")
-                    .font(.callout).foregroundStyle(.secondary)
+                    .font(.callout).foregroundStyle(Theme.muted)
             } else {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(store.favorites) { fav in
                         HStack {
-                            Image(systemName: "star.fill").foregroundStyle(.yellow)
+                            // 시스템 노랑 대신 브라스 — 하우스 팔레트의 따뜻한 강조를 별도 가져간다.
+                            Image(systemName: "star.fill").foregroundStyle(Theme.activity)
                             VStack(alignment: .leading) {
                                 Text(fav.label).bold()
-                                Text(fav.place.name).font(.caption).foregroundStyle(.secondary)
+                                Text(fav.place.name).font(.caption).foregroundStyle(Theme.muted)
                             }
                             Spacer()
                             Button(role: .destructive) { store.deleteFavorite(fav.id) } label: {
@@ -63,7 +64,7 @@ struct FavoritesView: View {
                         Image(systemName: "mappin.circle")
                         VStack(alignment: .leading) {
                             Text(place.name)
-                            Text(place.address).font(.caption).foregroundStyle(.secondary)
+                            Text(place.address).font(.caption).foregroundStyle(Theme.muted)
                         }
                         Spacer()
                     }
