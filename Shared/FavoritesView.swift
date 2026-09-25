@@ -55,6 +55,8 @@ struct FavoritesView: View {
                 Button { runSearch() } label: {
                     if searching { ProgressView().controlSize(.small) } else { Image(systemName: "magnifyingglass") }
                 }
+                // 아이콘만 있는 버튼은 VoiceOver가 읽을 문구가 없다 — 무엇을 여는지 직접 말해준다.
+                .accessibilityLabel("장소 검색")
             }
             ForEach(results, id: \.name) { place in
                 Button {
