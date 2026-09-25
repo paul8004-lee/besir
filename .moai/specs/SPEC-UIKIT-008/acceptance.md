@@ -56,7 +56,7 @@
   3. 재현 절 커밋이 드라이버만 바꿨다 — `git show --stat <M1 커밋>`의 소스 경로가 `Tools/GuardDriver.swift` 하나다.
   4. 후보에서 ✓로 나온(재현되지 않은) 가설마다 "재현 안 됨"이 적혀 있고, `git diff e1a40a6 HEAD -- Shared/AIAssistant.swift`에 그 가설을
      근거로 적은 헝크가 없으며, 그 단언은 바라는 동작 그대로 회귀 방지선으로 남아 있다(§E.2의 헝크 귀속 목록으로 대조).
-  5. 게이트가 수용으로 정한 가설(D-2 (c)의 H-4 · D-5 (c)의 H-3 · D-8 (a)의 H-9)마다 §E.2에 M1의 ✗ 줄과 "재현됨 — 수용(D-n)"이 적혀 있고, 최종 트리의 그 단언
+  5. 게이트가 수용으로 정한 가설(D-2 (c)의 H-4 · D-5 (c)의 H-3 · D-6 (b)의 H-5 · D-8 (a)의 H-9)마다 §E.2에 M1의 ✗ 줄과 "재현됨 — 수용(D-n)"이 적혀 있고, 최종 트리의 그 단언
      이름에 `[수용]`이 있으며 ✓로 찍힌다 — `grep -c '✓ AB-H[0-9][0-9] \[수용\]' <최종 로그>`가 수용 가설 수와 같다. 수용하지 않은 가설의 단언에는 `[수용]`이 없다.
 
 ## AC-002 — 채택 판정이 실제 주소 모양에서 판정된다 ⬜
@@ -112,16 +112,20 @@
 **관측자: 기계 (1)(2)(3)(5) + 사람 (4).**
 
 - **Then** 다섯이 동시에 성립한다:
-  1. **(D-6 (a))** 후보 카드의 모든 후보 줄이 `startsOpen == true`다(드라이버). `grep -c 'AI 카드는 전부 기본값 false' Shared/EditCard.swift` = **0**
-     (후보 트리 1). **(D-6 (b))** 후보 줄 캡션에 '장소 검색'을 누르라는 안내가 있고 "아래 후보"라는 말이 없다.
+  1. **(D-6 (a))** 후보 카드의 모든 후보 줄이 `startsOpen == true`다(드라이버 `AB-H05`). `grep -c 'AI 카드는 전부 기본값 false' Shared/EditCard.swift` = **0**
+     (후보 트리 1). **(D-6 (b))** 후보 줄 캡션에 '장소 검색'을 누르라는 안내가 있고 "아래 후보"라는 말이 없으며, M1의 `AB-H05` ✗ 기록 뒤 그 단언이 `AB-H05 [수용]`
+     (후보 줄 `startsOpen == false`)으로 바뀌어 ✓이다(AC-001 (5)).
   2. 맥락 줄 — `create_schedule`·`create_activity`·`create_recurring_schedule` 각각에 대해, 실행 전 카드(`drvAsk`)와 후보 카드(`drvPark`) 모두의
      `stated`에 제목과 **카드가 묻지 않는 모델 채움 장소 값**이 들어 있다(드라이버 6단언 이상). 후보 트리에서는 활동·반복 후보 카드의 `stated`가 빈 배열이다(H-6).
+     **(D-3 (c))** 후보 카드 쪽은 `create_schedule`만 본다(활동·반복은 후보 카드를 열지 않는다). 실행 전 카드 쪽은 세 도구 그대로다.
   3. 맥락 줄을 만드는 함수가 하나다 — 그 줄을 만드는 선언이 `Shared/AIAssistant.swift`에 한 건이고, `grep -c 'guard tool == "create_schedule"' Shared/AIAssistant.swift`가
      후보 트리의 **1**보다 줄었거나, 남았다면 그 줄이 맥락 줄과 무관한 자리임을 §E.2에 적는다.
   4. **사람**: AC-014 1·3·4번에서 후보가 **첫 화면에** 보이고(D-6 (a)), 카드 위쪽 "말씀하신 대로"에 제목이 보인다.
-  5. 후보 캡션에 구현 용어가 없다 — `grep -c '첫 검색 결과가 말씀하신' Shared/AIAssistant.swift` = **0**(후보 트리 1). **(D-10 (a))** `plan.md` §2 D-10 표의 후보 캡션
+  5. 후보 캡션 — **(D-10 (a))** 구현 용어가 없다 — `grep -c '첫 검색 결과가 말씀하신' Shared/AIAssistant.swift` = **0**(후보 트리 1) — 그리고 `plan.md` §2 D-10 표의 후보 캡션
      원문이 있다 — `grep -c '검색 결과가 말씀하신 지점인지 확실하지 않아요' Shared/AIAssistant.swift` ≥ **1**, 그리고 D-6 (a)면 `grep -c '아래 후보에서 맞는 곳을 골라 주세요'`,
-     D-6 (b)면 `grep -c "'장소 검색'을 누르면 후보가 나와요"`가 **1**.
+     D-6 (b)면 `grep -c "'장소 검색'을 누르면 후보가 나와요"`가 **1**. **(D-10 (b) + D-6 (a))** 후보 트리 문구가 그대로다 — `grep -c '첫 검색 결과가 말씀하신'` = **1**, REQ-006의
+     구현 용어 절은 "해당 없음(D-10 (b))". **(D-10 (b) + D-6 (b))** D-10 (a)의 D-6 (b) 조건과 같다 — 표의 D-6 (b) 원문 1건, `grep -c '아래 후보에서 골라 주세요' Shared/AIAssistant.swift` = **0**
+     (닫힌 후보를 "아래"라고 말하지 않는다 — `plan.md` §2 D-10 (b)).
 
 ## AC-006 — 같은 이름 줄에 양성·음성 대조가 있다 ⬜
 
@@ -145,7 +149,8 @@
 - **Then** 셋이 동시에 성립한다(드라이버):
   1. `create_activity`에 `return_to_query`가 있고 `travel_from_query`가 `집` → 가는 편 출발지 줄이 서고, '가는 편 없음' 칩이 있으며, 줄이 선택된 채 시작하지 않는다(`chosen == nil`).
   2. **(D-7 (a))** 1의 줄 캡션에 채워 온 값 `집`이 있다(`AB-H07`). `grep -c '미리 정해진 출발지가 맞는지' Shared/AIAssistant.swift` = **0**(후보 트리 1, H-7).
-     **(D-10 (a))** `grep -c '에서 출발하는지 한 번 더 골라 주세요' Shared/AIAssistant.swift` = **1**. **(D-7 (c))** 이 절과 1은 "채워 온 출발지가 있으면 가는 편 줄이 서지 않는다"로 바뀐다.
+     **(D-10 (a))** `grep -c '에서 출발하는지 한 번 더 골라 주세요' Shared/AIAssistant.swift` = **1**. **(D-10 (b) + D-7 (a))** D-10 (a)와 같다 — 이 캡션은 REQ-009 때문에 (b)에서도 표의
+     원문으로 새로 쓴다(`plan.md` §2 D-10 (b)). **(D-7 (c))** 이 절과 1은 "채워 온 출발지가 있으면 가는 편 줄이 서지 않는다"로 바뀌고, D-10의 어느 안이든 문자열 신호는 보지 않는다.
   3. 회귀 — `travel_from_query`가 비어 있으면 줄이 서고 칩이 있다. 즐겨찾기에 없는 일반명사(`사무실`)면 못 푸는 장소 줄이 서고 탈출 칩은 없다(`:642-644` 설계 그대로).
 
 ## AC-008 — 머무는 반복이 이동 없이 만들어지고 사실만 말한다 ⬜
@@ -197,7 +202,8 @@
      `git diff --name-only e1a40a6 HEAD -- . ':!.moai/specs/SPEC-UIKIT-008' ':!.moai/reports/t16/plan-lens-ai-tooling.md' ':!.moai/reports/t16/plan-lens-ui-design.md' ':!.moai/reports/plan-audit/SPEC-UIKIT-008-*'` —
      의 모든 줄이 다음 목록 안에 있다: `Shared/AIAssistant.swift` · `Tools/GuardDriver.swift` · `Shared/EditCardView.swift`(D-1이 넣기일 때) · `Shared/EditCard.swift`(D-6 (a)일 때,
      그리고 `git diff aa7b792 HEAD -- Shared/EditCard.swift | grep '^[-+][^-+]' | grep -v '^[-+][[:space:]]*///\?'`가 0줄 — 주석 줄만 바뀜) · 루트 `plan.md` · `CHECKLIST.md`(sync) ·
-     `.moai/specs/SPEC-UIKIT-005/progress.md`·`.moai/specs/SPEC-UIKIT-007/progress.md`(sync) · 재위임으로 들어온 SPEC-UIKIT-005/007 본문(sync, 커밋 주체를 §E.4에). 밖의 경로가 하나라도
+     `.moai/specs/SPEC-UIKIT-005/progress.md`·`.moai/specs/SPEC-UIKIT-007/progress.md`(sync) · `manager-spec` 재위임으로 들어온 SPEC-UIKIT-005/007 `spec.md`·`plan.md`·`acceptance.md`의
+     인용 줄(sync, REQ-013·REQ-015 — `c5396b3` 표기 포함, 커밋 주체를 §E.4에). 밖의 경로가 하나라도
      있으면 FAIL. 루트 `plan.md`가 나오면 헝크마다 t16 행·계획-실제 갱신 가운데 어디에 닿는지 §E.2에 적는다. 커밋끼리 비교하므로 추적되지 않는 빌드 로그는 나오지 않는다.
   2. `git diff --name-only --diff-filter=A aa7b792 HEAD -- Shared/` = 0줄 → `xcodegen generate` 불필요, Team 재선택 요청 없음.
   3. `git diff --quiet aa7b792 HEAD -- proxy/ project.yml` exit 0.
@@ -237,12 +243,14 @@
      `grep -o 'GuardDriver\(\.swift\)\{0,1\}:[0-9]\{1,4\}' <문서> | wc -l`로 `CHECKLIST.md` **1**(`:619`의 `GuardDriver.swift:264`, 후보에서 이미 `:275`로 밀림) · 나머지 0이다(spec REQ-015).
   2. 원장의 행은 세 범주다 — **재사상**(새 토큰이 가리키는 최종 트리의 원문이 "가리키던 원문"과 같다, 범위는 양 끝 모두) · **대상 제거·재작성**(이 카드가 대상을 없애거나 고쳐 쓴 행 —
      새 원문과 그것을 바꾼 REQ 또는 커밋을 적고 바이트 대조에서 빠지되 목록에는 남는다. 예: `:1869` 주석을 인용하는 루트 `plan.md:562`·`CHECKLIST.md:535`) · **base 고정**(수리 전 상태를
-     적은 문장 — 아래 5). 재사상 행의 불일치가 0이다.
+     적은 문장 — 아래 5). 재사상 행의 불일치가 0이다. "대상 제거·재작성" 행의 인용 문장이 옛 원문의 내용을 옮겨 적었으면, 살아 있는 문서(루트 `plan.md`·`CHECKLIST.md`)에서는 그 문장도
+     새 원문에 맞춰 고치고, 완료된 SPEC 본문(예: SPEC-UIKIT-005 `spec.md:237`)에서는 문장을 두고 원장에만 그 사실을 적는다.
   3. **양성 대조**: 사본 하나에 틀린 토큰을 일부러 심고 같은 대조를 돌리면 불일치 1이 나온다. 이 출력을 §E.4에 적는다.
   4. 이름 있는 옛 커밋에 묶인 인용(예: SPEC-UIKIT-005 §1의 `c5396b3` 좌표)은 바뀌지 않았다.
   5. 완료된 SPEC의 수리 전 상태 문장은 재사상하지 않고 그 SPEC의 base 커밋에 고정됐다 — SPEC-UIKIT-005 `acceptance.md`의 AC-005 Given(`:748`·`:1297`·`:1613`·`:2322`·`:2371`·`:2393`)과
      AC-009 7·9번(`:1297`·`:1613`)에 `c5396b3` 표기가 붙어 있고 숫자는 그대로다(`git show c5396b3:Shared/AIAssistant.swift`에서 서술과 맞는다). 완료된 SPEC 본문의 편집은
-     `manager-spec` 재위임으로 들어왔다(커밋 주체를 §E.4에 적는다). 이 SPEC의 스크립트 7·8번이 같은 단계를 현재 좌표로 다시 적으므로 운영자는 005의 옛 좌표에 기대지 않는다.
+     `manager-spec` 재위임으로 들어왔다(커밋 주체를 §E.4에 적는다). 이 SPEC의 스크립트 7·8번이 SPEC-UIKIT-005 AC-009 7·9번 단계를 현재 트리 기준으로 다시 적으므로 운영자는 005의
+     옛 좌표에 기대지 않는다.
 
 ## AC-014 — 시뮬레이터: AI 카드 (대체 불가능한 증거) ⬜
 

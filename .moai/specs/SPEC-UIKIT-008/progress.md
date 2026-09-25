@@ -113,3 +113,9 @@ _<pending sync-phase>_
 
 - **1회차 — FAIL 0.77**(Tier M 통과선 0.80 미달) — `.moai/reports/plan-audit/SPEC-UIKIT-008-review-1.md`. must-pass 실패는 MP-7 하나이고 그것은 게이트 표식(리드 몫)이다.
   작성 결함 D2~D9·D12(차단)와 D11·D13·D14(권고 선택)를 0.1.1에서 고쳤고, 한 줄 수리로 D15~D17·D19~D22를 함께 반영했다. D18은 프로젝트 관례로 두었다. 2회차는 이 차분과 회귀만 본다.
+- **2회차 — FAIL 0.89**(통과선 0.80 넘음, 점수 상승이라 STOP 신호 없음) — `.moai/reports/plan-audit/SPEC-UIKIT-008-review-2.md`, 대상 `2313e38`(0.1.1 커밋). 1회차 결함 22건은
+  모두 해소 판정(D1 게이트 표식은 설계상 유지, D18은 관례 유지). must-pass 실패는 MP-7뿐이다. 새 차단 결함 셋 — D2(D-10 (b)가 D-7 (a)·D-6 (b)와 양립 불가) · D3(D-6 (b)가 수용 목록 밖의
+  H-5 수용) · D4(REQ-013 sync 경로 목록이 REQ-015·AC-013 (5)의 편집을 막음) — 와 선택 D5·D7·D8을 **0.1.2**에서 고쳤다(`spec.md` HISTORY 0.1.2). 나머지 선택 D6·D9~D12는 오케스트레이터
+  지시대로 두었다. 3회차(마지막)는 게이트 표식의 해소와 D2~D4의 차분, 게이트 결과로 확정된 절의 회귀만 본다.
+- 0.1.2 개정 때 이 레인이 돌린 명령: `grep -c '아래 후보에서 골라 주세요' Shared/AIAssistant.swift` → `1`(후보 트리 `:735` — AC-005 (5)의 D-10 (b)+D-6 (b) 분기 기준값) ·
+  `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` · `grep -c 'NEEDS CLARIFICATION' plan.md` · `moai spec lint --strict .moai/specs/SPEC-UIKIT-008/spec.md` — 출력은 오케스트레이터 보고에 적었다.
