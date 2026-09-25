@@ -1,7 +1,7 @@
 import Foundation
 import CoreLocation
 
-/// 이동 수단.
+/// 이동수단.
 enum TransportMode: String, Codable, CaseIterable, Identifiable {
     case car        // 자동차
     case transit    // 대중교통
@@ -159,7 +159,7 @@ struct ScheduledEvent: Identifiable, Codable {
     var destination: Place
     /// 도착해야 하는 시각.
     var arrivalDate: Date
-    /// 선택한 이동 수단.
+    /// 선택한 이동수단.
     var mode: TransportMode
     /// 도착 시 여유로 둘 버퍼(분). 출발 시각 = 도착 - 이동시간 - 버퍼.
     var bufferMinutes: Int

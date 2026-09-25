@@ -242,7 +242,7 @@ struct AddEventView: View {
         var rows: [EditField] = [
             .init(key: "arrival_iso", kind: .datetime, label: "시각", options: [],
                   allowsCustom: false, chosen: datetime),
-            .init(key: "mode", kind: .mode, label: "이동 수단",
+            .init(key: "mode", kind: .mode, label: "이동수단",
                   options: TransportMode.allCases.map { .init(label: $0.title, value: $0.rawValue) },
                   allowsCustom: false, chosen: mode, busy: estimating),
             .init(key: "buffer_minutes", kind: .buffer, label: "도착 여유",
@@ -567,7 +567,14 @@ struct AddEventView: View {
             let sources = TransportMode.allCases
                 .compactMap { estimates[$0] }.filter(\.isAvailable).map(\.source)
                 .filter { seen.insert($0).inserted }
-            c.fields[mi].note = sources.isEmpty ? nil : "소요시간: " + sources.joined(separator: " · ")
+            // B7: 계산이 끝났는데 고른 수단의 값이 없으면 칩 캡션("정보 없음")만으로는 닿지
+            // 않는다 — 줄 노트가 상태를 말한다. estimates가 빈 창(아직 계산 전)에는 말하지 않는다.
+            var modeNote = sources.isEmpty ? nil : "소요시간: " + sources.joined(separator: " · ")
+            if !estimates.isEmpty, estimates[currentMode]?.duration == nil {
+                modeNote = (modeNote.map { $0 + " " } ?? "")
+                    + "선택한 이동수단은 소요시간을 계산하지 못했어요. 저장할 때 다시 계산해요."
+            }
+            c.fields[mi].note = modeNote
         }
         if let ti = c.fields.firstIndex(where: { $0.key == "arrival_iso" }) {
             let parsed = c.fields[ti].chosen.flatMap(BesirTime.parseDatetime)
@@ -585,6 +592,26 @@ struct AddEventView: View {
                 } else {
                     note += " 예상 출발 "
                         + BesirTime.compact.string(from: parsed.date.addingTimeInterval(-secs - buffer))
+                }
+            }
+            // D-3: 과거 출발엔 알림이 예약되지 않는다(NotificationManager가 과거 시각을 거부한다).
+            // 저장하고 나서 "왜 안 울리지"를 겪기 전에 폼이 먼저 말한다. 이동시간을 모르는 창에는
+            // 기준 시각만으로 판단한다 — 모르고 단정하는 것보다 안 말하는 쪽을 택한다.
+            if field("notify_enabled")?.chosen != "false", let parsed {
+                let lead = Double(field("notify_lead_minutes")?.chosen.flatMap { Int($0) }
+                    ?? Int(lastNotifyLead) ?? 0) * 60
+                let buffer = Double(c.fields.first(where: { $0.key == "buffer_minutes" })?.chosen
+                    .flatMap { Int($0) } ?? 0) * 60
+                let depGuess: Date
+                if departureAnchored {
+                    depGuess = parsed.date
+                } else if let secs = estimates[currentMode]?.duration {
+                    depGuess = parsed.date.addingTimeInterval(-secs - buffer)
+                } else {
+                    depGuess = parsed.date
+                }
+                if depGuess.addingTimeInterval(-lead) <= Date() {
+                    note += " 출발 시각이 이미 지나 출발 알림이 예약되지 않아요."
                 }
             }
             c.fields[ti].note = note
@@ -627,10 +654,11 @@ struct AddEventView: View {
     /// `chosen == nil`을 먼저 거르는 이유는 실패 방향을 닫아두기 위해서다. 열쇠가 이름이던 시절엔
     /// 이름 없는 줄이 사전을 못 찾아 저절로 nil이 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은
     /// 없는 줄"이 생기면 그 좌표가 조용히 실려 나간다 — 쓰기 자리들이 지금은 이름과 좌표를 늘
-    /// 함께 심지만 그 불변식은 코드가 아니라 규율이 지킨다. 출발지 줄의 nil 읽기는 넷(프리필
-    /// 가드·재계산 가드·originCoord·save 가드)인데 프리필을 여는 것은 prefillOrigin의 가드
-    /// 하나다 — 그 가드에서 이 nil은 "없는 장소"가 아니라 프리필을 여는 신호다. fail-closed만
-    /// 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다(1b98e14).
+    /// 함께 심지만 그 불변식은 코드가 아니라 규율이 지킨다. 출발지 줄의 nil을 "없는 장소"가 아니라
+    /// **프리필을 여는 신호로 읽는 곳은 prefillOrigin의 가드 하나뿐**이다 — 그 밖의 읽기 자리는
+    /// (재계산 가드·originCoord·save 가드 등 — 자리 수는 코드를 따라 늘어난다) nil을 있는 그대로
+    /// "없는 장소"로 취급한다. fail-closed만 믿다가 저장된 출발지가 현재 위치로 조용히 바뀌었다
+    /// (1b98e14).
     private func confirmedPlace(_ key: String) -> Place? {
         field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
     }

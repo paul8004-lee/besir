@@ -225,7 +225,10 @@ struct EventDetailView: View {
                         Text("⚠️ 이미 출발 시각이 지났습니다.")
                             .font(.caption).foregroundStyle(Theme.warn)
                     } else {
-                        Text("출발까지 \(relativeText(to: dep)) 남음 · \(event.notifyLeadMinutes)분 전 알림 예약됨")
+                        // 알림 상태는 사실대로 — 꺼졌거나, 예약돼 있거나, 아니라면 그 이유까지
+                        // (판정식은 alarmStatus에). "예약됨"이라고만 쓰면 울리지 않을 약속을
+                        // 화면이 한다(D-3).
+                        Text("출발까지 \(relativeText(to: dep)) 남음 · \(alarmStatus(for: event, departure: dep))")
                             .font(.caption).foregroundStyle(Theme.muted)
                     }
                 }
@@ -334,7 +337,7 @@ struct EventDetailView: View {
             // 값 행(+반복 배지)만 카드로 감싼다 — 삭제 단추는 카드 밖에 그대로 둔다(AC-006
             // 8·9행의 분할이 규범 — REQ-020의 :302-348 인용이 잘못 넓었고 0.1.3으로 정정).
             VStack(alignment: .leading, spacing: 10) {
-                row("이동 수단", "\(event.mode.title)")
+                row("이동수단", "\(event.mode.title)")
                 row("도착 여유(버퍼)", "\(event.bufferMinutes)분")
                 row("알림", "출발 \(event.notifyLeadMinutes)분 전")
                 if event.recurrenceId != nil {
@@ -382,6 +385,17 @@ struct EventDetailView: View {
             }
             Button("취소", role: .cancel) {}
         }
+    }
+
+    /// 알림 상태 문구 — 화면이 예약 여부를 사실대로 말한다(D-3). notificationId == nil에는
+    /// 두 원인이 섞여 있다(과거 시각 거부·64건 창 밖 대기 — 리스케줄러가 가까운 것만 채운다).
+    /// 아이디만으로는 갈라지지 않으므로 알림 시각으로 판정한다.
+    private func alarmStatus(for event: ScheduledEvent, departure: Date) -> String {
+        if !event.wantsNotification { return "알림 꺼짐" }
+        if event.notificationId != nil { return "\(event.notifyLeadMinutes)분 전 알림 예약됨" }
+        return departure.addingTimeInterval(-Double(event.notifyLeadMinutes) * 60) <= Date()
+            ? "알림 시각이 지나 예약 없음"
+            : "가까워지면 알림 예약돼요"
     }
 
     private func row(_ k: String, _ v: String) -> some View {
