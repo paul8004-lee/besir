@@ -121,7 +121,7 @@ CLAUDE.md 계약 6은 "색을 직접 쓰지 않는다 — 전부 `Theme` 토큰�
   (e) 후보 줄은 이름과 주소가 한 덩어리로 읽힌다(`:462`) — 따로 읽히면 같은 이름의 다른 지점을 가를 수 없다;
   (f) 칩 높이는 iOS `44`pt / macOS `28`pt, 양쪽 `@ScaledMetric(relativeTo: .callout)`(`:176`·`:178`). 고정하면 큰 글씨 설정에서 칩이 잘리고, iOS 44pt는 터치 최소치다;
   (g) 긴 문구를 숨기지 않는다 — `note` 캡션의 `.fixedSize(horizontal: false, vertical: true)`, 확정 시각 칩의 `.lineLimit(nil)` + `.fixedSize`;
-  (h) 직접입력 칩은 점선 테두리로 성격 차이를 **형태로** 구분한다;
+  (h) 직접입력 칩은 점선 테두리로 성격 차이를 **형태로** 구분한다 — **t14(2026-09-24 사용자 요청)로 대체**: 칩 테두리 실선 통일, 구분은 글자가 맡음;
   (i) iOS 숫자 줄은 `.keyboardType(.numberPad)`과 확인 버튼을 함께 유지한다 — 숫자판에 완료 키가 없다.
 
 - **REQ-022 (Ubiquitous)**: The extracted component shall preserve the behavioral contract:
