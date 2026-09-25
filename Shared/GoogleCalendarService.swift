@@ -130,7 +130,7 @@ final class GoogleCalendarService: NSObject {
     /// 페이지 모으기: `fetchPage`에 페이지 토큰을 넘겨 `nextPageToken`이 끊길 때까지 돌아
     /// `items`를 쌓는다. 왜 도우미인가 — 26주 평일 반복에 왕복까지 붙으면 260건이라 maxResults
     /// 250의 한 페이지로는 끝 10건이 아예 조회되지 않았고(t23 X2), 그러면 동기화가 "원격에
-    /// 없다"로 읽어 로컬을 지운다. 통신을 클로저로 주입받는 구조라 가드 드라이버가 통 없이
+    /// 없다"로 읽어 로컬을 지운다. 통신을 클로저로 주입받는 구조라 가드 드라이버가 통신 없이
     /// 이 루프만은 결정적으로 검증할 수 있다.
     static func collectPages(_ fetchPage: (String?) async throws -> [String: Any]) async throws -> [[String: Any]] {
         var items: [[String: Any]] = []
