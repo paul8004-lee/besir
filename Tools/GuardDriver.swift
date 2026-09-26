@@ -118,6 +118,7 @@ extension AIAssistant {
     /// 내부 토큰 둘도 같은 이유로 노출용 접근자를 지난다(값 자체는 그대로).
     static func drvCurrentLocationToken() -> String { currentLocationToken }
     static func drvNoOutboundToken() -> String { noOutboundToken }
+    static func drvNoTravelToken() -> String { noTravelToken }
     /// P절 — 검색 상태를 글자로 바꿔 비교한다(Lookup은 Equatable이 아니고, 그렇게 만들 이유도 없다).
     static func drvLookup(_ l: AskField.Lookup) -> String {
         switch l {
@@ -1587,14 +1588,17 @@ struct Drv {
                      z5.contains("즐겨찾기에 없어요") && z5.contains("회사")
                         && !z5.contains("비어 있어요")
                         && store.events.filter { $0.title == "Z-단발" }.isEmpty, z5)
-        // O-6: 활동의 장소·다리 질의도 같다. 이동이 없는 활동도 장소를 못 풀면 묻는다(위치 없는
-        //      활동으로 조용히 등록되던 자리 — M의 사후 보고보다 앞에서 막힌다).
+        // O-6: 활동의 장소·다리 질의도 같다. 이동 없는 활동도 장소를 못 풀면 묻는다(위치 없는
+        //      활동으로 조용히 등록되던 자리 — M의 사후 보고보다 앞에서 막힌다). 머무는 요청
+        //      계약(REQ-010, T-1) 뒤에는 출발지 줄도 함께 선다 — 뺀 0 · 더한 0, 기대만 새 계약으로.
         let zActPlace = aiZ.drvAsk("create_activity", ["title": "Z-활동", "place_query": "회사",
                                                        "start_iso": "2027-03-11T14:00:00",
                                                        "end_iso": "2027-03-11T18:00:00"])
-        aiZ.drvCheck("O-6: 이동 없는 활동도 못 푸는 장소면 활동 장소 줄이 뜬다(이동 줄은 그대로 없다)",
-                     zActPlace?.fields.map(\.key) == ["place_query"],
-                     "keys=\(zActPlace?.fields.map(\.key) ?? [])")
+        aiZ.drvCheck("O-6: 못 푸는 장소의 이동 없는 활동은 장소 줄과 출발지 줄이 함께 뜬다(머무는 요청)",
+                     Set(zActPlace?.fields.map(\.key) ?? []) == ["place_query", "travel_from_query"]
+                        && (zActPlace?.fields.first { $0.key == "travel_from_query" })?
+                            .options.contains { $0.label == "이동 없음" } == true,
+                     "keys=\(zActPlace?.fields.map(\.key) ?? []) options=\((zActPlace?.fields.first { $0.key == "travel_from_query" })?.options.map(\.label) ?? [])")
         let zAct = aiZ.drvAsk("create_activity", ["title": "Z-왕복", "place_query": "회사",
                                                   "start_iso": "2027-03-11T14:00:00",
                                                   "end_iso": "2027-03-11T18:00:00",
@@ -1883,15 +1887,10 @@ struct Drv {
                      (aaAct?.fields.first { $0.key == "travel_from_query" })?
                         .options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true,
                      "options=\((aaAct?.fields.first { $0.key == "travel_from_query" })?.options.map(\.value) ?? [])")
-        // AA-4: 머무는 반복(집/집)은 수단·여유·알림을 묻지 않는다 — 쓸 구간이 없다.
+        // AA-4: 머무는 반복(집/집)의 카드 모양은 AB-H11이 새 계약(출발지 줄 + 기간, '이동 없음'
+        //      선택지)으로 잇는다 — 옛 첫 단언(기간 줄만 묻는다)은 그 계약과 맞서 뺐다(AC-008 (1)).
+        //      다른 장소 반복이 수단·여유·알림을 묻는다는 회귀 방지선은 그대로 둔다.
         let aaR = fresh()
-        let aaStay = aaR.drvAsk("create_recurring_schedule",
-                                ["title": "AA-점심", "destination_query": "집", "origin_query": "집",
-                                 "weekdays": ["mon", "tue"], "arrival_time": "12:00",
-                                 "return_time": "13:00"])
-        aaR.drvCheck("AA-4: 출발지=목적지 반복은 기간 줄만 묻는다(수단·여유·알림 안 묻는다)",
-                     Set(aaStay?.fields.map(\.key) ?? []) == ["weeks"],
-                     "keys=\(aaStay?.fields.map(\.key) ?? [])")
         let aaGo = aaR.drvAsk("create_recurring_schedule",
                               ["title": "AA-통근", "destination_query": "회사", "origin_query": "집",
                                "weekdays": ["mon", "tue"], "arrival_time": "09:00",
@@ -2060,13 +2059,17 @@ struct Drv {
                       store.events.contains { $0.title == "AB-반복목적지주입" && $0.destination.name == abGangnam[1].name },
                       "reply=\(h1rdReply ?? "nil") events=\(store.events.filter { $0.title == "AB-반복목적지주입" }.count)")
         // H-01 조합5: create_activity · place_query(이동 없음) — 빈 place_query는 장소 없는 활동이
-        //        되고(:534·:1667-1668) 성공 문구로 조용히 지나간다.
+        //        되고(:534·:1667-1668) 성공 문구로 조용히 지나간다. 수리 뒤 최종 모양: 후보를 고르면
+        //        머무는 요청의 출발지 줄이 함께 뜨므로(REQ-010) '이동 없음'까지 골라야 확인이 넘어간다.
         let h1p = fresh()
         _ = h1p.drvPark("create_activity",
                         ["title": "AB-활동장소주입", "place_query": "스타벅스 홍대점",
                          "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
                          "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
                         [(key: "place_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        if let card = h1p.drvLiveAsk(), let ft = card.fields.first(where: { $0.key == "travel_from_query" }) {
+            h1p.choose(field: ft.id, value: AIAssistant.drvNoTravelToken())
+        }
         let h1pReply = await abConfirm(h1p, "place_query", abHongdae[1])
         h1p.drvCheck("AB-H01 create_activity place_query",
                      store.activities.first { $0.title == "AB-활동장소주입" }?.location?.name == abHongdae[1].name,
@@ -2144,6 +2147,26 @@ struct Drv {
         h1two.drvCheck("AB-H01 한 호출 두 키 동시 모호",
                        h1twoEvent?.origin?.name == abHongdae[1].name && h1twoEvent?.destination.name == abGangnam[1].name,
                        "origin=\(h1twoEvent?.origin?.name ?? "nil") dest=\(h1twoEvent?.destination.name ?? "nil")")
+        // H-01 조합10(AC-003 10번, 수리 때 추가하는 회귀 방지선): 머무는 반복 — 카드의 출발지 줄에서
+        //        '이동 없음'을 고른 뒤 목적지가 검색에 맡겨진다. 이동 없음 뒤의 후보 카드는 수단·여유·
+        //        알림을 묻지 않아야 하고(I-1), 고른 둘째 후보가 활동 블록의 장소가 되어야 한다.
+        //        출발지가 토큰으로 실린 모양을 drvPark에 직접 준다 — choose가 확정 사전에 좌표를
+        //        남기므로 확인 뒤 실행부는 검색 없이 둘째 후보로 푼다(위 조합들과 같은 결정성).
+        let h1stay = fresh()
+        _ = h1stay.drvPark("create_recurring_schedule",
+                           ["title": "AB-머묾후보", "origin_query": AIAssistant.drvNoTravelToken(),
+                            "destination_query": "스타벅스 홍대점",
+                            "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00",
+                            "start_date": "2027-03-01", "weeks": 4],
+                           [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1stayCard = h1stay.drvLiveAsk()
+        let h1stayReply = await abConfirm(h1stay, "destination_query", abHongdae[1])
+        let h1stayBlocks = store.activities.filter { $0.title == "AB-머묾후보" }
+        h1stay.drvCheck("AB-H01 머무는 반복 목적지 모호('이동 없음' 뒤)",
+                        h1stayBlocks.first?.location == abHongdae[1]
+                            && store.events.filter { $0.title == "AB-머묾후보" }.isEmpty
+                            && Set(h1stayCard?.fields.map(\.key) ?? []) == ["destination_query"],
+                        "location=\(h1stayBlocks.first?.location?.name ?? "nil") legs=\(store.events.filter { $0.title == "AB-머묾후보" }.count) cardKeys=\(h1stayCard?.fields.map(\.key) ?? []) reply=\(h1stayReply ?? "nil")")
 
         // H-2: 카드가 열려 있을 때 다른 입력의 모호 호출 — 카드는 한 장이되 안내는 사실이어야 한다.
         //      후보의 중복 가드(:790)는 "카드가 하나라도 열려 있는가"만 보고 두 번째 호출을
@@ -2202,6 +2225,67 @@ struct Drv {
         h4.drvCheck("AB-H04 '강남'→선릉과정릉(삼성동 주소)도 맞지 않는다",
                     h4b == false, "match=\(h4b) — 판정은 주소를 보지 않아야 하므로 두 주소의 결과가 같다")
 
+        // REQ-008 양성 대조(AC-006 (2)(3)(5)) — 같은 이름 줄이 서지 **않아야** 하는 쪽. 후보의 AA-2
+        //      회귀는 '회사'/'집'(서로 다른 이름)을 써서 제외 규칙을 시험하지 않았다(음성 대조만 있었다).
+        //      즐겨찾기 이름은 좌표가 고정이라 두 줄이 한 지점으로 무너질 일이 없다.
+        let r8fav = fresh()
+        let r8favAsk = r8fav.drvAsk("create_schedule",
+                                    ["title": "AB-즐겨찾기제외", "origin_query": "집", "destination_query": "집",
+                                     "arrival_iso": "2027-03-22T15:00:00"])
+        r8fav.drvCheck("AB-REQ008 같은 즐겨찾기 이름(집/집)에는 같은 이름 줄이 서지 않는다",
+                       (r8favAsk?.fields ?? []).contains { $0.note?.contains("같은 이름") == true } == false
+                           && Set(r8favAsk?.fields.map(\.key) ?? [])
+                                .isDisjoint(with: ["origin_query", "destination_query"]),
+                       "keys=\(r8favAsk?.fields.map(\.key) ?? []) notes=\(r8favAsk?.fields.map { $0.note ?? "-" } ?? [])")
+        // 이번 대화에서 확정된 장소 이름도 좌표가 이미 고정이다 — choose가 좌표와 함께 확정 사전에
+        // 남기므로, 등록까지 밟지 않고 이름만 남긴 뒤 두 키에 같이 실어 본다.
+        let r8conf = fresh()
+        _ = r8conf.drvPark("create_schedule",
+                           ["title": "AB-확정제외", "origin_query": "집",
+                            "destination_query": "스타벅스 홍대입구역점",
+                            "arrival_iso": "2027-03-23T15:00:00", "mode_this_time": "walk",
+                            "buffer_minutes": 10, "notify_lead_minutes": 10],
+                           [(key: "destination_query", query: "스타벅스 홍대입구역점", candidates: abHongdae)])
+        if let f = r8conf.drvLiveAsk()?.fields.first(where: { $0.key == "destination_query" }) {
+            r8conf.choose(field: f.id, place: abHongdae[1])
+        }
+        r8conf.drvCancelPendingAsk()
+        let r8confAsk = r8conf.drvAsk("create_schedule",
+                                      ["title": "AB-확정제외2", "origin_query": "스타벅스 홍대입구역점",
+                                       "destination_query": "스타벅스 홍대입구역점",
+                                       "arrival_iso": "2027-03-23T16:00:00"])
+        r8conf.drvCheck("AB-REQ008 이번 대화에서 확정된 장소 이름에는 같은 이름 줄이 서지 않는다",
+                        (r8confAsk?.fields ?? []).contains { $0.note?.contains("같은 이름") == true } == false
+                            && Set(r8confAsk?.fields.map(\.key) ?? [])
+                                 .isDisjoint(with: ["origin_query", "destination_query"]),
+                        "keys=\(r8confAsk?.fields.map(\.key) ?? []) notes=\(r8confAsk?.fields.map { $0.note ?? "-" } ?? [])")
+        // 반복 도구는 같은 이름 규칙 밖이다(REQ-008 끝 문장) — 검색에 맡겨질 같은 이름도 머무는
+        // 요청 신호라 같은 이름 캡션이 아니라 출발지 줄('이동 없음')이 선다(AC-006 (5)).
+        let r8rec = fresh()
+        let r8recAsk = r8rec.drvAsk("create_recurring_schedule",
+                                    ["title": "AB-반복같은이름", "origin_query": "스타벅스 홍대점",
+                                     "destination_query": "스타벅스 홍대점", "weekdays": ["mon"],
+                                     "arrival_time": "12:00", "return_time": "13:00"])
+        r8rec.drvCheck("AB-REQ008 반복의 같은 검색어는 같은 이름 줄이 아니라 머무는 출발지 줄이 선다",
+                       Set(r8recAsk?.fields.map(\.key) ?? []) == ["origin_query", "weeks"]
+                           && (r8recAsk?.fields.first { $0.key == "origin_query" })?
+                                .options.contains { $0.label == "이동 없음" } == true
+                           && Set(r8recAsk?.fields.map(\.key) ?? [])
+                                .isDisjoint(with: ["mode_this_time", "buffer_minutes", "notify_lead_minutes"]),
+                       "keys=\(r8recAsk?.fields.map(\.key) ?? [])")
+        // 한 번짜리도 같다(AC-006 (5)) — place·travel_from이 같은 검색어면 같은 이름 캡션이 아니라
+        // 그 값을 적은 출발지 줄 캡션이 선다(머무는 요청, T-1).
+        let r8act = fresh()
+        let r8actAsk = r8act.drvAsk("create_activity",
+                                    ["title": "AB-활동같은이름", "place_query": "스타벅스",
+                                     "travel_from_query": "스타벅스",
+                                     "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00"])
+        r8act.drvCheck("AB-REQ008 한 번짜리 같은 검색어는 그 값을 적은 출발지 줄 캡션이 선다",
+                       Set(r8actAsk?.fields.map(\.key) ?? []) == ["travel_from_query"]
+                           && (r8actAsk?.fields.first { $0.key == "travel_from_query" })?
+                                .note?.contains("스타벅스") == true,
+                       "keys=\(r8actAsk?.fields.map(\.key) ?? []) note=\((r8actAsk?.fields.first { $0.key == "travel_from_query" })?.note ?? "nil")")
+
         // H-5: 후보 줄이 첫 렌더에 보이는가 — AI 카드는 startsOpen을 켠 적이 없다(기본값 false).
         let h5 = fresh()
         _ = h5.drvPark("create_schedule",
@@ -2238,6 +2322,43 @@ struct Drv {
         h6b.drvCheck("AB-H06 반복 후보 카드 맥락 줄에 제목이 있다",
                      h6bStated.contains { $0.contains("AB-반복맥락") } == true, "stated=\(h6bStated)")
         h6b.drvCancelPendingAsk()
+        // H-6 보강(REQ-007, AC-005 (2)) — 맥락 줄의 단일 출처(filledValueLabels)가 세 도구 × 두 경로
+        //      모두에서 제목을 적는다. 위 둘(활동·반복 후보 카드)과 합쳐 여섯 단언이 된다.
+        let h6c = fresh()
+        _ = h6c.drvPark("create_schedule",
+                        ["title": "AB-일정맥락", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                         "arrival_iso": "2027-03-20T15:00:00", "mode_this_time": "walk",
+                         "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h6cStated = h6c.drvLiveAsk()?.stated ?? []
+        h6c.drvCheck("AB-H06 일정 후보 카드 맥락 줄에 제목이 있다",
+                     h6cStated.contains { $0.contains("AB-일정맥락") } == true, "stated=\(h6cStated)")
+        h6c.drvCancelPendingAsk()
+        // 실행 전 카드(drvAsk) 세 도구 — pendingAsk가 같은 함수로 세 도구의 맥락 줄을 만든다.
+        let h6d = fresh()
+        let h6dAsk = h6d.drvAsk("create_schedule",
+                                ["title": "AB-일정맥락2", "origin_query": "집", "destination_query": "회사",
+                                 "arrival_iso": "2027-03-21T15:00:00"])
+        h6d.drvCheck("AB-H06 일정 실행 전 카드 맥락 줄에 제목이 있다",
+                     (h6dAsk?.stated ?? []).contains { $0.contains("AB-일정맥락2") } == true,
+                     "stated=\(h6dAsk?.stated ?? [])")
+        let h6e = fresh()
+        let h6eAsk = h6e.drvAsk("create_activity",
+                                ["title": "AB-활동맥락2", "place_query": "회사",
+                                 "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                                 "travel_from_query": "집", "return_to_query": "집"])
+        h6e.drvCheck("AB-H06 활동 실행 전 카드 맥락 줄에 제목과 묻지 않는 장소가 있다",
+                     (h6eAsk?.stated ?? []).contains { $0.contains("AB-활동맥락2") }
+                        && (h6eAsk?.stated ?? []).contains { $0.contains("회사") },
+                     "stated=\(h6eAsk?.stated ?? [])")
+        let h6f = fresh()
+        let h6fAsk = h6f.drvAsk("create_recurring_schedule",
+                                ["title": "AB-반복맥락2", "origin_query": "집", "destination_query": "회사",
+                                 "weekdays": ["mon"], "arrival_time": "09:00", "return_time": "18:00"])
+        h6f.drvCheck("AB-H06 반복 실행 전 카드 맥락 줄에 제목과 묻지 않는 장소가 있다",
+                     (h6fAsk?.stated ?? []).contains { $0.contains("AB-반복맥락2") }
+                        && (h6fAsk?.stated ?? []).contains { $0.contains("집") },
+                     "stated=\(h6fAsk?.stated ?? [])")
 
         // H-7: 왕복 가는 편 줄의 캡션 — 후보 문구는 카드 어디에도 없는 값('미리 정해진 출발지')을
         //      확인하라고 한다(REQ-009). 줄 자체·탈출 칩·미리 선택 없음은 이미 후보가 갖춘 부분이다.
@@ -2272,14 +2393,15 @@ struct Drv {
                     store.activities.filter { $0.title == "AB-머묾수정" }.count == h8Before,
                     "before=\(h8Before) after=\(store.activities.filter { $0.title == "AB-머묾수정" }.count)")
 
-        // H-9: 끝 시각 재호출에서 '반복 기간' 이중 질문 — weeks는 선언에 없어 정화가 지우므로 재호출
-        //      인자에 실리지 못하고 기간 줄이 다시 선다(수용 I-5 — 수리 때 [수용] 특성화로 바뀐다).
+        // H-9 [수용](I-5 확정): 끝 시각 재호출에서 '반복 기간' 이중 질문 — weeks는 선언에 없어 정화가
+        //      지우므로 재호출 인자에 실리지 못하고 기간 줄이 다시 선다. M1 재현 뒤 관측 동작을 적는
+        //      특성화 단언으로 바꿨다(REQ-001 극성 규칙 — §E.2에 "재현됨 — 수용(I-5)").
         let h9 = fresh()
         let h9Ask = h9.drvAsk("create_recurring_schedule",
                               ["title": "AB-기간재질문", "destination_query": "집", "origin_query": "집",
                                "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00"])
-        h9.drvCheck("AB-H09 weeks 없는 재호출에 '반복 기간' 줄이 다시 서지 않는다",
-                    h9Ask?.fields.contains { $0.key == "weeks" } == false,
+        h9.drvCheck("AB-H09 [수용] weeks 없는 재호출에도 '반복 기간' 줄이 다시 선다",
+                    h9Ask?.fields.contains { $0.key == "weeks" } == true,
                     "keys=\(h9Ask?.fields.map(\.key) ?? [])")
 
         // H-10: 머무는 반복의 점심 인자 조용한 버림 — staying 갈래가 return_time 노트와 함께 바로
@@ -2354,6 +2476,151 @@ struct Drv {
                       (h11Unres?.fields.first { $0.key == "travel_from_query" })?
                         .options.contains { $0.label == "이동 없음" } == true,
                       "options=\((h11Unres?.fields.first { $0.key == "travel_from_query" })?.options.map(\.label) ?? [])")
+
+        // REQ-010 확인 경로(AC-008 (3)(4)(5)(7)) — 머무는 요청은 출발지 선택을 거쳐서만 실행부에
+        //      닿는다. 카드를 버블에 얹고 choose로 고른 뒤 drvResolvePendingAsk로 확인까지 밟는다
+        //      (P절과 같은 결정성 — 확정 사전에 좌표가 남아 검색이 필요 없다).
+        store.events = []
+        store.activities = []
+        // (3) '이동 없음'을 고르고 확인하면 활동 블록만 생기고 반복 그룹이 묶인다.
+        let a8no = fresh()
+        let a8noAsk = a8no.drvAsk("create_recurring_schedule",
+                                  ["title": "AB-머묾확정", "destination_query": "집", "origin_query": "집",
+                                   "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00"])
+        if let card = a8noAsk {
+            a8no.bubbles.append(.init(role: .assistant, text: "", ask: card))
+            if let fo = card.fields.first(where: { $0.key == "origin_query" }) {
+                a8no.choose(field: fo.id, value: AIAssistant.drvNoTravelToken())
+            }
+            if let fw = card.fields.first(where: { $0.key == "weeks" }) {
+                a8no.choose(field: fw.id, value: "4")
+            }
+        }
+        _ = await a8no.drvResolvePendingAsk()
+        let a8noBlocks = store.activities.filter { $0.title == "AB-머묾확정" }
+        a8no.drvCheck("AB-REQ010 '이동 없음' 확인 — 활동 블록만 생기고 그룹이 묶인다",
+                      a8noBlocks.count > 0 && store.events.isEmpty
+                          && a8noBlocks.allSatisfy { $0.recurrenceId != nil },
+                      "blocks=\(a8noBlocks.count) events=\(store.events.count)")
+        // (4) 다른 출발지(회사)를 고르면 수단·여유·알림을 사용자에게 받을 때까지 등록하지 않는다(I-1).
+        let a8co = fresh()
+        let a8coAsk = a8co.drvAsk("create_recurring_schedule",
+                                  ["title": "AB-다른출발지", "destination_query": "집", "origin_query": "집",
+                                   "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00"])
+        if let card = a8coAsk {
+            a8co.bubbles.append(.init(role: .assistant, text: "", ask: card))
+            if let fo = card.fields.first(where: { $0.key == "origin_query" }) {
+                a8co.choose(field: fo.id, value: "회사")
+            }
+            if let fw = card.fields.first(where: { $0.key == "weeks" }) {
+                a8co.choose(field: fw.id, value: "4")
+            }
+        }
+        let a8coReply = await a8co.drvResolvePendingAsk()
+        let a8coCount = store.events.filter { $0.title == "AB-다른출발지" }.count
+            + store.activities.filter { $0.title == "AB-다른출발지" }.count
+        a8co.drvCheck("AB-REQ010 다른 출발지 — 수단·여유·알림이 비어 있으면 0건으로 막는다",
+                      a8coCount == 0 && a8coReply?.contains("이동수단") == true
+                          && a8coReply?.contains("비어 있어요") == true,
+                      "count=\(a8coCount) reply=\(a8coReply ?? "nil")")
+        // 셋을 갖춘 같은 인자로 다시 오면 통근 경로로 등록된다(가는+오는+활동 — return_time이 실렸을 때).
+        _ = await a8co.drvCreateRecurring(["title": "AB-다른출발지", "destination_query": "집",
+                                           "origin_query": "회사", "weekdays": ["mon"],
+                                           "arrival_time": "12:00", "return_time": "13:00",
+                                           "start_date": "2027-03-01", "weeks": 4,
+                                           "mode_this_time": "transit", "buffer_minutes": 10,
+                                           "notify_lead_minutes": 10])
+        let a8goLegs = store.events.filter { $0.title == "AB-다른출발지" }
+        let a8goBack = store.events.filter { $0.title == "AB-다른출발지 (복귀)" }
+        let a8goActs = store.activities.filter { $0.title == "AB-다른출발지" }
+        a8co.drvCheck("AB-REQ010 다른 출발지 — 셋을 갖추면 통근 경로로 등록된다(가는·오는·활동)",
+                      a8goLegs.count > 0 && a8goBack.count > 0 && a8goActs.count > 0,
+                      "go=\(a8goLegs.count) back=\(a8goBack.count) acts=\(a8goActs.count)")
+        // 특성화(잔여 위험, 감사 3회차 D3) — 재호출이 return_time을 빠뜨리면 통근 호출과 같아져
+        // 가는 구간만 생기고 활동 블록은 없다. 결과 문구에 '복귀'가 없는 것으로 드러난다. 제목에
+        // '복귀'를 쓰지 않는다 — 요약이 제목을 인용하므로 제목의 글자가 판정을 오염시킨다(M1의
+        // '점심' 사례와 같은 이유).
+        let a8nrReply = await a8co.drvCreateRecurring(["title": "AB-끝시각누락", "destination_query": "집",
+                                                       "origin_query": "회사", "weekdays": ["mon"],
+                                                       "arrival_time": "12:00",
+                                                       "start_date": "2027-03-01", "weeks": 4,
+                                                       "mode_this_time": "transit", "buffer_minutes": 10,
+                                                       "notify_lead_minutes": 10])
+        let a8nrGo = store.events.filter { $0.title == "AB-끝시각누락" }
+        let a8nrBack = store.events.filter { $0.title == "AB-끝시각누락 (복귀)" }
+        let a8nrActs = store.activities.filter { $0.title == "AB-끝시각누락" }
+        a8co.drvCheck("AB-REQ010 재호출이 return_time을 빠뜨리면 가는 구간만 생긴다(특성화)",
+                      a8nrGo.count > 0 && a8nrBack.count == 0 && a8nrActs.count == 0
+                          && a8nrReply.contains("복귀") == false,
+                      "go=\(a8nrGo.count) back=\(a8nrBack.count) acts=\(a8nrActs.count) reply=\(a8nrReply)")
+        // (5) 한 번짜리(T-1) — '이동 없음'을 고르면 활동 1건·이동 0건이다(집을 골라도 좌표가 같아 같다).
+        let a8one = fresh()
+        let a8oneAsk = a8one.drvAsk("create_activity",
+                                    ["title": "AB-한번머묾", "place_query": "집",
+                                     "start_iso": "2027-03-16T12:00:00", "end_iso": "2027-03-16T13:00:00"])
+        if let card = a8oneAsk, let ft = card.fields.first(where: { $0.key == "travel_from_query" }) {
+            a8one.bubbles.append(.init(role: .assistant, text: "", ask: card))
+            a8one.choose(field: ft.id, value: AIAssistant.drvNoTravelToken())
+        }
+        _ = await a8one.drvResolvePendingAsk()
+        let a8oneActs = store.activities.filter { $0.title == "AB-한번머묾" }
+        a8one.drvCheck("AB-REQ010 한 번짜리 '이동 없음' — 활동 1건·이동 0건",
+                       a8oneActs.count == 1
+                           && store.events.filter { $0.title == "AB-한번머묾" }.isEmpty,
+                       "acts=\(a8oneActs.count) legs=\(store.events.filter { $0.title == "AB-한번머묾" }.count)")
+        let a8co2 = fresh()
+        let a8co2Ask = a8co2.drvAsk("create_activity",
+                                    ["title": "AB-한번출발", "place_query": "집",
+                                     "start_iso": "2027-03-17T12:00:00", "end_iso": "2027-03-17T13:00:00"])
+        if let card = a8co2Ask, let ft = card.fields.first(where: { $0.key == "travel_from_query" }) {
+            a8co2.bubbles.append(.init(role: .assistant, text: "", ask: card))
+            a8co2.choose(field: ft.id, value: "회사")
+        }
+        let a8co2Reply = await a8co2.drvResolvePendingAsk()
+        let a8co2Count = store.events.filter { $0.title == "AB-한번출발" }.count
+            + store.activities.filter { $0.title == "AB-한번출발" }.count
+        a8co2.drvCheck("AB-REQ010 한 번짜리 다른 출발지 — 수단·여유·알림이 비어 있으면 0건으로 막는다",
+                       a8co2Count == 0 && a8co2Reply?.contains("이동수단") == true,
+                       "count=\(a8co2Count) reply=\(a8co2Reply ?? "nil")")
+        let a8go2Reply = await a8co2.drvExecuteTool("create_activity",
+                                                    ["title": "AB-한번출발", "place_query": "집",
+                                                     "start_iso": "2027-03-17T12:00:00",
+                                                     "end_iso": "2027-03-17T13:00:00",
+                                                     "travel_from_query": "회사", "mode_this_time": "transit",
+                                                     "buffer_minutes": 10, "notify_lead_minutes": 10])
+        let a8go2Acts = store.activities.filter { $0.title == "AB-한번출발" }
+        let a8go2Legs = store.events.filter { $0.title == "AB-한번출발" }
+        a8co2.drvCheck("AB-REQ010 한 번짜리 다른 출발지 — 셋을 갖추면 편도로 등록된다(가는 1·오는 0, B-1)",
+                       a8go2Acts.count == 1 && a8go2Legs.count == 1
+                           && a8go2Legs.allSatisfy { $0.origin?.name == "회사" },
+                       "acts=\(a8go2Acts.count) legs=\(a8go2Legs.count) reply=\(a8go2Reply)")
+        // (7) 끝 시각을 출발지보다 먼저 받는다(B-2·B-3) — 카드가 서지 않고(nil), 실행부가 사용자에게
+        //     물어받으라고 지시하며 레코드는 0건이다. 반복(return_time 없음)·한 번짜리(end_iso 없음).
+        let a7r = fresh()
+        let a7rAsk = a7r.drvAsk("create_recurring_schedule",
+                                ["title": "AB-끝시각", "destination_query": "집", "origin_query": "집",
+                                 "weekdays": ["mon"], "arrival_time": "12:00"])
+        let a7rReply = await a7r.drvExecuteTool("create_recurring_schedule",
+                                                ["title": "AB-끝시각", "destination_query": "집",
+                                                 "origin_query": "집", "weekdays": ["mon"],
+                                                 "arrival_time": "12:00", "start_date": "2027-03-01",
+                                                 "weeks": 4])
+        a7r.drvCheck("AB-REQ010 끝 시각 없는 머무는 반복 — 카드 없이 사용자에게 물어받으라고 지시한다",
+                     a7rAsk == nil && a7rReply.contains("사용자에게")
+                         && store.activities.filter { $0.title == "AB-끝시각" }.isEmpty
+                         && store.events.filter { $0.title == "AB-끝시각" }.isEmpty,
+                     "ask=\(a7rAsk != nil) reply=\(a7rReply)")
+        let a7a = fresh()
+        let a7aAsk = a7a.drvAsk("create_activity",
+                                ["title": "AB-끝시각활동", "place_query": "집",
+                                 "start_iso": "2027-03-16T12:00:00"])
+        let a7aReply = await a7a.drvExecuteTool("create_activity",
+                                                ["title": "AB-끝시각활동", "place_query": "집",
+                                                 "start_iso": "2027-03-16T12:00:00"])
+        a7a.drvCheck("AB-REQ010 끝 시각 없는 머무는 한 번짜리 — 카드 없이 사용자에게 물어받으라고 지시한다",
+                     a7aAsk == nil && a7aReply.contains("사용자에게")
+                         && store.activities.filter { $0.title == "AB-끝시각활동" }.isEmpty,
+                     "ask=\(a7aAsk != nil) reply=\(a7aReply)")
         store.events = []
         store.activities = []
 

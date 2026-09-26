@@ -345,6 +345,63 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | `grep -c '✗ AB-' m3-driver.log` · `grep '✗' m3-driver.log \| grep -c 'AA-1\|AB-H04'` | `18` · `0` |
 | `ls -d $TMPDIR/besir-gd-*` | 없음(정상 종료 정리) |
 
+### M4 — 카드 표면 · 머무는 요청 (REQ-006~011, 2026-09-26)
+
+- **관측 트리: 이번 커밋**(아래 커밋 SHA). 변경은 `Shared/AIAssistant.swift`·`Tools/GuardDriver.swift`·`Shared/EditCard.swift`(주석만 — AC-011 (1) 필터 0줄)+이 progress.md, 관측 로그는 `.moai/state/verify/t16/m4-driver.log`·`m4-compile.log`.
+- **결과: `296/296 통과` · 드라이버 exit 0 · `✗ AB-` 0.** `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다`. 샌드박스 정상 정리(`ls -d $TMPDIR/besir-gd-*` → 없음). `grep -c '✗'` 1줄은 AB절 배너 문장(✗ 문자를 안내에 포함)이고 M2·M3 로그와 같은 모양이다.
+
+#### (a) M3 ✗ 18줄 → 전부 ✓ (원문)
+
+| 가설 | M3 ✗ (§E.2 M1 표 참조 — 단언 코드는 그대로) | M4 ✓ 원문 |
+|---|---|---|
+| H-5 | `✗ AB-H05 후보 줄이 첫 렌더에 열려 있다`(`startsOpen=false`) | `✓ AB-H05 후보 줄이 첫 렌더에 열려 있다` |
+| H-6 ×2 | `✗ AB-H06 활동 후보 카드 맥락 줄에 제목이 있다`(`stated=[]`) · `✗ AB-H06 반복 후보 카드 맥락 줄에 제목이 있다` | 둘 다 ✓ (같은 이름) |
+| H-7 | `✗ AB-H07 왕복 가는 편 줄 캡션이 채워 온 값(집)을 적는다` | `✓ AB-H07 왕복 가는 편 줄 캡션이 채워 온 값(집)을 적는다` |
+| H-8 ×2 | `✗ AB-H08 거짓 '이미 삭제' 문구가 없다` · `✗ AB-H08 바꿀 이동 구간이 없다고 사실을 말한다` | 둘 다 ✓ |
+| H-9 | `✗ AB-H09 weeks 없는 재호출에 '반복 기간' 줄이 다시 서지 않는다` | **재작성** — 아래 (b) |
+| H-10 | `✗ AB-H10 머무는 반복 결과가 버린 점심 인자를 말한다` | `✓ AB-H10 머무는 반복 결과가 버린 점심 인자를 말한다` |
+| H-11 ×10 | 머무는 반복 카드 출발지 줄·'이동 없음'·캡션 ×3, 한 번짜리(비움) 출발지 줄·선택지 ×2, 같은 값 출발지 줄·캡션·선택지 ×3, 못 푸는 장소 장소+출발지 줄·선택지 ×2 (전부 ✗) | 전부 ✓ (M1 표의 줄 이름 그대로) — `✓ AB-H11` 11줄(수단·여유·알림 억제 회귀 방지선 포함) |
+
+#### (b) 단언 원장 — M4 차분 **뺀 2 · 더한 19** (누적 더한 61 · 뺀 6, T = 241 + 61 − 6 = **296**)
+
+- **뺀 2**: `AB-H09 weeks 없는 재호출에 '반복 기간' 줄이 다시 서지 않는다`(바라는 동작 원문 — 아래 재작성) · `AA-4: 출발지=목적지 반복은 기간 줄만 묻는다(수단·여유·알림 안 묻는다)`(새 계약과 맞선다 — AC-008 (1) 지시대로 제거, `AB-H11`이 대신한다. AA-4 둘째 단언 "다른 장소 반복은 수단·여유·알림을 묻는다"는 그대로 ✓).
+- **더한 19**:
+  1. `AB-H09 [수용] weeks 없는 재호출에도 '반복 기간' 줄이 다시 선다` — **재현됨 — 수용(I-5)**. M1 ✗ 줄(`keys=["weeks"]`)을 관측 동작 특성화로 재작성했다(REQ-001 극성 규칙). `grep -c '✓ AB-H09 \[수용\]'` = 1.
+  2. `AB-H01 머무는 반복 목적지 모호('이동 없음' 뒤)` — **AC-003 10번 조합**(수리 때 추가하는 회귀 방지선). 레코드는 활동 블록뿐, 장소 = 둘째 후보, 이동 없음 뒤 후보 카드는 `{destination_query}`만 묻는다(I-1).
+  3~6. `AB-H06 일정 후보 카드 맥락 줄에 제목이 있다` · `AB-H06 일정 실행 전 카드 맥락 줄에 제목이 있다` · `AB-H06 활동 실행 전 카드 맥락 줄에 제목과 묻지 않는 장소가 있다` · `AB-H06 반복 실행 전 카드 맥락 줄에 제목과 묻지 않는 장소가 있다` — REQ-007의 3도구 × 2경로 여섯 단언을 갖춘다(AC-005 (2), 기존 활동·반복 후보 카드 둘과 합쳐 `grep -c '✓ AB-H06'` = 6).
+  7~10. `AB-REQ008` 넷 — 같은 즐겨찾기 이름(집/집) 제외 · 이번 대화 확정 장소 이름 제외 · 반복의 같은 검색어는 머무는 출발지 줄(AC-006 (5)) · 한 번짜리 같은 검색어는 값 캡션 출발지 줄(AC-006 (5)).
+  11~19. `AB-REQ010` 아홉 — '이동 없음' 확인(활동 블록만·그룹 묶임, AC-008 (3)) · 다른 출발지 수단·여유·알림 공백 0건 블록(I-1) · 셋을 갖춘 통근 등록(가는+오는+활동) · `return_time` 누락 재호출 특성화(가지만·복귀 문구 없음 — 감사 3회차 D3 잔여 위험의 검사) · 한 번짜리 '이동 없음'(활동 1·이동 0) · 한 번짜리 다른 출발지 블록 · 한 번짜리 편도 등록(가는 1·오는 0 — 경계 B-1) · 끝 시각 없는 반복(카드 nil·`사용자에게`·0건) · 끝 시각 없는 한 번짜리(같음) — AC-008 (4)(5)(7).
+- **O-6 첫 단언 — 뺀 0 · 더한 0(기대만 교체)**: 이름 `O-6: 이동 없는 활동도 못 푸는 장소면 활동 장소 줄이 뜬다(이동 줄은 그대로 없다)` → `O-6: 못 푸는 장소의 이동 없는 활동은 장소 줄과 출발지 줄이 함께 뜬다(머무는 요청)`. 옛 기대 `fields.map(\.key) == ["place_query"]` → 새 기대 `Set(keys) == ["place_query", "travel_from_query"]` + 출발지 줄에 `이동 없음` 옵션(AC-008 (5), 감사 3회차 D2의 보존 지시).
+
+#### (c) 수리별 코드 자리 · grep 증명 (임무 지시 전부, 관측 수치)
+
+| 대상 | 관측 |
+|---|---|
+| REQ-006 — `grep -c 'startsOpen' Shared/AIAssistant.swift` | **1**(후보 줄 `f.startsOpen = true`, parkForUnclearPlaces). `grep -c 'AI 카드는 전부 기본값 false' Shared/EditCard.swift` = **0**(주석 교체 — D-6 (a)). 캡션: `첫 검색 결과가 말씀하신` = **0**, `검색 결과가 말씀하신 지점인지 확실하지 않아요` = **1**, `아래 후보에서 맞는 곳을 골라 주세요` = **1** |
+| REQ-007 — `grep -c 'guard tool == "create_schedule"' Shared/AIAssistant.swift` | **0**(< 1). 맥락 줄 단일 함수 `filledValueLabels`(정의 **:868**)이 세 도구를 담당하고 `pendingAsk`(실행 전)·`parkForUnclearPlaces`(후보)가 같은 함수를 부른다. 드라이버 `grep -c '✓ AB-H06'` = **6** |
+| REQ-008 — 옛/새 캡션 | `가 여러 줄에 같은 이름으로 왔어요` = **0**, `이 다른 줄에도 있어요. 이 줄에 맞는 지점을 골라 주세요.` = **1**. 제외 신호 세 가지(즐겨찾기 `searchBoundPlace` · 확정 `confirmedPlaces` · 머무는 신호 `stayingOneShotActivity`가 같은 이름 줄을 건너뛴다)+반복 도구는 애초에 같은 이름 줄이 없다 |
+| REQ-009 — 옛/새 캡션 | `미리 정해진 출발지가 맞는지` = **0**, `에서 출발하는지 한 번 더 골라 주세요` = **1**(`roundTripOriginNote`). 칩 `가는 편 없음`·미리 선택 없음·사무실 unknown 무칩 회귀는 기존 단언(O-6 3·4번, AB-H07)이 지킨다 |
+| REQ-010 — 문구 | `'이동 없음'을 고르면 돼요` = **1**(stayingOriginNote, I-6 원문), `이동 없이 한 곳에서` = **0**, `return_time에 넣어` = **0**(< 1 — `stayingEndAsk`가 arg를 보간하므로 리터럴이 사라졌고, 문장은 `사용자에게 물어`를 포함한다), `가드는 create_schedule 경로 전용` = **0**(주석 교체 자리 **:2070** — `isSamePlace`의 사용처(create_schedule 거절 · 머무는 요청 판정)를 적는다, AC-008 (9)) |
+| REQ-010 — 새 지점 | `noTravelToken` **:2818**(카드 전용 토큰, 선언 키 무변경) · `stayingRecurrenceSignal` **:788** · `stayingOneShotActivity` **:797**(T-1) · `stayingOriginField` **:807**(I-2 칩) · `stayingEndAsk` **:1908**(B-2·B-3) · `makeStayingRecurrence` **:1916**(두 신호가 같은 길 — 계약 5) · 50 m 교체는 `executeCreateActivity`의 머무는 신호 게이트 안에서만(편도 실행부 일반 가드 없음 — AC-008 (5) 양성 대조 단언 `AB-REQ010 한 번짜리 다른 출발지 — 셋을 갖추면 편도`가 지킨다) |
+| REQ-011 — AB-H08 | `executeUpdateRecurringSchedule` — 번호 없는 호출이 lastRecurrenceId의 그룹을 겨누는데 events에 그 rid가 없고 activities에만 있으면 "바꿀 이동 구간이 없어요" 사실 문구(`이동 구간` 포함, `이미 삭제됐을 수 있어요` 부재). `Shared/Store.swift` 무변경(`git diff aa7b792 -- Shared/Store.swift` 빈 출력) |
+| AC-002 (3) 회귀 | `grep '✗' m4-driver.log \| grep -c 'AA-1\|AB-H04'` = **0** |
+| 선언 무변경(REQ-013) | M4 diff(`e1a40a6` → HEAD)에서 `"type"`·`"required"`·`"enum"`·`"properties"`·`functionDeclarations` 줄 변경 **0**. `grep -c '"type": "[a-z]'` = **0**. aa7b792 → HEAD의 선언 영역 차이는 후보(e1a40a6)의 `origin_query` 설명 한 줄뿐(§1.2 "선언 설명 :1273" — 이 카드의 출발점이 채택한 diff) |
+| 컴파일 경고 | `grep -c 'warning:' m4-compile.log` = **24**(base·M1·M2·M3와 동일 — 진단 12 + 캐럿 문맥 12) |
+
+#### (d) M4 도중 잡은 자기 결함 1건(기록)
+
+- **토큰이 실린 재호출에서 답을 받은 줄이 다시 서나**: 첫 실행(290/296)에서 `AB-H01 create_activity place_query`·한 번짜리 확인·R절 "편도로 만들어진다" 세 곳이 "가는 편 출발지이(가) 비어 있어요"로 막혔다. 원인 — 출발지 줄의 값이 내부 토큰(`이동 없음`/`가는 편 없음`)이면 캡션이 nil이 되고, note 없는 줄을 `missingAskedArguments`가 "비어 있다"로 세어 등록을 막았다. 수리 — 토큰은 이미 답이므로 그 줄을 다시 띄우지 않는다(askFields 두 갈래에 같은 판정). 재현 절이 수리 자체의 회귀도 잡는다는 원칙(REQ-001)의 M4 사례다.
+
+#### M4 때 이 레인이 돌린 명령
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `git branch --show-current && git rev-parse --short HEAD`(착수 전) | `WT-place-resolution` · `433439c` |
+| `grep -c '✗ AB-' .moai/state/verify/t16/m3-driver.log`(착수 전) | `18` |
+| `CLAUDE.md` 드라이버 블록 → `m4-compile.log` / `m4-driver.log` | 컴파일 exit 0 · warning 24줄(1차 컴파일은 `from` let 상수 오류 1건 → `pickedFrom` 국소 바인딩으로 수정) · 1차 실행 `290/296` exit 1(위 (d)) → 최종 **exit 0 · `296/296 통과` · `[실제 데이터] 대조 통과`** |
+| `grep -c '✓ AB-H01\|✓ AB-H06\|✓ AB-H11\|✓ AB-REQ008\|✓ AB-REQ010' m4-driver.log` | `10` · `6` · `11` · `4` · `9` |
+| `ls -d $TMPDIR/besir-gd-*` | 없음(정상 종료 정리) |
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
