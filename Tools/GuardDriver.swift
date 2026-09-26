@@ -1827,18 +1827,22 @@ struct Drv {
         store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000)),
                            FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))]
         // AA-1: 채택 판정 — 관측 두 사례(홍대점→대학로점, 강남→선릉과정릉)는 물어보고, 접미어가
-        //       다른 같은 지점(홍대역/홍대입구역)은 조용히 채택한다.
+        //       다른 같은 지점(홍대역/홍대입구역)은 조용히 채택한다. 판정은 이름만 본다(REQ-002
+        //       D-2 (a)) — 강남·테헤란로 픽스처는 실제 주소 모양까지 준다(빈 주소로는 관측 경로가
+        //       지나쳤다).
         let aaT = fresh()
         aaT.drvCheck("AA-1: '스타벅스 홍대점'→'스타벅스 대학로점'은 맞지 않는다(물어본다)",
-                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 대학로점") == false)
-        aaT.drvCheck("AA-1: '강남'→'서울선릉과정릉'은 맞지 않는다(2026-09-24 관측)",
-                     AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉") == false)
+                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 대학로점", address: "서울 종로구 대학로 116") == false)
+        aaT.drvCheck("AA-1: '강남'→'서울선릉과정릉'(선릉로 주소)은 맞지 않는다(2026-09-24 관측)",
+                     AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1") == false)
+        aaT.drvCheck("AA-1: '강남'→'서울선릉과정릉'(삼성동 주소)도 맞지 않는다(주소는 안 본다)",
+                     AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 삼성동 131") == false)
         aaT.drvCheck("AA-1: '스타벅스 홍대점'→'스타벅스 홍대입구역점'은 같은 지점으로 본다",
-                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 홍대입구역점") == true)
+                     AIAssistant.drvTopMatches("스타벅스 홍대점", name: "스타벅스 홍대입구역점", address: "서울 마포구 양화로 165") == true)
         aaT.drvCheck("AA-1: '홍대역'→'홍대입구역'도 같은 지점으로 본다(접미어 '역'은 뗀다)",
                      AIAssistant.drvTopMatches("홍대역", name: "홍대입구역") == true)
-        aaT.drvCheck("AA-1: 이름에 없는 낱말이 주소에 있으면 거짓 되묻기하지 않는다",
-                     AIAssistant.drvTopMatches("테헤란로 152", name: "OO빌딩", address: "서울 강남구 테헤란로 152") == true)
+        aaT.drvCheck("AA-1: 주소로만 말한 질의('테헤란로 152')는 물어본다(이름만 본다)",
+                     AIAssistant.drvTopMatches("테헤란로 152", name: "OO빌딩", address: "서울 강남구 테헤란로 152") == false)
         // AA-2: 같은 이름이 출발지·목적지에 오면 두 줄을 다 띄운다(AC-009 7번 — 예전엔 줄이 안
         //       떠 첫 결과가 두 줄에 같게 잡히고 isSamePlace가 거절로 끝났다).
         let aaS = fresh()

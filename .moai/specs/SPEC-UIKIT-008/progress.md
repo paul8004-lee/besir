@@ -295,6 +295,56 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 - **`runLoop` — `Shared/AIAssistant.swift:441`** `if bubbles.contains(where: { $0.ask != nil }) { return }`: 도구 실행 중 후보 카드가 서면 그 턴에서 모델을 다시 부르지 않고 돌아오는 자리. 카드 아래 모델 말풍선이 붙지 않는다(:428-431 ask 카드 경로와 같은 모양 — 카드는 `parkForUnclearPlaces` :820이 빈 말풍선과 함께 단다).
 - 재호출 경로 제거의 짝: `submit()` :285 `cancelPendingAsk()`(새 발화가 열린 카드를 접는다 — spec REQ-005 근거의 `:285`).
 
+### M3 — 판정 술어 (REQ-002, 2026-09-26)
+
+- **관측 트리: 이번 커밋**(아래 커밋 SHA). 변경은 `Shared/AIAssistant.swift`·`Tools/GuardDriver.swift`(+이 progress.md), 관측 로그는 `.moai/state/verify/t16/m3-driver.log`·`m3-compile.log`.
+- **결과: `261/279 통과`** · 드라이버 exit **1**(M4 대상 18건이 여전히 ✗ — 중간 기대값). `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다`. 샌드박스 정상 정리(`ls -d $TMPDIR/besir-gd-*` → 없음). 비-AB 회귀 0건 — ✗ 줄 중 비-AB는 AB절 배너 문장(✗ 문자를 안내에 포함) 1줄뿐이고 M2 로그와 같은 모양이다.
+
+#### (a) 술어 변경 — 결과 이름만 본다 (D-2 (a))
+
+- `Shared/AIAssistant.swift` `searchTopClearlyMatches`(정의 **:2714**, 호출처 :2702 하나뿐):
+  - 옛: `let haystack = (result.name + " " + result.address).replacingOccurrences(of: " ", with: "")` — 이름 뒤 주소를 이어붙여 낱말을 찾았다.
+  - 새: `let haystack = result.name.replacingOccurrences(of: " ", with: "")`(**:2715**) — 결과 이름만 판정한다.
+- 주석도 같이 뒤집었다 — 옛은 "주소도 함께 보는 건 거짓 되묻기를 줄이기 위해서다(건물명 결과는 이름에 없는 낱말이 주소에 있는 경우가 흔하다)"였고, 새는 "판정이 주소를 안 보는 건 주소 낱말이 가짜 답을 만들었기 때문이다 — '강남'으로 말한 자리에서 주소의 '강남구'가 낱말을 만족시켜 '서울선릉과정릉'이 조용히 채택됐다(2026-09-24 관측). 주소로 말한 질의는 후보 카드에서 한 번 더 고른다".
+- 토큰 규칙('점'·'역' 접미어 제거·2글자 하한·띄어쓰기 제거)과 `adoptPlace` 사다리(:2681, 검색 갈래 :2691-2704)·`maxPlaceSuggestions`·후보 카드 경로는 무변경(REQ-013).
+
+#### (b) 픽스처 변경 — AA-1 (AC-002)
+
+| 픽스처 | 옛 | 새 | 장부 |
+|---|---|---|---|
+| 강남 | `drvTopMatches("강남", name: "서울선릉과정릉") == false` — 주소 인자 없음(옛 `:1835`) | 두 줄: `drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1") == false` · `drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 삼성동 131") == false` | **뺀 1 · 더한 2** |
+| 테헤란로 | `drvTopMatches("테헤란로 152", name: "OO빌딩", address: "서울 강남구 테헤란로 152") == true`(문구 "이름에 없는 낱말이 주소에 있으면 거짓 되묻기하지 않는다", 옛 `:1841`) | 같은 픽스처에 `== false` — 문구 "주소로만 말한 질의('테헤란로 152')는 물어본다(이름만 본다)" | **뺀 1 · 더한 1** |
+| 회귀(기대값 무변경) | 주소 인자 없음 | '스타벅스 홍대점'→'스타벅스 대학로점'에 `address: "서울 종로구 대학로 116"`(NOT match) · →'스타벅스 홍대입구역점'에 `address: "서울 마포구 양화로 165"`(match)을 얹었다. '홍대역'→'홍대입구역'(match)은 무변경 — AC-002 (3)이 이 픽스처에는 주소를 명시하지 않는다 | 0(줄 수 무변경) |
+
+#### (c) AB-H04 ✗ → ✓ (원문 — 단언 코드는 M1 그대로, 통과만 뒤집혔다)
+
+- M1 ✗(관측 트리 `c405ff5`, §E.2 M1 표): `✗ AB-H04 '강남'→선릉과정릉(선릉로 주소)은 맞지 않는다`(`match=true — 주소의 '강남구'가 이름 낱말을 만족시켰다`) · `✗ AB-H04 '강남'→선릉과정릉(삼성동 주소)도 맞지 않는다`(`match=true — 판정은 주소를 보지 않아야 하므로 두 주소의 결과가 같다`)
+- M3 ✓(이번 커밋): `✓ AB-H04 '강남'→선릉과정릉(선릉로 주소)은 맞지 않는다` · `✓ AB-H04 '강남'→선릉과정릉(삼성동 주소)도 맞지 않는다`
+- `drvCheck`가 상세 문구를 ✗일 때만 찍으므로(`Tools/GuardDriver.swift:32`) 재현용 상세는 ✓ 줄에 남지 않는다 — AB절 코드는 무변경.
+
+#### (d) 드라이버 수치 · AC-012 장부 · grep 증명
+
+- `261/279 통과` · exit 1 · `grep -c '✗ AB-'` = **18**(M2 20 → AB-H04 두 줄 뒤집힘). 잔여 내역: H05×1·H06×2·H07×1·H08×2·H09×1·H10×1·H11×10 — 전부 M4 대상(중간 기대값). `grep '✗' <드라이버 로그> | grep -c 'AA-1\|AB-H04'` = **0**(AC-002 (3)).
+- **AC-012 장부(누적 더한 42 · 뺀 4)**: M3 차분 — 뺀 2(강남 1 · 테헤란로 1) · 더한 3(강남 2 · 테헤란로 1). T = 241 + 42 − 4 = **279**(M1 +38/−0 · M2 +1/−2 · M3 +3/−2).
+- **AC-002 (1) grep 증명** — `grep -n 'drvTopMatches("강남"' Tools/GuardDriver.swift` → 네 줄 모두 `address:`를 싣는다:
+  - `:1837  AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1") == false)`(AA-1)
+  - `:1839  AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 삼성동 131") == false)`(AA-1)
+  - `:2198  let h4a = AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1")`(AB-H04)
+  - `:2201  let h4b = AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 삼성동 131")`(AB-H04)
+- 컴파일 경고: `grep -c 'warning:' .moai/state/verify/t16/m3-compile.log` = **24**(base·M1·M2와 동일).
+- 로그: `.moai/state/verify/t16/m3-driver.log` · `.moai/state/verify/t16/m3-compile.log`.
+
+#### M3 때 이 레인이 돌린 명령
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `git branch --show-current && git rev-parse --short HEAD`(착수 전) | `WT-place-resolution` · `a18154d` |
+| `grep -n 'func searchTopClearlyMatches\|drvTopMatches("강남"\|테헤란로' Shared/AIAssistant.swift Tools/GuardDriver.swift`(착수 전) | `Shared/AIAssistant.swift:2713`(술퍼 정의) · `Tools/GuardDriver.swift:1835`(강남, 주소 없음) · `:1841`(테헤란로 `== true`) · `:2194`·`:2197`(AB-H04) — `:1687`(사무실 픽스처)은 오탐(테헤란로 1, 이번 대상 아님) |
+| `CLAUDE.md` 드라이버 블록(§D) — stderr을 `m3-compile.log`로 | 컴파일 exit `0` · `warning:` 24줄 |
+| `/tmp/gd > .moai/state/verify/t16/m3-driver.log` | exit `1` · `261/279 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` |
+| `grep -c '✗ AB-' m3-driver.log` · `grep '✗' m3-driver.log \| grep -c 'AA-1\|AB-H04'` | `18` · `0` |
+| `ls -d $TMPDIR/besir-gd-*` | 없음(정상 종료 정리) |
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
