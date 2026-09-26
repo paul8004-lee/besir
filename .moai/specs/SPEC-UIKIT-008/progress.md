@@ -243,6 +243,58 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | `grep -c '✗ AB-H' m1-driver.log` · `grep -c '✓ AB-H' m1-driver.log` | `28` · `10` |
 | `ls -d $TMPDIR/besir-gd-*` | 없음(정상 종료 정리) |
 
+### M2 — 데이터 흐름 (REQ-003·004·005, 2026-09-26)
+
+- **관측 트리: 이번 커밋**(아래 커밋 SHA). 변경은 `Shared/AIAssistant.swift`·`Tools/GuardDriver.swift` 두 파일, 관측 로그는 `.moai/state/verify/t16/m2-driver.log`·`m2-compile.log`.
+- **결과: `258/278 통과`** · 드라이버 exit **1**(M3/M4 대상 20건이 여전히 ✗ — 중간 기대값). `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다`. 샌드박스 정상 정리(`ls -d $TMPDIR/besir-gd-*` → 없음).
+- **AC-012 장부(뺀 2 · 더한 1)**: 뺀 것 — `AB-H03 카드가 열린 동안 재호출이 등록되지 않는다`·`AB-H03 한 요청이 두 건이 되지 않는다`(M1에서 AB-H03은 **두 줄**이었다). 더한 것 — `AB-H03 [경로 제거] 실행부 직접 주행에서만 두 건이 된다` 한 줄. 임무 지시는 "뺀 1 · 더한 1"로 적었으나 실제로는 뺀 2 · 더한 1이다(임무 문안이 AB-H03을 한 단언으로 세었고, M1 원장은 2줄로 섰다 — 이 줄이 그 차이를 기록한다). T = 241 + 38 − 2 + 1 = **278**.
+
+#### (a) D-5 (a) 전제 확인 — 코드 증거로 닫았다 (착수 전, D-5 코드를 쓰기 전)
+
+| # | 확인한 인용 | 이 트리에서의 관측 |
+|---|---|---|
+| 1 | `Shared/AIAssistant.swift:198-201` `repairDanglingToolTurn()` + 호출 :164·:292 | function 턴으로 끝난 히스토리에 model 확인 턴("네, 확인했어요.")을 끼운다. submit의 호출(:292)은 사용자 턴을 contents에 넣는(:300) **앞**에 무조건 지나므로, [function → model → user] 순서가 요청으로 나가기 전에 만들어진다 ✓ |
+| 2 | `proxy/src/index.js:167-222` `toResponsesRequest` | 순서 보존 1:1 매핑(model functionCall → function_call; function → function_call_output; user → user items). 재정렬·거부 분기 없음 ✓ |
+| 3 | "거부했다" 주석(`Shared/AIAssistant.swift:161-162`·`:410-412`) | 둘 다 **삭제된 Workers AI**의 role 순서 거부 이야기다 — `proxy/src/index.js`에서 `proxyWorkersAI`·`toOpenAIRequest`·`toGeminiShape`·`WORKERS_AI_MODEL` grep 0건, `proxy/wrangler.toml:5`가 [ai] 바인딩 제거(2026-09-13)를 확인. 현재 백엔드는 `proxyOpenAI`(:224, `/v1/responses`, `gpt-5.6-luna`, effort medium) ✓ |
+| 4 | 더 강한 근거 | 2회 이상 도구를 도는 턴은 오늘도 매번 function 턴으로 끝나는 히스토리로 callAI를 부른다(runLoop의 둘째 호출) — 수리 뒤 모양([function_call_output → model → user])은 그보다 표준적이다 ✓ (코드 구조 사실) |
+
+- **갭(정직하게)**: 이 정확한 히스토리를 실은 라이브 요청은 보내지 않았다 — 코드 증거로 닫았고 할당량은 쓰지 않았다(드라이버는 프록시 설정을 비운다). 모델 루프 실동작은 AC-014 시뮬레이터 몫이다.
+- **전제는 깨지지 않았다** — 블로커 없이 D-5 코드를 썼다(REQ-005).
+
+#### (b) 수리별 증거 — M1 ✗ → M2 ✓ (원문)
+
+| 가설 | M1 ✗ 원문(관측 트리 `c405ff5`) | M2 ✓ 원문 | 수리 자리 |
+|---|---|---|---|
+| H-1 조합4 | `✗ AB-H01 create_recurring_schedule destination_query`(`reply=반복 일정 정보가 부족합니다. 제목, 목적지, 반복 요일, 도착 시각을 다시 확인해 주세요. events=0`) | `✓ AB-H01 create_recurring_schedule destination_query` | D-3 — `parkForUnclearPlaces` :806(줄 공장 askFields를 **비우기 전 인자**로)·:808(비우기=기록), `resolvePendingAsk` :1067-1073(빈 키 선주입) |
+| H-1 조합5 | `✗ AB-H01 create_activity place_query`(`location=nil reply=활동 블록 등록 완료 — 'AB-활동장소주입', 3월 16일 (화) 오전 10시 0분 ~ 3월 16일 (화) 오후 12시 0분.`) | `✓ AB-H01 create_activity place_query` | 같음 |
+| H-1 조합7 | `✗ AB-H01 create_activity travel_from_query 편도`(`legs=0 reply=… 가는 이동 없이 성공 등록`) | `✓ AB-H01 create_activity travel_from_query 편도` | 같음 |
+| H-1 조합8 | `✗ AB-H01 create_activity return_to_query`(`복귀legs=0 reply=활동 블록 등록 완료 — 'AB-복귀지주입', 장소 '회사', … 가는 이동 1건도 활동에 묶어서 만들었어요(도보).`) | `✓ AB-H01 create_activity return_to_query` | 같음 + 카드가 확인 뒤 호출 모양(왕복)의 줄(가는 편 출발지 재확인·가는/오는 편 수단)까지 함께 묻는다 — 드라이버 조합8 픽스처가 그 줄들을 같이 고른다 |
+| H-2 | `✗ AB-H02 두 번째 모호 호출 안내가 자동 진행을 말하지 않는다` · `✗ AB-H02 두 번째 모호 호출이 미등록·카드 뒤 재호출 안내를 받는다`(둘 다 상세 원문: `이미 같은 질문의 카드가 열려 있어요. 사용자가 카드에서 고르면 그 값으로 자동으로 진행돼요 — 인자를 바꾸지 말고 기다려.`) | 두 줄 모두 ✓ | D-4 — `parkForUnclearPlaces` :798-800, 새 문구 `등록하지 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 등록만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해.`("자동으로 진행" 부재 · "등록하지 않았"·"다시 호출" 있음 — 단언이 그대로 판정) |
+| H-3 | `✗ AB-H03 카드가 열린 동안 재호출이 등록되지 않는다`(`events=1`) · `✗ AB-H03 한 요청이 두 건이 되지 않는다`(`events=2 reply=등록 완료 — 제목 'AB-이중등록', '집' → '스타벅스 홍대입구역점', …`) | `✓ AB-H03 [경로 제거] 실행부 직접 주행에서만 두 건이 된다` — **경로 제거(D-5 (a))** | D-5 — 아래 (c) |
+
+- **남은 ✗ 20줄(전부 M3/M4 대상 — 중간 기대값)**: `AB-H04`×2 — M3(REQ-002 D-2 이름만 판정) · `AB-H05`×1·`AB-H06`×2·`AB-H07 캡션`×1 — M4(REQ-006 D-6 · REQ-007 · REQ-009 D-7) · `AB-H08`×2 — M4(REQ-011) · `AB-H09`×1 — M4 수용(I-5) 재작성 대상 · `AB-H10`×1·`AB-H11`×10 — M4(REQ-010 '이동 없음' 출발지 줄).
+- **M2 도중 잡은 자기 결함 1건(기록)**: 빈 값 판정을 `??` 한 줄로 쓰면 `(a ?? b) == nil`로 해석돼 값이 있는 키까지 "안 비었다"로 읽혀, 첫 드라이버 실행에서 조합 4·5·7·8이 그대로 ✗로 나왔다(254/278). `if let`으로 펴서 고쳤고 `resolvePendingAsk` 주석에 근거를 남겼다 — 재현 절이 수리 자체의 회귀도 잡는다는 원칙(REQ-001)의 M2 사례다.
+
+#### (c) AB-H03 [경로 제거] 재작성 기록 (REQ-001)
+
+- `AB-H03 카드가 열린 동안 재호출이 등록되지 않는다` + `AB-H03 한 요청이 두 건이 되지 않는다`(바라는 동작 2줄) → `AB-H03 [경로 제거] 실행부 직접 주행에서만 두 건이 된다`(특성화 1줄, `h3Total == 2`).
+- **경로 제거(D-5 (a))** — 경로를 없앤 코드 자리:
+  - `runLoop` — **`Shared/AIAssistant.swift:441`** `if bubbles.contains(where: { $0.ask != nil }) { return }`(도구 실행(`runToolCalls` :434) 뒤, 모델 재호출(`for` 루프의 다음 `callAI`) **앞**). 후보 카드가 도구 실행 안에서 서면 그 턴이 끝난다 — 같은 턴의 모델 재호출(인자를 바꾼 이중 등록의 진입로)이 구조적으로 없다.
+  - `submit()` — **`:285` `cancelPendingAsk()`**(새 발화가 열린 카드를 접는다)·**`:292` `repairDanglingToolTurn()`**(function 턴으로 끝난 히스토리를 고쳐 다음 요청이 [function_call_output → model → user]로 나간다 — 전제 (a)).
+- 드라이버는 모델 루프를 지나지 못하므로(프록시 설정을 비운다), 실행부를 직접 몰 때의 잔상(등록 2건)을 특성화로 적었다 — 앱에서는 위 두 자리로 그 경로에 닿을 수 없다.
+
+#### (d) 드라이버 수치 (AC-012 장부용)
+
+- `258/278 통과` · exit 1 · `grep -c '✗ AB-'` = **20**(M1 28 → 뒤집힘 6 + 제거된 AB-H03 ✗ 2). 비-AB 회귀 0건.
+- 뒤집힘(✗→✓) 6줄: AB-H01 조합 4·5·7·8 + AB-H02 두 줄. AB-H03은 재작성(뺀 2 · 더한 1 — 위 장부 줄).
+- 컴파일 경고: `grep -c 'warning:' .moai/state/verify/t16/m2-compile.log` = **24**(base와 동일 — 진단 12 + 캐럿 문맥 12, MapKit·CoreLocation 지원중단(deprecation) 경고로 전부 `DirectionsService.swift`·`LocationManager.swift` 것).
+- 로그: `.moai/state/verify/t16/m2-driver.log` · `.moai/state/verify/t16/m2-compile.log`.
+
+#### (e) AC-004 (2) 코드 대조 줄
+
+- **`runLoop` — `Shared/AIAssistant.swift:441`** `if bubbles.contains(where: { $0.ask != nil }) { return }`: 도구 실행 중 후보 카드가 서면 그 턴에서 모델을 다시 부르지 않고 돌아오는 자리. 카드 아래 모델 말풍선이 붙지 않는다(:428-431 ask 카드 경로와 같은 모양 — 카드는 `parkForUnclearPlaces` :820이 빈 말풍선과 함께 단다).
+- 재호출 경로 제거의 짝: `submit()` :285 `cancelPendingAsk()`(새 발화가 열린 카드를 접는다 — spec REQ-005 근거의 `:285`).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

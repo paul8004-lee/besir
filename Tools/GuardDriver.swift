@@ -2094,6 +2094,8 @@ struct Drv {
                      "legs=\(store.events.filter { $0.title == "AB-편도출발주입" }.count) reply=\(h1sReply ?? "nil")")
         // H-01 조합8: create_activity · return_to_query — 고른 복귀지가 버려지고 왕복이 편도로
         //        조용히 바뀐다(수단까지 비워 오면 missingAskedArguments가 막는다 — §1.3 예측).
+        //        D-3 수리 뒤 후보 카드는 확인 뒤의 호출 모양(왕복)이 물을 줄까지 함께 묻는다 —
+        //        가는 편 출발지(재확인)와 가는/오는 편 수단을 같이 고른다.
         let h1r = fresh()
         _ = h1r.drvPark("create_activity",
                         ["title": "AB-복귀지주입", "place_query": "회사",
@@ -2101,6 +2103,17 @@ struct Drv {
                          "travel_from_query": "집", "return_to_query": "스타벅스 강남점",
                          "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
                         [(key: "return_to_query", query: "스타벅스 강남점", candidates: abGangnam)])
+        if let card = h1r.drvLiveAsk() {
+            if let ff = card.fields.first(where: { $0.key == "travel_from_query" }) {
+                h1r.choose(field: ff.id, value: "집")
+            }
+            if let fmo = card.fields.first(where: { $0.key == "travel_mode_this_time" }) {
+                h1r.choose(field: fmo.id, value: "walk")
+            }
+            if let fmr = card.fields.first(where: { $0.key == "return_mode_this_time" }) {
+                h1r.choose(field: fmr.id, value: "walk")
+            }
+        }
         let h1rReply = await abConfirm(h1r, "return_to_query", abGangnam[1])
         h1r.drvCheck("AB-H01 create_activity return_to_query",
                      store.events.contains { $0.title == "AB-복귀지주입 (복귀)" && $0.destination.name == abGangnam[1].name },
@@ -2151,8 +2164,10 @@ struct Drv {
                     "cards=\(h2.bubbles.filter { $0.ask != nil }.count)")
         h2.drvCancelPendingAsk()
 
-        // H-3: 카드가 열려 있는 동안 인자를 바꾼 재호출이 등록되고, 확인이 한 건을 더 만든다. 턴 종료
-        //      (runLoop)는 드라이버가 못 지나가는 경로라 실행부 수준에서만 잰다(REQ-005).
+        // H-3 [경로 제거]: D-5 (a)로 이 결함에 이르는 경로가 없어졌다 — 후보 카드가 서면 runLoop이
+        //      모델을 다시 부르지 않고 복귀하므로 같은 턴의 재호출이 앱에서는 일어나지 않고, 새 발화는
+        //      submit의 cancelPendingAsk()가 열린 카드를 접는다(§E.2에 코드 자리 기록). 드라이버는
+        //      모델 루프를 지나지 못하므로 실행부를 직접 몰 때의 잔상을 특성화로 적는다(REQ-001).
         let abH3 = fresh()
         store.events = []
         _ = abH3.drvPark("create_schedule",
@@ -2160,20 +2175,18 @@ struct Drv {
                         "arrival_iso": "2027-03-17T18:00:00", "mode_this_time": "walk",
                         "buffer_minutes": 10, "notify_lead_minutes": 10],
                        [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
-        // 모델이 도구 결과를 읽고 목적지만 바꿔 재호출하는 모양 — 후보에서는 그대로 등록된다.
-        // 재호출(09:00)과 보류 호출(18:00)의 시각을 크게 벌린다: 도보 추정이 길어(집→홍대 3시간대)
-        // 가까우면 둘째 건이 겹침 가드에 막혀 이중 등록이 '1건'으로 관측돼 가설이 조용히 풀린다.
+        // 모델이 도구 결과를 읽고 목적지만 바꿔 재호출하는 모양 — 앱에서는 위 경로 제거로 더 올 수
+        // 없다. 재호출(09:00)과 보류 호출(18:00)의 시각을 크게 벌린다: 도보 추정이 길어(집→홍대
+        // 3시간대) 가까우면 둘째 건이 겹침 가드에 막혀 두 건이 '1건'으로 관측된다.
         _ = await abH3.drvExecuteTool("create_schedule",
                                     ["title": "AB-이중등록", "origin_query": "집", "destination_query": "회사",
                                      "arrival_iso": "2027-03-17T09:00:00", "mode_this_time": "walk",
                                      "buffer_minutes": 10, "notify_lead_minutes": 10])
-        let h3AfterRecall = store.events.filter { $0.title == "AB-이중등록" }.count
-        abH3.drvCheck("AB-H03 카드가 열린 동안 재호출이 등록되지 않는다",
-                    h3AfterRecall == 0, "events=\(h3AfterRecall)")
         let h3ConfirmReply = await abConfirm(abH3, "destination_query", abHongdae[1])
         let h3Total = store.events.filter { $0.title == "AB-이중등록" }.count
-        abH3.drvCheck("AB-H03 한 요청이 두 건이 되지 않는다", h3Total == 1,
-                    "events=\(h3Total) reply=\(h3ConfirmReply ?? "nil")")
+        abH3.drvCheck("AB-H03 [경로 제거] 실행부 직접 주행에서만 두 건이 된다",
+                    h3Total == 2,
+                    "events=\(h3Total) reply=\(h3ConfirmReply ?? "nil") — 같은 턴 재호출 경로는 runLoop 복귀로 없앴다(앱에서는 닿지 않는다)")
 
         // H-4: '강남' 판정 — 실제 주소 모양까지 준다(REQ-002, 이름만 본다). AA-1은 빈 주소로 지나가
         //      2026-09-24 관측 경로를 빼고 있었다.

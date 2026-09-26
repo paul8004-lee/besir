@@ -432,6 +432,13 @@ final class AIAssistant: ObservableObject {
 
             contents.append(["role": "model", "parts": filled])
             lastToolSummary = await runToolCalls(filled) ?? lastToolSummary
+            // 후보 카드가 도구 실행 안에서 서면 그 턴을 여기서 끝낸다(D-5 (a), REQ-005) — 카드가
+            // 열린 채 모델을 다시 부르면 모델이 인자를 바꿔 재호출해 한 요청이 두 건이 되었다
+            // (H-3). 위의 ask 카드 경로(:428-431)와 같은 모양으로 카드 아래에 모델 말풍선이
+            // 붙지 않게 한다. 히스토리는 function 턴으로 끝나지만 다음 발화는 submit의
+            // repairDanglingToolTurn()·cancelPendingAsk() 경로를 지나 [function_call_output →
+            // model → user] 순서로 나가므로 백엔드가 거부하는 모양이 만들어지지 않는다.
+            if bubbles.contains(where: { $0.ask != nil }) { return }
         }
         // 5회를 다 돌 때까지 마무리가 안 된 드문 경우에도, 툴 결과가 있으면 보여준다.
         if let lastToolSummary { bubbles.append(.init(role: .assistant, text: lastToolSummary)) }
@@ -779,19 +786,24 @@ final class AIAssistant: ObservableObject {
 
     /// 검색 첫 결과가 이름과 맞지 않아 등록을 멈추고 후보를 고르게 하는 카드(U-4). runLoop이
     /// 카드를 만드는 창(모델 턴이 히스토리에 들어가기 전)은 이미 닫혔다 — 실행이 시작된 뒤라
-    /// 여기서 직접 보류 카드를 만든다. 재료는 runLoop 경로와 같은 것을 쓴다(줄 공장 placeRow·
-    /// stated — 계약 5). 모호한 질의는 보류 인자에서 **비운다**: 확인 때 resolvePendingAsk가
-    /// 값을 주입하는 줄은 askFields가 "비어 있다"고 보는 줄뿐이다. 값을 남겨 두면 주입이 일어나지
-    /// 않아 사용자가 골랐는데도 같은 질문의 카드가 다시 뜬다.
+    /// 여기서 직접 보류 카드를 만든다. 재료는 runLoop 경로와 같은 것을 쓴다(줄 공장 askFields·
+    /// placeRow·stated — 계약 5). 모호한 질의는 보류 인자에서 **비운다** — 그 빈 값이 카드가 비운
+    /// 키의 기록이고(D-3 (a)), 확인 때 resolvePendingAsk가 그 키에 고른 값을 실는다. 값을 남겨
+    /// 두면 원래 질의가 그대로 실행부에 흘러 사용자가 고른 지점 대신 그 질의가 다시 검색된다.
     private func parkForUnclearPlaces(tool: String, input: [String: Any],
                                       unclear: [(key: String, query: String, candidates: [Place])]) -> String {
-        // 모델이 안내를 읽지 않고 같은 호출을 되풀이해도 카드를 두 장 열지 않는다 — 마지막 카드가
-        // 정답을 받는 통로라 두 번째부터는 묵묵히 기다리라고만 한다.
+        // 모델이 안내를 읽지 않고 같은 호출을 되풀이해도 카드를 두 장 열지 않는다. 다만 "자동으로
+        // 진행돼요"라고 답하면 이 호출이 등록됐다는 거짓 안내가 된다(H-2 재현) — 사실대로 등록은
+        // 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)).
         guard !bubbles.contains(where: { $0.ask != nil }) else {
-            return "이미 같은 질문의 카드가 열려 있어요. 사용자가 카드에서 고르면 그 값으로 자동으로 진행돼요 — 인자를 바꾸지 말고 기다려."
+            return "등록하지 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 등록만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해."
         }
         var parked = input
-        var fields: [AskField] = []
+        // 줄은 **비우기 전 인자**로 물을 줄과 같은 공장(askFields)에서 만든다. 비워진 인자로 만들면
+        // 왕복 판정(filled("return_to_query")) 같은 형태가 주입 전 모양으로 계산돼, 복귀지 후보를
+        // 고르면 갑자기 필요해지는 가는/오는 편 수단 줄이 카드에 빠진다(H-1 조합8 — 확인 때
+        // missingAskedArguments에 막혀 고른 후보가 못 들어간다).
+        var fields = askFields(tool: tool, args: input)
         for item in unclear {
             parked[item.key] = ""
             var f = placeRow(key: item.key)
@@ -799,7 +811,8 @@ final class AIAssistant: ObservableObject {
             // 후보를 줄에 미리 얹는다 — 물어보는 김에 사용자가 직접 검색하게 하는 건 또 한 번의
             // 왕복이다. 갖고 온 후보가 전부 아니면 직접입력으로 좁히면 된다.
             f.lookup = .results(item.candidates)
-            fields.append(f)
+            if let i = fields.firstIndex(where: { $0.key == item.key }) { fields[i] = f }
+            else { fields.append(f) }
         }
         let ask = PendingAsk(parts: [["functionCall": ["name": tool, "args": parked]]],
                              stated: statedLabels() + filledValueLabels(tool: tool, args: input, fields: fields),
@@ -1046,6 +1059,21 @@ final class AIAssistant: ObservableObject {
             guard var call = parts[i]["functionCall"] as? [String: Any] else { continue }
             let name = call["name"] as? String ?? ""
             var args = call["args"] as? [String: Any] ?? [:]
+            // 후보 카드가 비워 둔 키(빈 값이 곧 카드가 남긴 기록)에 먼저 골라진 값을 싣는다
+            // (D-3 (a)). 빈 채로 아래 재계산에 들어가면 왕복 판정 같은 형태가 주입 전 모양으로
+            // 계산돼, 주입으로 생길 줄(가는/오는 편 수단)이 이 호출에 아예 안 붙은 채 확인이
+            // 끝난다(H-1 조합8). 값을 먼저 실으면 재계산이 그 줄들을 묻고 아래 루프가 마저
+            // 싣는다 — 주입 경로는 한 곳으로 둔다(계약 5).
+            for f in ask.fields where f.kind == .place {
+                // 빈 값 판정을 ?? 한 줄로 묶으면 우선순위 때문에 (a ?? b) == nil로 해석돼 값이
+                // 있는 키까지 "안 비었다"로 읽는다 — 이 판정을 처음 쓸 때 실제로 냈다. if let으로
+                // 펴서 애초에 모호함이 없게 한다.
+                let current = args[f.key]
+                let blank: Bool
+                if let s = current as? String { blank = s.trimmingCharacters(in: .whitespaces).isEmpty }
+                else { blank = current == nil }
+                if let chosen = f.chosen, blank { args[f.key] = chosen }
+            }
             // 카드를 만들 때와 **같은 함수**로 이 호출이 무엇을 물었는지 다시 구한다.
             for f in askFields(tool: name, args: args) {
                 guard let chosen = ask.fields.first(where: { $0.key == f.key })?.chosen else { continue }
