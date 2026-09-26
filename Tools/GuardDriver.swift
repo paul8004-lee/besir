@@ -1989,7 +1989,9 @@ struct Drv {
         //        (parkForUnclearPlaces → resolvePendingAsk → runToolCalls)를 그대로 탄다. drvPark·
         //        drvExecuteTool은 정화를 지나지 않아 mode_this_time 등 미선언 인자를 그대로 실을 수
         //        있다 — 카드를 지나온 호출과 같은 모양이다(O-5 주석).
-        print("\nAB. t16 M1 — 가설 재현(REQ-001): 단언은 바라는 동작, 후보에서 ✗ = 재현이다")
+        // 배너 문장에 ✗ 글자를 넣지 않는다 — 로그 판정 명령(AC-012)이 ✗를 세는데 배너가
+        // 거짓 양성을 만들었기 때문(ai-tooling 렌즈 ①, 2026-09-26).
+        print("\nAB. t16 M1 — 가설 재현(REQ-001): 단언은 바라는 동작, 후보 트리에서 실패로 찍히면 재현이다")
         // 후보 두 벌: [0]=틀린 첫 결과, [1]=사용자가 고를 맞는 지점(AA절과 같은 배치).
         let abHongdae = [Place(name: "스타벅스 대학로점", address: "서울 종로구 대학로", latitude: 37.582, longitude: 127.002),
                          Place(name: "스타벅스 홍대입구역점", address: "서울 마포구 양화로", latitude: 37.557, longitude: 126.924)]
