@@ -1144,6 +1144,10 @@ final class AIAssistant: ObservableObject {
         isThinking = true
         defer { isThinking = false; saveHistory() }
         guard let summary = await resolvePendingAsk() else { return }
+        // 확인 실행 안에서 후보 카드가 또 열리면(예: 머무는 반복의 목적지 모호 — AC-003 10번) 모델을
+        // 부르지 않고 턴을 끝낸다. runLoop의 runToolCalls 뒤 가드와 같은 규칙인데 확인 경로에만 빠져
+        // 있어 카드 아래 말풍선·이중 등록 창이 열렸다(code-safety 렌즈 F-1, 2026-09-26).
+        if bubbles.contains(where: { $0.ask != nil }) { return }
         do {
             try await runLoop(seed: summary)
             stripInlineDataFromHistory()

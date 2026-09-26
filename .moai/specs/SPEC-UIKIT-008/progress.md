@@ -449,9 +449,36 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 - **보안 가드언 판정 반박 기록**: 런 중 sql-injection(high) 지적이 떴다 — 이 코드베이스에 SQL은 없고(JSON 영속화) `grep -rc 'SELECT \|INSERT INTO\|DELETE FROM' Shared/AIAssistant.swift Shared/Store.swift` = **0/0**. 거짓 양성으로 기각한다.
 - **커밋**: `fix(SPEC-UIKIT-008): M6 죽은 가지 정리·토큰 쌍 측정 — 기준선 3,824 (card t16)` — `Shared/AIAssistant.swift` · `Tools/GuardDriver.swift` · 루트 `plan.md` · 이 파일 + run 게이트 감사 보고서(`.moai/reports/plan-audit/SPEC-UIKIT-008-2026-09-26.md`, plan 커밋의 보고서 동반 관례).
 
+### M6 렌즈 — 3종 판정과 F-1 수리 (2026-09-26)
+
+| 렌즈 | 판정 | 보고서 |
+|---|---|---|
+| code-safety | **FAIL(차단 1·선택 3) → F-1 수리로 차단 소멸**(아래) | `.moai/reports/t16/run-lens-code-safety.md` |
+| ui-design | PASS(차단 0·선택 2) | `.moai/reports/t16/run-lens-ui-design.md` |
+| ai-tooling | PASS(차단 0·선택 4) | `.moai/reports/t16/run-lens-ai-tooling.md` |
+
+- **F-1(차단) — 수리됨**: D-5 턴 종료 가드가 `runLoop`의 runToolCalls 뒤(:446)에만 있고 **확인 경로**(confirmAsk → resolvePendingAsk 실행부에서 후보 카드#2 — AC-003 10번·스크립트 3·4번 길)에 없어, 카드#2 아래 모델 말풍선(AC-004 (2) 사람 절 위반)·이중 등록 창이 열렸다. 드라이버가 못 본 이유: `drvResolvePendingAsk`가 confirmAsk를 우회한다. **수리**: confirmAsk의 `resolvePendingAsk()` 뒤에 같은 가드를 거울(한 줄 + 이유 주석, `Shared/AIAssistant.swift:1147-1150`). 코드 대조로 닫는다(드라이버가 이 창을 지나지 못함).
+- **선택 처리**: code-safety F-2(혼합 배치에서 첫 등록 문구가 카드 확인 전까지 안 보임)·F-3(중복 가드 문구 "같은 질문"이 다른 질의에도) — 후보, 기록만. F-4(`noTravelToken` 히스토리 에코 — 재호출에 실리면 머무는 반복으로 굳을 수 있음) — 잔여 위험, t30·실기기 확인. ui 선택 2(debouncer 창에서 캡션만 남아 "아래 후보"가 일시 거짓 — plan §3 잔여의 날 선 것 · callAI 실패 폴백에 신규 문구 노출 확대). ai 선택 4 중 ①(배너 ✗)·③(§E.2 좌표 혼용)은 `a9c63a5`에서 고쳤고 ②(AA-4 문장의 "+1" 착지 이름은 AB-H01 계열)·④(카드 열림 인라인 판정 9곳 — 관용구, 계약 위반 아님)은 기록만.
+- **게이트 재실행(F-1 수리 뒤 최종 트리, 판정 레인 직접)**:
+
+| 게이트 | 로그 | 관측 |
+|---|---|---|
+| 드라이버 | `gate3-compile.log`·`gate3-driver.log` | 컴파일 exit 0 · 드라이버 **exit 0** · `296/296 통과` · **`grep -c '✗'` = 0** · `[실제 데이터] 대조 통과` |
+| 컴파일 경고 | `gate3-compile.log` | **24줄**(base와 동일 수) |
+| iOS | `ios-final.log`(새 DerivedData 재생성) | `** BUILD SUCCEEDED **` 1 · `.swift` 경고 **0** · `^SwiftCompile` 42 · exit 0 |
+| macOS | `macos-final.log` | `** BUILD SUCCEEDED **` 1 · `.swift` 경고 **0** · `^SwiftCompile` 38 · exit 0 |
+| 프록시 | `npm --prefix proxy test`(dbdb5b9 시점, 이후 proxy 무변경) | 7/7 통과 · exit 0 |
+
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+- run_status: **audit-ready**
+- run_complete_at: 2026-09-26
+- run 커밋: `0a3f59e`(M1 재현 절 — `draft → in-progress` 전이) · `a18154d`(M2 데이터 흐름) · `433439c`(M3 판정 술어) · `56d5e5a`(M4 카드 표면·머무는 요청) · `a73b6c2`(M5 U-2) · `dbdb5b9`(M6 죽은 가지·토큰 쌍 — 기준선 3,824) · `a9c63a5`(AB절 배너 ✗ 제거) · run 종결 커밋(F-1 가드 + 이 절 — SHA는 리드 보고에 명시)
+- AC 행렬: **AC-001 ✅**(11/11 재현, 극성 규칙·`[수용]` 1·`[경로 제거]` 1, M1 커밋 소스 경로 GuardDriver 하나) · **AC-002 ✅**(이름만 판정, 강남 주소 픽스처 4줄 모두 address, AB-H04 ✓) · **AC-003 ✅**(`✓ AB-H01` 10/10 조합) · **AC-004 🟡**(기계 몫 ✓ — AB-H02 ✓·AB-H03 [경로 제거] ✓·가드 자리 runLoop :446 + confirmAsk 거울 ; 사람 몫 AC-014 1번 대기) · **AC-005 🟡**((1)(2)(3)(5) 기계 ✓ — startsOpen·맥락 줄 단일 함수·grep 신호 ; (4) 사람 대기) · **AC-006 ✅**(음성·양성 대조) · **AC-007 ✅**(왕복 줄·캡션) · **AC-008 ✅**(아홉 절 — AB-H11 10줄·끝 시각 선행·점심 고지·주석 교체·return_time 특성화) · **AC-009 ✅**(AB-H08·Store diff 빈 출력) · **AC-010 ✅**(술어 한 자리·chip() cmp·양성 대조·4화면 0줄) · **AC-011 ✅**(범위·계약 8절 — 판정 레인 직접 대조) · **AC-012 ✅**(게이트 4종 + 토큰 쌍 3,824→3,946(+122)·기준선 교체·경고 집합 동일) · **AC-013 ⬜**(sync — 인용 재사상·원장·양성 대조) · **AC-014 ⬜**(사람 전용 — 시뮬레이터 1~16번, 빌드는 최종 커밋 `ios-final.log`의 것) · **AC-015 ⬜**(사람 전용 — 17~20번)
+- 게이트 최종 수치(판정 레인 직접, 최종 트리): 드라이버 `296/296 통과` · exit 0 · `grep -c '✗'` = 0 · 실제데이터 대조 통과 · 컴파일 경고 24(base 동일) · iOS `BUILD SUCCEEDED` 무경고(42) · macOS 무경고(38) · 프록시 7/7 · 토큰 쌍 산출물 `.moai/state/verify/t16/token-pair.json`
+- 렌즈: code-safety **차단 1(F-1) → 수리로 소멸** + 선택 3 기록 · ui-design PASS + 선택 2 · ai-tooling PASS + 선택 4(①③은 수리) — 보고서 `.moai/reports/t16/run-lens-{code-safety,ui-design,ai-tooling}.md`
+- 잔여(이 카드 밖으로 넘기는 것): F-2·F-3(선택)·F-4(`noTravelToken` 에코 — 잔여 위험) · ui 선택 2(debouncer 창·폴백 도달) · ai 선택 ②④ · 브랜드 단일어 채택 한계(spec §3) · 한 번짜리 오는 편 부재·끝 시각 문장 되묻기(t30 중간 동작) · 시뮬레이터·실기기 사람 증거(AC-014·015·기기 확인 목록)
+- 운영자 지시(리드 전달, 2026-09-26): run 완료 후 정지 — 다음 단계는 sync가 아니라 운영자 재개 지시.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
