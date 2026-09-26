@@ -83,6 +83,10 @@ struct EditCardView: View {
 
     @ViewBuilder
     private func fieldRow(_ field: EditField, depBasis: Bool) -> some View {
+        // 장소 검색 편집기가 이 줄에 열려 있는지 — 검색을 다시 열어도 옛 강조가 남아 지금 값을
+        // 가리는 결함(U-2) 때문에, 열린 동안엔 이 줄의 칩 강조를 끈다. 판정은 이 한 곳에서만
+        // 계산해 값 칩과 검색으로 고른 칩이 같이 읽는다(계약 5). 텍스트 줄은 강조가 곧 현재 값이라 제외.
+        let placeSearchOpen = field.kind == .place && customOpen.contains(field.id)
         VStack(alignment: .leading, spacing: 6) {
             // 줄 이름 옆의 진행 표시 — 화면 소유 상태가 이 줄에서 일하는 중임을 알린다.
             // 장소 검색의 "찾는 중…"과 같은 문법이라 두 진행이 한 카드에서 같게 읽힌다.
@@ -113,14 +117,14 @@ struct EditCardView: View {
             } else {
                 ChipFlow(spacing: 6, lineSpacing: 6) {
                     ForEach(field.options) { option in
-                        chip(option.label, selected: field.chosen == option.value, detail: option.detail) {
+                        chip(option.label, selected: field.chosen == option.value && !placeSearchOpen, detail: option.detail) {
                             actions.chooseValue(field.id, option.value)
                             closeCustom(field)
                         }
                     }
                     // 직접 적은 값도 선택된 칩으로 남긴다 — 고른 값이 화면에 없으면 안 고른 것과 같다.
                     if let typed = typedLabel(field) {
-                        chip(typed, selected: true) { openCustom(field) }
+                        chip(typed, selected: !placeSearchOpen) { openCustom(field) }
                     }
                     if field.allowsCustom {
                         // 장소 줄의 그 칩은 이제 빈 칸이 아니라 검색창을 연다 — 이름을 그렇게 적는다.
@@ -315,6 +319,12 @@ struct EditCardView: View {
     @ViewBuilder
     private func placeSearchEditor(_ field: EditField) -> some View {
         VStack(alignment: .leading, spacing: 6) {
+            // 강조를 끈 동안 현재 값을 글자로 남긴다(U-2) — 칩 강조만 끄면 골라둔 값이 화면에서 사라진다(머리말 약속).
+            if let chosen = field.chosenLabel {
+                Text("지금 고른 곳: \(chosen). 새로 고르지 않으면 그대로예요.")
+                    .font(.caption).foregroundStyle(Theme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             TextField(placeholder(for: field), text: placeQueryBinding(field))
                 .textFieldStyle(.roundedBorder)
                 #if os(iOS)

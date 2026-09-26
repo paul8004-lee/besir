@@ -402,6 +402,34 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | `grep -c '✓ AB-H01\|✓ AB-H06\|✓ AB-H11\|✓ AB-REQ008\|✓ AB-REQ010' m4-driver.log` | `10` · `6` · `11` · `4` · `9` |
 | `ls -d $TMPDIR/besir-gd-*` | 없음(정상 종료 정리) |
 
+### M5 — U-2 재오픈 강조 끄기 · 한 술어 · 현재 값 캡션 (REQ-012, AC-010, 2026-09-26)
+
+- **관측 트리: 이번 커밋**(아래 커밋 SHA). 변경은 `Shared/EditCardView.swift`+이 progress.md뿐이고 관측 로그는 `.moai/state/verify/t16/m5-ios.log`. 드라이버 컴파일 집합(EditCard+AIAssistant+GuardDriver)에 이 파일이 없어 드라이버는 돌리지 않았다 — 권위 빌드 게이트는 M6이다.
+- **LOC**: `wc -l` 528 → **538**(순증 +10 — plan §0 예상 "≤ 10줄" 경계 안). diff `+12/-2`(뺀 2는 같은 줄 안 교체 — 값 칩·검색 고른 칩). 세 덩어리: `fieldRow` 머리의 술어 let(+4) · 두 칩 호출 줄내 교체(±2) · `placeSearchEditor` 머리의 캡션(+6).
+
+#### (a) AC-010 넷 — 관측 수치
+
+| 조항 | 관측 |
+|---|---|
+| (1) 한 술어, 두 생산자 | 식 `let placeSearchOpen = field.kind == .place && customOpen.contains(field.id)` — 계산 자리 **:89** 하나(`fieldRow` 머리; 이 식은 파일에 이곳에만 산다). 그 결과를 읽는 두 칩 호출: 값 칩 **:120** `chip(option.label, selected: field.chosen == option.value && !placeSearchOpen, detail: option.detail)` · 검색으로 고른 칩 **:127** `chip(typed, selected: !placeSearchOpen) { openCustom(field) }`(aa7b792 좌표 :116·:122-123). 편집기가 열린 valued 장소 줄에서는 이 줄의 어떤 칩도 selected로 그려지지 않는다("장소 검색" 칩 :131은 원래 상수 false). |
+| (2) `chip()` 무변경 | `sed -n '/private func chip(/,/^    }$/p'`를 `git show aa7b792:Shared/EditCardView.swift`판과 현행 파일에서 추출 → `diff` **빈 출력** · `cmp` **무출력**(양쪽 25줄). |
+| (3) 캡션 + 토큰 | `grep -c '새로 고르지 않으면 그대로예요' Shared/EditCardView.swift` = **1**(:324, `placeSearchEditor` 머리 — 편집기가 열린 줄에 값이 있을 때만; X는 `field.chosenLabel`, D-10 표 원문 `지금 고른 곳: X. 새로 고르지 않으면 그대로예요.`). 색 파이프 양성 대조 `printf '+ .foregroundStyle(.gray)\n' \| grep -v 'Theme\.' \| grep -cE 'Color[.(]\|\.(gray\|black\|white\|red\|blue\|green\|orange\|yellow\|primary\|secondary\|tertiary)\b\|cornerRadius: [0-9]'` = **1**(대조 작동), 실제 `git diff aa7b792 HEAD -- Shared/EditCardView.swift \| grep '^+'`에 같은 파이프 = **0**(더한 줄은 `.font(.caption).foregroundStyle(Theme.muted)`뿐 — 토큰 경유). |
+| (4) 화면별 코드 없음 | `git diff --name-only aa7b792 HEAD -- Shared/AIChatView.swift Shared/AddEventView.swift Shared/AddActivityView.swift Shared/ActivityDetailView.swift` = **0줄** — 네 화면(AIChatView :106 · AddEventView :68 · AddActivityView :72 · ActivityDetailView :64)이 공유 카드 하나로 다 같이 받는다. |
+
+#### (b) iOS 빌드 연기(선택 smoke) — 로그 `.moai/state/verify/t16/m5-ios.log`
+
+`iPhone 17 Pro` 시뮬레이터, `-derivedDataPath build`: exit **0** · `BUILD SUCCEEDED` · `grep "warning:" \| grep -v appintentsmetadataprocessor \| sort -u` **빈 출력**(무경고). 새 DerivedData 양측(ios+macOS) 빌드는 M6 게이트가 권위다 — 이 smoke는 컴파일 확인일 뿐.
+
+#### M5 때 이 레인이 돌린 명령
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `git branch --show-current && git rev-parse --short HEAD`(착수 전) | `WT-place-resolution` · `56d5e5a` |
+| `git diff aa7b792 HEAD -- Shared/EditCardView.swift \| wc -l`(착수 전) | `0`(baseline 좌표 유효) |
+| `grep -n 'selected: true' Shared/EditCardView.swift`(착수 전) | `:123`(텍스트 줄 검색 고른 칩 — 수리 대상) · `:206`(시각 줄 확정 칩 — M5 범위 밖, 무변경) |
+| `grep -rn 'EditCardView(' Shared/` | `AIChatView.swift:106` · `AddEventView.swift:68` · `AddActivityView.swift:72` · `ActivityDetailView.swift:64` |
+| `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` | exit 0 · BUILD SUCCEEDED · 무경고(위 (b)) |
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
