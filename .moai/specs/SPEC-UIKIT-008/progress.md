@@ -430,6 +430,25 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | `grep -rn 'EditCardView(' Shared/` | `AIChatView.swift:106` · `AddEventView.swift:68` · `AddActivityView.swift:72` · `ActivityDetailView.swift:64` |
 | `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` | exit 0 · BUILD SUCCEEDED · 무경고(위 (b)) |
 
+### M6 — 죽은 가지·튜플 별칭·토큰 쌍·게이트 4종 (REQ-013·014, AC-011·012, 2026-09-26)
+
+- **경과**: ai-tooling 스폰으로 시작해 **사용량 한도(429, 리셋 13:01:54)로 도중에 끊겼다** — 끊긴 시점의 몫(죽은 가지·튜플 별칭·드라이버 재실행 `296/296`)은 온전했고, 오케스트레이터가 나머지(토큰 쌍·기준선 교체·게이트 재실행·기록)를 직접 마쳤다(운영자 지시 "계속 진행해줘").
+- **죽은 가지(REQ-013 (6))**: `resolveOrigin` 선언에서 `orDefault: Bool = false` 기본값을 걷었다(호출은 `:2601`의 `orDefault: true` 하나). `orDefault: true` 사다리(빈 값 → 집 → 현재 위치)와 `resolveOriginAdoption`의 기본 경로(선언 `:2803`, 호출 `:1459`·`:1648`·`:1786`)는 잔존. 후보 카드 맥락 줄의 늘 빈 앞 항도 제거(`statedLabels() +` 삭제, 이유 주석 — 실행부 안에서만 열리는 카드라 그 항은 늘 빈 배열이었다).
+- **튜플 별칭(권고, AC-011 (6))**: `typealias UnclearPlaceList` — 반복 5자리 → 1(정의 자체 1, GuardDriver 0).
+- **토큰 쌍(REQ-014, plan.md:230-233 방법)**: 해니스 `.moai/state/verify/t16/tokmain.swift`(cat 연결 + 같은-파일 extension으로 private 접근 + 드라이버와 같은 임시 홈·프록시/토큰 비움) — **base `aa7b792` = 3,824**(시스템 1,704 + 툴 2,120) · **최종 트리 = 3,946**(1,771 + 2,175) · **증분 +122**. 안정성: 최종 트리 2회 실행 sha256 일치(±4 지터는 직렬화 방식 고정으로 소멸). 산출물 `token-base.{raw,txt}`·`token-final.{raw,txt}`·`token-pair.json`. base 3,824는 이전 기록의 base 3,824와 정확히 일치 — 같은 방법임이 여기서 확정됐고, 옛 4,425(2026-09-15)는 그날 트리의 값(툴 2,899 vs 지금 2,120)이었다. 루트 `plan.md` 기준선 행(:230)을 3,824로 교체하고 본문 언급(:364)도 같이 갱신했다.
+- **게이트 — 판정 레인(오케스트레이터)이 최종 트리에서 직접 실행**(AC-012; 에이전트 기록 전재 아님):
+
+| 게이트 | 명령/로그 | 관측 |
+|---|---|---|
+| 드라이버 | CLAUDE.md 레시피 → `gate-compile.log`·`gate-driver.log` | 컴파일 exit 0 · **드라이버 exit 0** · `296/296 통과` · `[실제 데이터] 대조 통과` (T = 241 + 61 − 6) |
+| 컴파일 경고 집합 | `grep 'warning:'` → 메시지 본문 추출 → 정렬 → base(`t16-plan/compile-base.log`)판과 `diff` | **무출력 — 24줄 동일**(좌표 정규화 첫 시도는 파일 경로 접두 차만 나와 본문 기준으로 재판정) |
+| iOS | `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t16/dd build` → `ios.log` | `** BUILD SUCCEEDED **` 1 · `.swift` 경고 **0** · `^SwiftCompile` 42 · exit 0 |
+| macOS | 같은 경로 `-scheme besir-macOS` → `macos.log` | `** BUILD SUCCEEDED **` 1 · `.swift` 경고 **0** · `^SwiftCompile` 38 · exit 0 |
+| 프록시 | `npm --prefix proxy test` | **7/7 통과** · exit 0 |
+
+- **보안 가드언 판정 반박 기록**: 런 중 sql-injection(high) 지적이 떴다 — 이 코드베이스에 SQL은 없고(JSON 영속화) `grep -rc 'SELECT \|INSERT INTO\|DELETE FROM' Shared/AIAssistant.swift Shared/Store.swift` = **0/0**. 거짓 양성으로 기각한다.
+- **커밋**: `fix(SPEC-UIKIT-008): M6 죽은 가지 정리·토큰 쌍 측정 — 기준선 3,824 (card t16)` — `Shared/AIAssistant.swift` · `Tools/GuardDriver.swift` · 루트 `plan.md` · 이 파일 + run 게이트 감사 보고서(`.moai/reports/plan-audit/SPEC-UIKIT-008-2026-09-26.md`, plan 커밋의 보고서 동반 관례).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

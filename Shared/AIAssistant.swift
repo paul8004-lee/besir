@@ -31,6 +31,11 @@ final class AIAssistant: ObservableObject {
     typealias AskField = EditField
     typealias PendingAsk = EditCard
 
+    /// 후보 되묻기 카드가 넘기는 모호 장소 목록 — 실행부 셋과 후보 카드, 드라이버(drvPark)가
+    /// 같은 모양을 본다. 튜플을 자리마다 풀어 적으면 한 자리만 고치고 나머지가 어긋나므로
+    /// 별칭으로 하나로 둔다.
+    typealias UnclearPlaceList = [(key: String, query: String, candidates: [Place])]
+
     @Published var bubbles: [Bubble] = []
     @Published var isThinking = false
     @Published var input = ""
@@ -896,7 +901,7 @@ final class AIAssistant: ObservableObject {
     /// 키의 기록이고(D-3 (a)), 확인 때 resolvePendingAsk가 그 키에 고른 값을 실는다. 값을 남겨
     /// 두면 원래 질의가 그대로 실행부에 흘러 사용자가 고른 지점 대신 그 질의가 다시 검색된다.
     private func parkForUnclearPlaces(tool: String, input: [String: Any],
-                                      unclear: [(key: String, query: String, candidates: [Place])]) -> String {
+                                      unclear: UnclearPlaceList) -> String {
         // 모델이 안내를 읽지 않고 같은 호출을 되풀이해도 카드를 두 장 열지 않는다. 다만 "자동으로
         // 진행돼요"라고 답하면 이 호출이 등록됐다는 거짓 안내가 된다(H-2 재현) — 사실대로 등록은
         // 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)).
@@ -922,8 +927,11 @@ final class AIAssistant: ObservableObject {
             if let i = fields.firstIndex(where: { $0.key == item.key }) { fields[i] = f }
             else { fields.append(f) }
         }
+        // 맥락 줄에 statedLabels()를 얹지 않는다 — 이 카드는 executeTool이 statedArgs를 비운
+        // 뒤에 열리는(실행부 안에서만 불리는) 카드라 그 앞 항은 늘 빈 배열이었다. 실행 전
+        // 카드(pendingAsk)와 같은 모양으로 두면 없는 값을 읽는 것처럼 보이는 죽은 항이 된다.
         let ask = PendingAsk(parts: [["functionCall": ["name": tool, "args": parked]]],
-                             stated: statedLabels() + filledValueLabels(tool: tool, args: input, fields: fields),
+                             stated: filledValueLabels(tool: tool, args: input, fields: fields),
                              fields: fields)
         bubbles.append(.init(role: .assistant, text: "", ask: ask))
         let names = unclear.map { "'\($0.query)'" }.joined(separator: ", ")
@@ -1590,7 +1598,7 @@ final class AIAssistant: ObservableObject {
 
         // 채택 삼태(U-4): 첫 결과가 이름과 맞지 않으면 등록을 멈추고 후보를 고르는 카드를 연다.
         // notFound는 옛 안내 문구로, unclear는 되묻기 카드로 갈린다.
-        var unclear: [(key: String, query: String, candidates: [Place])] = []
+        var unclear: UnclearPlaceList = []
         let origin: Place?
         switch await resolveOriginAdoption(input["origin_query"] as? String) {
         case .resolved(let p):
@@ -1771,7 +1779,7 @@ final class AIAssistant: ObservableObject {
 
         // 채택 삼태(U-4) — 세 장소 줄이 각자 resolved/notFound/unclear로 갈린 뒤, unclear가 하나라도
         // 있으면 등록을 멈추고 후보 카드를 연다(세 줄을 한 카드에 모은다).
-        var unclear: [(key: String, query: String, candidates: [Place])] = []
+        var unclear: UnclearPlaceList = []
         var place: Place?
         if let q = (input["place_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty {
             switch await adoptPlace(q, creation: true) {
@@ -1983,7 +1991,7 @@ final class AIAssistant: ObservableObject {
         let stayingTokenOrigin = Self.trimmedArg(input, "origin_query") == Self.noTravelToken
 
         // 채택 삼태(U-4) — create_schedule과 같은 갈래다(unclear면 후보 카드를 연다).
-        var unclear: [(key: String, query: String, candidates: [Place])] = []
+        var unclear: UnclearPlaceList = []
         // '이동 없음'을 고른 호출은 출발지를 따로 풀지 않는다 — 목적지와 같은 곳으로 굳는다(아래).
         // 토큰을 검색에 넣으면 실패 문구로 새어 나갈 뿐이다.
         let origin: Place?
@@ -2778,7 +2786,10 @@ final class AIAssistant: ObservableObject {
     /// "회사에서 출발"이라고 말했는데 집→집인 0분짜리 일정이 만들어진 적이 있다. 그 폴백은
     /// `orDefault`로 가뒀다 — 지금 켜는 곳은 check_travel_time 하나뿐이고, 그건 등록이 아니라
     /// 조회라 되묻을 이유가 없다(시스템 프롬프트 규칙 3의 예외와 같은 자리).
-    private func resolveOrigin(_ query: String? = nil, orDefault: Bool = false) async -> Place? {
+    /// 매개변수에 기본값을 두지 않는다 — 등록 경로 세 호출처가 resolveOriginAdoption으로
+    /// 옮긴 뒤로 기본값 `false` 갈래엔 부르는 곳이 없었다. 조용히 false로 빠지는 길을 없애
+    /// 두면, 이 래퍼가 나중에 다시 조용한 폴백의 입구가 되는 일도 없다.
+    private func resolveOrigin(_ query: String?, orDefault: Bool) async -> Place? {
         switch await resolveOriginAdoption(query, orDefault: orDefault) {
         case .resolved(let p): return p
         case .notFound: return nil

@@ -142,7 +142,7 @@ extension AIAssistant {
     /// t16절 — 애매 후보 되묻기 카드를 검색 없이 직접 연다(후보를 주입해 검증 — 실검색 연동은
     /// MapKit이라 드라이버에서 결정적일 수 없고 실기기 항목으로 넘긴다).
     func drvPark(_ tool: String, _ input: [String: Any],
-                 _ unclear: [(key: String, query: String, candidates: [Place])]) -> String {
+                 _ unclear: UnclearPlaceList) -> String {
         parkForUnclearPlaces(tool: tool, input: input, unclear: unclear)
     }
     static func drvStated(_ utterance: String) -> [String: Any] { statedArguments(from: utterance) }
