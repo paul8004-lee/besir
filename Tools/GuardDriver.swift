@@ -1977,6 +1977,369 @@ struct Drv {
         store.events = []
         store.activities = []
 
+        // ── AB. t16 M1(SPEC-UIKIT-008 REQ-001) — 가설 H-1~H-11 재현 절. 단언은 전부 **바라는 동작**을
+        //        적는다(REQ-001 극성 규칙): 후보 트리에서 ✗가 찍히면 가설이 재현된 것이고, ✓이면
+        //        "재현 안 됨"으로 progress.md §E.2에 적어 그 가설을 근거로 코드를 고치지 않는다.
+        //        관측 동작 특성화로 다시 적는 예외는 수리 때 H-9(`[수용]`, 해석 I-5)와 H-3(`[경로 제거]`,
+        //        D-5 (a))뿐이다. 후보 카드는 drvPark으로 열어 후보를 주입한다(실검색은 MapKit이라
+        //        드라이버에서 결정적일 수 없다), 확인은 choose + drvResolvePendingAsk로 실제 경로
+        //        (parkForUnclearPlaces → resolvePendingAsk → runToolCalls)를 그대로 탄다. drvPark·
+        //        drvExecuteTool은 정화를 지나지 않아 mode_this_time 등 미선언 인자를 그대로 실을 수
+        //        있다 — 카드를 지나온 호출과 같은 모양이다(O-5 주석).
+        print("\nAB. t16 M1 — 가설 재현(REQ-001): 단언은 바라는 동작, 후보에서 ✗ = 재현이다")
+        // 후보 두 벌: [0]=틀린 첫 결과, [1]=사용자가 고를 맞는 지점(AA절과 같은 배치).
+        let abHongdae = [Place(name: "스타벅스 대학로점", address: "서울 종로구 대학로", latitude: 37.582, longitude: 127.002),
+                         Place(name: "스타벅스 홍대입구역점", address: "서울 마포구 양화로", latitude: 37.557, longitude: 126.924)]
+        let abGangnam = [Place(name: "스타벅스 역삼역점", address: "서울 강남구 역삼로", latitude: 37.501, longitude: 127.036),
+                         Place(name: "스타벅스 강남역점", address: "서울 서초구 서초대로", latitude: 37.497, longitude: 127.028)]
+        // 후보 줄에서 둘째 후보를 고르고 확인까지 밟는 공용 절차. choose가 고른 지점을
+        // confirmedPlaces에 남기므로 확인 뒤 실행부의 adoptPlace는 검색 없이 그 좌표로 풀린다 —
+        // 재현 절이 네트워크 검색 없이 결정적으로 도는 이유다.
+        @discardableResult
+        func abConfirm(_ ai: AIAssistant, _ key: String, _ place: Place) async -> String? {
+            if let f = ai.drvLiveAsk()?.fields.first(where: { $0.key == key }) {
+                ai.choose(field: f.id, place: place)
+            }
+            return await ai.drvResolvePendingAsk()
+        }
+
+        // H-1: §1.3의 도구×키 조합 — 보류에서 비워진 키에 고른 값이 확인 때 실리는가. AC-003의
+        //      10번 조합(머무는 반복 목적지, '이동 없음' 선택지가 수리로 생긴다)과 5번의 최종 모양은
+        //      수리 커밋에서 회귀 방지선으로 더한다 — M1은 후보 트리에서 닿는 아홉 조합만 잰다.
+        // H-01 조합1: create_schedule · origin_query
+        let h1o = fresh()
+        _ = h1o.drvPark("create_schedule",
+                        ["title": "AB-출발지주입", "origin_query": "스타벅스 홍대점", "destination_query": "회사",
+                         "arrival_iso": "2027-03-15T15:00:00", "mode_this_time": "walk",
+                         "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "origin_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1oReply = await abConfirm(h1o, "origin_query", abHongdae[1])
+        let h1oEvent = store.events.first { $0.title == "AB-출발지주입" }
+        h1o.drvCheck("AB-H01 create_schedule origin_query",
+                     h1oEvent?.origin?.name == abHongdae[1].name,
+                     "origin=\(h1oEvent?.origin?.name ?? "nil") reply=\(h1oReply ?? "nil")")
+        // H-01 조합2: create_schedule · destination_query — 날짜는 조합1과 다르게(같은 날이면
+        //        겹침 가드가 주입이 아니라 충돌로 이 단언을 막아버린다).
+        let h1d = fresh()
+        _ = h1d.drvPark("create_schedule",
+                        ["title": "AB-목적지주입", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                         "arrival_iso": "2027-03-18T16:00:00", "mode_this_time": "walk",
+                         "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1dReply = await abConfirm(h1d, "destination_query", abHongdae[1])
+        let h1dEvent = store.events.first { $0.title == "AB-목적지주입" }
+        h1d.drvCheck("AB-H01 create_schedule destination_query",
+                     h1dEvent?.destination.name == abHongdae[1].name,
+                     "dest=\(h1dEvent?.destination.name ?? "nil") reply=\(h1dReply ?? "nil")")
+        // H-01 조합3: create_recurring_schedule · origin_query
+        let h1ro = fresh()
+        _ = h1ro.drvPark("create_recurring_schedule",
+                         ["title": "AB-반복출발주입", "origin_query": "스타벅스 홍대점", "destination_query": "회사",
+                          "weekdays": ["mon"], "arrival_time": "09:00", "start_date": "2027-03-01",
+                          "weeks": 1, "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                         [(key: "origin_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1roReply = await abConfirm(h1ro, "origin_query", abHongdae[1])
+        let h1roEvent = store.events.first { $0.title == "AB-반복출발주입" }
+        h1ro.drvCheck("AB-H01 create_recurring_schedule origin_query",
+                      h1roEvent?.origin?.name == abHongdae[1].name,
+                      "origin=\(h1roEvent?.origin?.name ?? "nil") reply=\(h1roReply ?? "nil")")
+        // H-01 조합4: create_recurring_schedule · destination_query — askFields가 빈 목적지에 줄을
+        //        안 만들므로(:520은 unknownPlace만 본다) 고른 값이 버려질 자리다.
+        let h1rd = fresh()
+        _ = h1rd.drvPark("create_recurring_schedule",
+                         ["title": "AB-반복목적지주입", "origin_query": "집", "destination_query": "스타벅스 강남점",
+                          "weekdays": ["mon"], "arrival_time": "09:00", "start_date": "2027-03-01",
+                          "weeks": 1, "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                         [(key: "destination_query", query: "스타벅스 강남점", candidates: abGangnam)])
+        let h1rdReply = await abConfirm(h1rd, "destination_query", abGangnam[1])
+        h1rd.drvCheck("AB-H01 create_recurring_schedule destination_query",
+                      store.events.contains { $0.title == "AB-반복목적지주입" && $0.destination.name == abGangnam[1].name },
+                      "reply=\(h1rdReply ?? "nil") events=\(store.events.filter { $0.title == "AB-반복목적지주입" }.count)")
+        // H-01 조합5: create_activity · place_query(이동 없음) — 빈 place_query는 장소 없는 활동이
+        //        되고(:534·:1667-1668) 성공 문구로 조용히 지나간다.
+        let h1p = fresh()
+        _ = h1p.drvPark("create_activity",
+                        ["title": "AB-활동장소주입", "place_query": "스타벅스 홍대점",
+                         "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                         "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "place_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1pReply = await abConfirm(h1p, "place_query", abHongdae[1])
+        h1p.drvCheck("AB-H01 create_activity place_query",
+                     store.activities.first { $0.title == "AB-활동장소주입" }?.location?.name == abHongdae[1].name,
+                     "location=\(store.activities.first { $0.title == "AB-활동장소주입" }?.location?.name ?? "nil") reply=\(h1pReply ?? "nil")")
+        // H-01 조합6: create_activity · travel_from_query(왕복) — :556의 왕복 재확인 줄이 빈 값에도 선다.
+        let h1t = fresh()
+        _ = h1t.drvPark("create_activity",
+                        ["title": "AB-왕복출발주입", "place_query": "회사",
+                         "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                         "travel_from_query": "스타벅스 홍대점", "return_to_query": "집",
+                         "travel_mode_this_time": "walk", "return_mode_this_time": "walk",
+                         "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "travel_from_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1tReply = await abConfirm(h1t, "travel_from_query", abHongdae[1])
+        h1t.drvCheck("AB-H01 create_activity travel_from_query 왕복",
+                     store.events.contains { $0.title == "AB-왕복출발주입" && $0.origin?.name == abHongdae[1].name },
+                     "legs=\(store.events.filter { $0.title == "AB-왕복출발주입" }.count) reply=\(h1tReply ?? "nil")")
+        // H-01 조합7: create_activity · travel_from_query(편도) — :550의 guard가 빠져나가 줄이 안 선다.
+        let h1s = fresh()
+        _ = h1s.drvPark("create_activity",
+                        ["title": "AB-편도출발주입", "place_query": "회사",
+                         "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                         "travel_from_query": "스타벅스 홍대점",
+                         "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "travel_from_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h1sReply = await abConfirm(h1s, "travel_from_query", abHongdae[1])
+        h1s.drvCheck("AB-H01 create_activity travel_from_query 편도",
+                     store.events.contains { $0.title == "AB-편도출발주입" && $0.origin?.name == abHongdae[1].name },
+                     "legs=\(store.events.filter { $0.title == "AB-편도출발주입" }.count) reply=\(h1sReply ?? "nil")")
+        // H-01 조합8: create_activity · return_to_query — 고른 복귀지가 버려지고 왕복이 편도로
+        //        조용히 바뀐다(수단까지 비워 오면 missingAskedArguments가 막는다 — §1.3 예측).
+        let h1r = fresh()
+        _ = h1r.drvPark("create_activity",
+                        ["title": "AB-복귀지주입", "place_query": "회사",
+                         "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                         "travel_from_query": "집", "return_to_query": "스타벅스 강남점",
+                         "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "return_to_query", query: "스타벅스 강남점", candidates: abGangnam)])
+        let h1rReply = await abConfirm(h1r, "return_to_query", abGangnam[1])
+        h1r.drvCheck("AB-H01 create_activity return_to_query",
+                     store.events.contains { $0.title == "AB-복귀지주입 (복귀)" && $0.destination.name == abGangnam[1].name },
+                     "복귀legs=\(store.events.filter { $0.title == "AB-복귀지주입 (복귀)" }.count) reply=\(h1rReply ?? "nil")")
+        // H-01 조합9: 한 호출의 두 키 동시 모호(create_schedule) — 두 줄이 한 카드에 오고 각자 주입된다.
+        //        날짜는 앞 조합들과 다르게 둔다(같은 날이면 겹침 가드가 다른 사건으로 섞인다).
+        let h1two = fresh()
+        _ = h1two.drvPark("create_schedule",
+                          ["title": "AB-두키주입", "origin_query": "스타벅스 홍대점", "destination_query": "스타벅스 강남점",
+                           "arrival_iso": "2027-03-19T17:00:00", "mode_this_time": "walk",
+                           "buffer_minutes": 10, "notify_lead_minutes": 10],
+                          [(key: "origin_query", query: "스타벅스 홍대점", candidates: abHongdae),
+                           (key: "destination_query", query: "스타벅스 강남점", candidates: abGangnam)])
+        if let card = h1two.drvLiveAsk() {
+            if let fo = card.fields.first(where: { $0.key == "origin_query" }) {
+                h1two.choose(field: fo.id, place: abHongdae[1])
+            }
+            if let fd = card.fields.first(where: { $0.key == "destination_query" }) {
+                h1two.choose(field: fd.id, place: abGangnam[1])
+            }
+        }
+        _ = await h1two.drvResolvePendingAsk()
+        let h1twoEvent = store.events.first { $0.title == "AB-두키주입" }
+        h1two.drvCheck("AB-H01 한 호출 두 키 동시 모호",
+                       h1twoEvent?.origin?.name == abHongdae[1].name && h1twoEvent?.destination.name == abGangnam[1].name,
+                       "origin=\(h1twoEvent?.origin?.name ?? "nil") dest=\(h1twoEvent?.destination.name ?? "nil")")
+
+        // H-2: 카드가 열려 있을 때 다른 입력의 모호 호출 — 카드는 한 장이되 안내는 사실이어야 한다.
+        //      후보의 중복 가드(:790)는 "카드가 하나라도 열려 있는가"만 보고 두 번째 호출을
+        //      "자동으로 진행돼요"라는 거짓으로 기다리게 한다(REQ-004).
+        let h2 = fresh()
+        _ = h2.drvPark("create_schedule",
+                       ["title": "AB-첫카드", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                        "arrival_iso": "2027-03-17T15:00:00", "mode_this_time": "walk",
+                        "buffer_minutes": 10, "notify_lead_minutes": 10],
+                       [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h2Second = h2.drvPark("create_schedule",
+                                  ["title": "AB-둘째호출", "origin_query": "집", "destination_query": "스타벅스 강남점",
+                                   "arrival_iso": "2027-03-17T16:00:00", "mode_this_time": "walk",
+                                   "buffer_minutes": 10, "notify_lead_minutes": 10],
+                                  [(key: "destination_query", query: "스타벅스 강남점", candidates: abGangnam)])
+        h2.drvCheck("AB-H02 두 번째 모호 호출 안내가 자동 진행을 말하지 않는다",
+                    h2Second.contains("자동으로 진행") == false, h2Second)
+        h2.drvCheck("AB-H02 두 번째 모호 호출이 미등록·카드 뒤 재호출 안내를 받는다",
+                    h2Second.contains("등록하지 않았") && h2Second.contains("다시 호출"), h2Second)
+        h2.drvCheck("AB-H02 후보 카드는 한 장이다",
+                    h2.bubbles.filter { $0.ask != nil }.count == 1,
+                    "cards=\(h2.bubbles.filter { $0.ask != nil }.count)")
+        h2.drvCancelPendingAsk()
+
+        // H-3: 카드가 열려 있는 동안 인자를 바꾼 재호출이 등록되고, 확인이 한 건을 더 만든다. 턴 종료
+        //      (runLoop)는 드라이버가 못 지나가는 경로라 실행부 수준에서만 잰다(REQ-005).
+        let abH3 = fresh()
+        store.events = []
+        _ = abH3.drvPark("create_schedule",
+                       ["title": "AB-이중등록", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                        "arrival_iso": "2027-03-17T18:00:00", "mode_this_time": "walk",
+                        "buffer_minutes": 10, "notify_lead_minutes": 10],
+                       [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        // 모델이 도구 결과를 읽고 목적지만 바꿔 재호출하는 모양 — 후보에서는 그대로 등록된다.
+        // 재호출(09:00)과 보류 호출(18:00)의 시각을 크게 벌린다: 도보 추정이 길어(집→홍대 3시간대)
+        // 가까우면 둘째 건이 겹침 가드에 막혀 이중 등록이 '1건'으로 관측돼 가설이 조용히 풀린다.
+        _ = await abH3.drvExecuteTool("create_schedule",
+                                    ["title": "AB-이중등록", "origin_query": "집", "destination_query": "회사",
+                                     "arrival_iso": "2027-03-17T09:00:00", "mode_this_time": "walk",
+                                     "buffer_minutes": 10, "notify_lead_minutes": 10])
+        let h3AfterRecall = store.events.filter { $0.title == "AB-이중등록" }.count
+        abH3.drvCheck("AB-H03 카드가 열린 동안 재호출이 등록되지 않는다",
+                    h3AfterRecall == 0, "events=\(h3AfterRecall)")
+        let h3ConfirmReply = await abConfirm(abH3, "destination_query", abHongdae[1])
+        let h3Total = store.events.filter { $0.title == "AB-이중등록" }.count
+        abH3.drvCheck("AB-H03 한 요청이 두 건이 되지 않는다", h3Total == 1,
+                    "events=\(h3Total) reply=\(h3ConfirmReply ?? "nil")")
+
+        // H-4: '강남' 판정 — 실제 주소 모양까지 준다(REQ-002, 이름만 본다). AA-1은 빈 주소로 지나가
+        //      2026-09-24 관측 경로를 빼고 있었다.
+        let h4 = fresh()
+        let h4a = AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1")
+        h4.drvCheck("AB-H04 '강남'→선릉과정릉(선릉로 주소)은 맞지 않는다",
+                    h4a == false, "match=\(h4a) — 주소의 '강남구'가 이름 낱말을 만족시켰다")
+        let h4b = AIAssistant.drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 삼성동 131")
+        h4.drvCheck("AB-H04 '강남'→선릉과정릉(삼성동 주소)도 맞지 않는다",
+                    h4b == false, "match=\(h4b) — 판정은 주소를 보지 않아야 하므로 두 주소의 결과가 같다")
+
+        // H-5: 후보 줄이 첫 렌더에 보이는가 — AI 카드는 startsOpen을 켠 적이 없다(기본값 false).
+        let h5 = fresh()
+        _ = h5.drvPark("create_schedule",
+                       ["title": "AB-첫렌더", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                        "arrival_iso": "2027-03-17T18:00:00", "mode_this_time": "walk",
+                        "buffer_minutes": 10, "notify_lead_minutes": 10],
+                       [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h5Row = h5.drvLiveAsk()?.fields.first { $0.key == "destination_query" }
+        h5.drvCheck("AB-H05 후보 줄이 첫 렌더에 열려 있다",
+                    h5Row?.startsOpen == true, "startsOpen=\(h5Row?.startsOpen ?? false)")
+        h5.drvCancelPendingAsk()
+
+        // H-6: 활동·반복 후보 카드의 맥락 줄 — 실제 경로에서 executeTool이 statedArgs를 먼저 비우므로
+        //      (:1414) park 시점의 statedLabels()는 늘 빈 상태다(프레시 인스턴스가 같은 상태를 재현한다).
+        //      filledValueLabels는 create_schedule만 다뤄 활동·반복은 제목조차 없다(REQ-007).
+        let h6a = fresh()
+        _ = h6a.drvPark("create_activity",
+                        ["title": "AB-활동맥락", "place_query": "스타벅스 홍대점", "return_to_query": "집",
+                         "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                         "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "place_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h6aStated = h6a.drvLiveAsk()?.stated ?? []
+        h6a.drvCheck("AB-H06 활동 후보 카드 맥락 줄에 제목이 있다",
+                    h6aStated.contains { $0.contains("AB-활동맥락") } == true, "stated=\(h6aStated)")
+        h6a.drvCancelPendingAsk()
+        let h6b = fresh()
+        _ = h6b.drvPark("create_recurring_schedule",
+                        ["title": "AB-반복맥락", "origin_query": "집", "destination_query": "스타벅스 홍대점",
+                         "weekdays": ["mon"], "arrival_time": "09:00", "return_time": "18:00",
+                         "start_date": "2027-03-01", "weeks": 1, "mode_this_time": "walk",
+                         "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "destination_query", query: "스타벅스 홍대점", candidates: abHongdae)])
+        let h6bStated = h6b.drvLiveAsk()?.stated ?? []
+        h6b.drvCheck("AB-H06 반복 후보 카드 맥락 줄에 제목이 있다",
+                     h6bStated.contains { $0.contains("AB-반복맥락") } == true, "stated=\(h6bStated)")
+        h6b.drvCancelPendingAsk()
+
+        // H-7: 왕복 가는 편 줄의 캡션 — 후보 문구는 카드 어디에도 없는 값('미리 정해진 출발지')을
+        //      확인하라고 한다(REQ-009). 줄 자체·탈출 칩·미리 선택 없음은 이미 후보가 갖춘 부분이다.
+        let h7 = fresh()
+        let h7Row = h7.drvAsk("create_activity",
+                              ["title": "AB-왕복출발", "place_query": "회사",
+                               "start_iso": "2027-03-16T10:00:00", "end_iso": "2027-03-16T12:00:00",
+                               "travel_from_query": "집", "return_to_query": "집"])?
+            .fields.first { $0.key == "travel_from_query" }
+        h7.drvCheck("AB-H07 왕복 가는 편 줄 캡션이 채워 온 값(집)을 적는다",
+                    h7Row?.note?.contains("집") == true, "note=\(h7Row?.note ?? "nil")")
+        h7.drvCheck("AB-H07 왕복 가는 편 줄은 선택된 채 시작하지 않는다",
+                    h7Row?.chosen == nil, "chosen=\(h7Row?.chosen ?? "nil")")
+        h7.drvCheck("AB-H07 왕복 가는 편 줄에 '가는 편 없음' 칩이 있다",
+                    h7Row?.options.contains { $0.value == AIAssistant.drvNoOutboundToken() } == true,
+                    "options=\(h7Row?.options.map(\.value) ?? [])")
+
+        // H-8: 머무는 반복 뒤 번호 없는 반복 수정 — 그룹은 활동 블록뿐인데 updateRecurringSeries는
+        //      events만 세므로(Store.swift:698-700) 0건이 되고 거짓 문구로 끝난다(REQ-011).
+        store.activities = []
+        let h8 = fresh()
+        _ = await h8.drvCreateRecurring(["title": "AB-머묾수정", "destination_query": "집", "origin_query": "집",
+                                         "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00",
+                                         "start_date": "2027-03-01", "weeks": 4])
+        let h8Before = store.activities.filter { $0.title == "AB-머묾수정" }.count
+        let h8Reply = await h8.drvUpdate(["mode": "car"])
+        h8.drvCheck("AB-H08 거짓 '이미 삭제' 문구가 없다",
+                    h8Reply.contains("이미 삭제됐을 수") == false, h8Reply)
+        h8.drvCheck("AB-H08 바꿀 이동 구간이 없다고 사실을 말한다",
+                    h8Reply.contains("이동 구간") == true, h8Reply)
+        h8.drvCheck("AB-H08 활동 블록 수가 그대로다",
+                    store.activities.filter { $0.title == "AB-머묾수정" }.count == h8Before,
+                    "before=\(h8Before) after=\(store.activities.filter { $0.title == "AB-머묾수정" }.count)")
+
+        // H-9: 끝 시각 재호출에서 '반복 기간' 이중 질문 — weeks는 선언에 없어 정화가 지우므로 재호출
+        //      인자에 실리지 못하고 기간 줄이 다시 선다(수용 I-5 — 수리 때 [수용] 특성화로 바뀐다).
+        let h9 = fresh()
+        let h9Ask = h9.drvAsk("create_recurring_schedule",
+                              ["title": "AB-기간재질문", "destination_query": "집", "origin_query": "집",
+                               "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00"])
+        h9.drvCheck("AB-H09 weeks 없는 재호출에 '반복 기간' 줄이 다시 서지 않는다",
+                    h9Ask?.fields.contains { $0.key == "weeks" } == false,
+                    "keys=\(h9Ask?.fields.map(\.key) ?? [])")
+
+        // H-10: 머무는 반복의 점심 인자 조용한 버림 — staying 갈래가 return_time 노트와 함께 바로
+        //      돌아가므로(:1812-1830) lunch_*는 요약에 못 들어간다(REQ-010). 제목에 '점심'을 쓰지
+        //      않는다 — 요약이 제목을 인용하므로 제목의 글자가 판정을 오염시킨다.
+        let h10 = fresh()
+        let h10Reply = await h10.drvCreateRecurring(["title": "AB-낮식사", "destination_query": "집", "origin_query": "집",
+                                                     "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00",
+                                                     "lunch_place_query": "회사", "lunch_start": "12:30", "lunch_end": "13:30",
+                                                     "start_date": "2027-03-01", "weeks": 4])
+        h10.drvCheck("AB-H10 머무는 반복 결과가 버린 점심 인자를 말한다",
+                     h10Reply.contains("점심") == true
+                        && store.activities.contains { $0.title == "AB-낮식사" },
+                     "reply=\(h10Reply)")
+
+        // H-11: 머무는 요청은 출발지를 묻고 '이동 없음'은 사용자의 선택으로만 정해진다(REQ-010,
+        //      D-8 운영자 문구). 반복은 줄 키 {origin_query, weeks}, 한 번짜리(T-1)는
+        //      {travel_from_query} — 못 푸는 장소 변형은 {place_query, travel_from_query}다.
+        let h11a = fresh()
+        let h11Recur = h11a.drvAsk("create_recurring_schedule",
+                                   ["title": "AB-머묾반복", "destination_query": "집", "origin_query": "집",
+                                    "weekdays": ["mon", "wed", "fri"], "arrival_time": "12:00", "return_time": "13:00"])
+        h11a.drvCheck("AB-H11 머무는 반복 카드가 출발지 줄을 띄운다",
+                      Set(h11Recur?.fields.map(\.key) ?? []) == ["origin_query", "weeks"],
+                      "keys=\(h11Recur?.fields.map(\.key) ?? [])")
+        let h11Origin = h11Recur?.fields.first { $0.key == "origin_query" }
+        h11a.drvCheck("AB-H11 반복 출발지 줄에 '이동 없음' 선택지가 있다",
+                      h11Origin?.options.contains { $0.label == "이동 없음" } == true,
+                      "options=\(h11Origin?.options.map(\.label) ?? [])")
+        h11a.drvCheck("AB-H11 반복 출발지 줄 캡션이 모델 값(집)을 적는다",
+                      h11Origin?.note?.contains("집") == true, "note=\(h11Origin?.note ?? "nil")")
+        h11a.drvCheck("AB-H11 반복 카드는 수단·여유·알림을 묻지 않는다",
+                      Set(h11Recur?.fields.map(\.key) ?? [])
+                        .isDisjoint(with: ["mode_this_time", "buffer_minutes", "notify_lead_minutes"]),
+                      "keys=\(h11Recur?.fields.map(\.key) ?? [])")
+        // 한 번짜리 — 이동을 말하지 않은 활동(place만, travel_from 비움).
+        let h11b = fresh()
+        let h11Empty = h11b.drvAsk("create_activity",
+                                   ["title": "AB-머묾활동", "place_query": "집",
+                                    "start_iso": "2027-03-16T12:00:00", "end_iso": "2027-03-16T13:00:00"])
+        h11b.drvCheck("AB-H11 이동 없는 한 번짜리 활동이 출발지 줄을 띄운다",
+                      Set(h11Empty?.fields.map(\.key) ?? []) == ["travel_from_query"],
+                      "keys=\(h11Empty?.fields.map(\.key) ?? [])")
+        h11b.drvCheck("AB-H11 한 번짜리 출발지 줄에 '이동 없음' 선택지가 있다",
+                      (h11Empty?.fields.first { $0.key == "travel_from_query" })?
+                        .options.contains { $0.label == "이동 없음" } == true,
+                      "options=\((h11Empty?.fields.first { $0.key == "travel_from_query" })?.options.map(\.label) ?? [])")
+        // 한 번짜리 — 가는 편 출발지가 활동 장소와 같은 값(집/집).
+        let h11c = fresh()
+        let h11Same = h11c.drvAsk("create_activity",
+                                  ["title": "AB-같은값활동", "place_query": "집", "travel_from_query": "집",
+                                   "start_iso": "2027-03-16T12:00:00", "end_iso": "2027-03-16T13:00:00"])
+        h11c.drvCheck("AB-H11 같은 값(집) 한 번짜리가 출발지 줄을 띄운다",
+                      Set(h11Same?.fields.map(\.key) ?? []) == ["travel_from_query"],
+                      "keys=\(h11Same?.fields.map(\.key) ?? [])")
+        h11c.drvCheck("AB-H11 같은 값 출발지 줄 캡션이 모델 값(집)을 적는다",
+                      (h11Same?.fields.first { $0.key == "travel_from_query" })?.note?.contains("집") == true,
+                      "note=\((h11Same?.fields.first { $0.key == "travel_from_query" })?.note ?? "nil")")
+        h11c.drvCheck("AB-H11 같은 값 출발지 줄에 '이동 없음' 선택지가 있다",
+                      (h11Same?.fields.first { $0.key == "travel_from_query" })?
+                        .options.contains { $0.label == "이동 없음" } == true,
+                      "options=\((h11Same?.fields.first { $0.key == "travel_from_query" })?.options.map(\.label) ?? [])")
+        // 한 번짜리 — 못 푸는 장소(사무실) 변형: 장소 줄과 출발지 줄이 함께 선다.
+        let h11d = fresh()
+        let h11Unres = h11d.drvAsk("create_activity",
+                                   ["title": "AB-못푸는활동", "place_query": "사무실",
+                                    "start_iso": "2027-03-16T12:00:00", "end_iso": "2027-03-16T13:00:00"])
+        h11d.drvCheck("AB-H11 못 푸는 장소 활동은 장소 줄+출발지 줄이 함께 선다",
+                      Set(h11Unres?.fields.map(\.key) ?? []) == ["place_query", "travel_from_query"],
+                      "keys=\(h11Unres?.fields.map(\.key) ?? [])")
+        h11d.drvCheck("AB-H11 못 푸는 장소 출발지 줄에 '이동 없음' 선택지가 있다",
+                      (h11Unres?.fields.first { $0.key == "travel_from_query" })?
+                        .options.contains { $0.label == "이동 없음" } == true,
+                      "options=\((h11Unres?.fields.first { $0.key == "travel_from_query" })?.options.map(\.label) ?? [])")
+        store.events = []
+        store.activities = []
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
