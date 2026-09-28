@@ -484,6 +484,11 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 
 _<pending sync-phase>_
 
+- **sync 1차 판정 — FAIL(2026-09-28, sync 레인)**: 코드 차단 4(D1~D4) · 증거 결손 1(D5 — AC-008 (5) `우리집` 양성 대조 단언 부재).
+  판정문 `.moai/reports/t16/sync-verdict.md`, 렌즈 원문 `.moai/reports/t16/sync-lens-{code-safety,ai-tooling}.md`, 증거 `.moai/state/verify/t16-sync/`.
+  게이트 다섯·토큰 쌍은 격리 사본에서 독립 재실측으로 통과(드라이버 `296/296` · base `217/217` · 경고 집합 동일 · iOS 42/macOS 38 Swift 경고 0 · 프록시 7/7 · 3,824→3,946).
+  이 절의 닫힘 신호(`sync_commit_sha` 등)는 수리 뒤 재심사가 채운다 — 판정문 §8의 순서.
+
 ## §F Phase 4 Mode Selection
 
 - 2026-09-26 run 레인 오케스트레이터가 첫 run 스폰 전에 적는다.
