@@ -524,6 +524,10 @@ _<pending sync-phase>_
   판정문 `.moai/reports/t16/sync-verdict.md`, 렌즈 원문 `.moai/reports/t16/sync-lens-{code-safety,ai-tooling}.md`, 증거 `.moai/state/verify/t16-sync/`.
   게이트 다섯·토큰 쌍은 격리 사본에서 독립 재실측으로 통과(드라이버 `296/296` · base `217/217` · 경고 집합 동일 · iOS 42/macOS 38 Swift 경고 0 · 프록시 7/7 · 3,824→3,946).
   이 절의 닫힘 신호(`sync_commit_sha` 등)는 수리 뒤 재심사가 채운다 — 판정문 §8의 순서.
+- **sync 2차 재심사 — FAIL(2026-09-28, sync 레인, 대상 `894fdc1` = 코드 `8ad3abd`)**: 코드 차단 6(E1~E6 — 수리가 만든 회귀 둘: E1 값 정화가 앱이 지시한 재호출의 '이동 없음'을 지움 ·
+  E2 확인 대기 중 새 대화 시 버린 등록 완료) · 증거 1(E7 AC-D5 좌표) · SPEC 1(E8 AC-011 (1)(5) 기계 판정 실패 — `manager-spec` 개정 필요). 1차 결함의 좁은 재현 경로(S-1·S-2·S-3b·S-4·S-4v)는
+  닫혔고 §E.2 M7 (d)의 S-3a 각주는 받아들였다(좌표를 심은 S-3a+ 활동만). 판정문 §R2, 렌즈 원문 `sync-lens-{ai-tooling,code-safety}-r2.md`, 증거 `.moai/state/verify/t16-sync/r2/`.
+  게이트는 격리 사본에서 전부 통과(드라이버 `310/310` · 경고 집합 동일 · iOS 42/macOS 38 Swift 경고 0 · 프록시 7/7 · 3,824→3,946).
 
 ## §F Phase 4 Mode Selection
 
