@@ -199,7 +199,9 @@
   3. 편집기가 열린 동안 현재 값을 적는 캡션이 있다 — `grep -c '새로 고르지 않으면 그대로예요' Shared/EditCardView.swift` = **1**(`plan.md` §2 D-10 표 원문).
      그리고 더한 줄이 `Theme` 토큰만 쓴다 — `git diff aa7b792 HEAD -- Shared/EditCardView.swift | grep '^+' | grep -v 'Theme\.' | grep -cE 'Color[.(]|\.(gray|black|white|red|blue|green|orange|yellow|primary|secondary|tertiary)\b|cornerRadius: [0-9]'` = **0**.
      **양성 대조**: 같은 파이프에 `+ .foregroundStyle(.gray)` 한 줄을 심어(`printf '+ .foregroundStyle(.gray)\n' | grep -v 'Theme\.' | grep -cE '…'`) **1**이 나오는 것을 먼저 보인다.
-  4. 화면별 코드가 없다 — `git diff --name-only aa7b792 HEAD -- Shared/AIChatView.swift Shared/AddEventView.swift Shared/AddActivityView.swift Shared/ActivityDetailView.swift`가 0줄.
+  4. 화면별 코드가 없다 — `git diff --name-only aa7b792 HEAD -- Shared/AddEventView.swift Shared/AddActivityView.swift Shared/ActivityDetailView.swift`가 0줄이고,
+     `Shared/AIChatView.swift`는 `git diff aa7b792 HEAD -- Shared/AIChatView.swift | grep '^[-+][^-+]' | grep -v '^[-+][[:space:]]*//'`가 **정확히 한 줄** —
+     `+`, 공백 24칸, `.disabled(assistant.isThinking)` — 만 찍는다. 그 줄은 sync 2차 E2의 새 대화 버튼 잠금이지 화면별 U-2 코드가 아니다(0.1.7, spec REQ-013).
 
 ## AC-011 — 범위와 계약 ⬜
 
@@ -209,7 +211,9 @@
   1. plan 단계 경로(오케스트레이터 결정 — plan 커밋에 들어간다)를 뺀 변경 경로 —
      `git diff --name-only e1a40a6 HEAD -- . ':!.moai/specs/SPEC-UIKIT-008' ':!.moai/reports/t16/plan-lens-ai-tooling.md' ':!.moai/reports/t16/plan-lens-ui-design.md' ':!.moai/reports/plan-audit/SPEC-UIKIT-008-*'` —
      의 모든 줄이 다음 목록 안에 있다: `Shared/AIAssistant.swift` · `Tools/GuardDriver.swift` · `Shared/EditCardView.swift` · `Shared/EditCard.swift`(단
-     `git diff aa7b792 HEAD -- Shared/EditCard.swift | grep '^[-+][^-+]' | grep -v '^[-+][[:space:]]*///\?'`가 0줄 — 주석 줄만 바뀜) · 루트 `plan.md` · `CHECKLIST.md`(sync) ·
+     `git diff aa7b792 HEAD -- Shared/EditCard.swift | grep '^[-+][^-+]' | grep -v '^[-+][[:space:]]*///\?'`가 정확히 `+    var clearedKeys: Set<String> = []` 한 줄 —
+     주석 줄 + `clearedKeys` 저장 속성, sync 1차 D4) · `Shared/AIChatView.swift`(단 주석이 아닌 변경은 AC-010 (4)의 한 줄만 — sync 2차 E2) ·
+     `.moai/reports/t16/run-lens-*.md`(run 렌즈) · `.moai/reports/t16/sync-lens-*.md`·`.moai/reports/t16/sync-verdict.md`(sync 판정·렌즈) · 루트 `plan.md` · `CHECKLIST.md`(sync) ·
      `.moai/specs/SPEC-UIKIT-005/progress.md`·`.moai/specs/SPEC-UIKIT-007/progress.md`(sync) · `manager-spec` 재위임으로 들어온 SPEC-UIKIT-005/007 `spec.md`·`plan.md`·`acceptance.md`의
      인용 줄(sync, REQ-013·REQ-015 — `c5396b3` 표기 포함, 커밋 주체를 §E.4에). 밖의 경로가 하나라도
      있으면 FAIL. 루트 `plan.md`가 나오면 헝크마다 t16 행·계획-실제 갱신 가운데 어디에 닿는지 §E.2에 적는다. 커밋끼리 비교하므로 추적되지 않는 빌드 로그는 나오지 않는다.
@@ -217,8 +221,17 @@
   3. `git diff --quiet aa7b792 HEAD -- proxy/ project.yml` exit 0.
   4. `grep -n '"type": "[a-z]' Shared/AIAssistant.swift` = 0건. 도구 선언의 매개변수 키 집합이 `aa7b792`와 같다 — 드라이버가 `drvToolsJSON()`의 도구별 키 집합을 base 값과 대조하는 단언을 갖거나,
      선언 블록의 모든 `+` 줄이 `description` 값만 바꿨음을 헝크마다 §E.2에 적는다.
-  5. 방어가 약해지지 않았다 — `isSamePlace`·`sanitizeModelArgs`의 본문을 `sed -n '/private static func isSamePlace/,/^    }$/p'`·`sed -n '/private func sanitizeModelArgs/,/^    }$/p'`로 잘라 `aa7b792`판과 `cmp` → 무출력.
-     `executeListSchedules` 본문도 같은 방법으로 무변경.
+  5. 방어가 약해지지 않았다 — `isSamePlace`의 본문을 `sed -n '/private static func isSamePlace/,/^    }$/p'`로 잘라 `aa7b792`판과 `cmp` → 무출력.
+     `executeListSchedules` 본문도 같은 방법으로 무변경. `sanitizeModelArgs`는 R1 결정(sync 1차 판정문 §4 R1 — 리드가 포함을 정했다, `8ad3abd`)과 sync 2차 E1 처방
+     (`.moai/reports/t16/sync-verdict.md` §R2.3 — 재호출의 `origin_query` 토큰을 버리지 말고 `destination_query` 값으로 되돌린다, `bf5fbd9`)으로 본문이 바뀌었으므로
+     `cmp` 대신 두 본문을 대조한다. base 본문은 `git show aa7b792:Shared/AIAssistant.swift | sed -n '/private func sanitizeModelArgs/,/^    }$/p'`(15줄),
+     head 본문은 같은 `sed`를 `Shared/AIAssistant.swift`에 건 것(23줄)이다. 넷이 함께 성립해야 한다:
+     (a) **키 필터 보존** — head 본문 `grep -c 'allowed.contains(\$0.key)'` = **2**(guard·filter 두 줄, base는 1).
+     (b) **값 필터 추가(R1)** — head 본문 `grep -c 'echoedPlaceToken(\$0.value)'` = **2**(base 0).
+     (c) **E1 복원절** — head 본문 `grep -c 'args\["origin_query"\] = destination'` = **1**(base 0)이고, 그 줄이 `if name == "create_recurring_schedule"` 블록 안에 있다 —
+     `grep -A3 'if name == "create_recurring_schedule",' <head 본문> | grep -c 'args\["origin_query"\] = destination'` = **1**.
+     (d) **줄 귀속** — `diff <base 본문> <head 본문>`이 헝크 하나(`8,10c8,18`, `<` 3줄 · `>` 11줄)이고, 빠진 줄은 base의 `let args` 바인딩과 키 필터 두 줄(guard·filter)뿐이며,
+     더한 줄은 모두 (a)(b)(c) 또는 (c)가 요구하는 `let`→`var` 바인딩에 속한다. 판정 레인이 줄마다 귀속을 자기 판정 기록(run은 §E.3, sync는 판정문)에 적는다.
   6. 후보 때문에 생긴 죽은 경로가 없다 — `resolveOrigin`의 `orDefault` 기본값 `false` 갈래가 사라졌거나 호출처가 생겼고(`orDefault: true` 사다리와 `resolveOriginAdoption`의
      기본값 경로는 남아 있다), 후보 카드 맥락 줄에 늘 빈 항이 없다(코드 대조, §E.2). **권고(통과 조건 아님)**: 튜플 타입 `(key: String, query: String, candidates: [Place])`의
      반복이 후보 트리의 5자리보다 줄었다(`grep -c` 두 파일 합).
