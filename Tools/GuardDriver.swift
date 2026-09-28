@@ -151,6 +151,32 @@ extension AIAssistant {
         await executeTool(name: name, input: input)
     }
     func drvResolvePendingAsk() async -> String? { await resolvePendingAsk() }
+    /// sync 1차 AC절 — drvAsk가 만든 실행 전 카드를 화면과 같이 bubbles에 달아 확인 경로로
+    /// 들어가게 한다(park는 스스로 달고, pendingAsk는 돌려주기만 해서 이 차이를 메운다).
+    func drvOpen(_ ask: PendingAsk) {
+        bubbles.append(.init(role: .assistant, text: "", ask: ask))
+    }
+    /// sync 1차 AC절 — 칩 **글자**로 고른다(라벨→value 사전을 뷰 대신 뒤집는다).
+    func drvPickLabel(_ key: String, _ label: String) -> Bool {
+        guard let f = drvLiveAsk()?.fields.first(where: { $0.key == key }),
+              let o = f.options.first(where: { $0.label == label }) else { return false }
+        choose(field: f.id, value: o.value)
+        return true
+    }
+    /// sync 1차 AC절 — '현재 위치' 칩이 풀릴 좌표를 심는다(location이 private이라 절 본문에서는
+    /// 못 대입한다 — 실기기의 LocationManager 역할을 대신하는 이 도우미만 경유한다).
+    func drvSeedCurrentLocation(lat: Double, lng: Double) {
+        location.currentLocation = CLLocationCoordinate2DMake(lat, lng)
+    }
+    /// sync 1차 AC절 — 한 턴에 호출 둘(D4): pendingAsk가 여러 호출의 부재를 카드 한 장으로
+    /// 묶는 실제 모양을 만든다. 정화→fillStated→pendingAsk 순서는 drvAsk와 같다.
+    func drvAskTwo(_ args1: [String: Any], _ args2: [String: Any]) -> PendingAsk? {
+        let parts: [[String: Any]] = [
+            ["functionCall": ["name": "create_activity", "args": args1]],
+            ["functionCall": ["name": "create_activity", "args": args2]],
+        ]
+        return pendingAsk(for: fillStated(sanitizeModelArgs(parts)))
+    }
 
     /// J절용 — 등록 요약의 시각 문구와 같은 포맷터(when)로 찍어 비교한다. when이 private이라
     /// Drv 구조체에서 못 부르므로 판정에 필요한 만큼만 통과시킨다(값은 그대로).
@@ -2623,6 +2649,186 @@ struct Drv {
                      a7aAsk == nil && a7aReply.contains("사용자에게")
                          && store.activities.filter { $0.title == "AB-끝시각활동" }.isEmpty,
                      "ask=\(a7aAsk != nil) reply=\(a7aReply)")
+        store.events = []
+        store.activities = []
+
+        // ── AC. t16 sync 1차 수리 — D1~D5 회귀 방지선(판정문 .moai/reports/t16/sync-verdict.md §2·§3).
+        //        재현은 sync 레인의 repro 하네스와 같은 모양(park·pendingAsk·choose·확인 실경로)으로
+        //        뽑고, 단언은 **뒤집힌 결과**(활동만 등록·오염 없음·가는 이동 유지)를 적는다.
+        //        '우리집'은 좌표가 '집'과 같은 두 번째 즐겨찾기 — 50 m 절이 글자가 아니라 좌표로
+        //        도는지를 재는 양성 대조 재료다(AC-008 (5)).
+        print("\nAC. t16 sync 1차 수리 — D1~D5 회귀 방지선(REQ-010)")
+        let acFavBackup = store.favorites
+        store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000)),
+                           FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010)),
+                           FavoritePlace(label: "우리집", place: Place(name: "우리집", address: "", latitude: 37.500, longitude: 127.000))]
+        let acHongdae = [Place(name: "스타벅스 대학로점", address: "서울 종로구 대학로", latitude: 37.582, longitude: 127.002),
+                         Place(name: "스타벅스 홍대입구역점", address: "서울 마포구 양화로", latitude: 37.557, longitude: 126.924)]
+
+        // D1 — 확인 경로 후보 카드의 맥락 줄(stated)에 내부 토큰이 찍혀 나가지 않는다(S-1).
+        //      park에 주는 input에 토큰을 직접 싣는다 — 정화를 거치지 않은 실행부 도착 모양이다.
+        let ac1 = fresh()
+        _ = ac1.drvPark("create_schedule",
+                        ["title": "AC-D1일정", "origin_query": AIAssistant.drvCurrentLocationToken(),
+                         "destination_query": "스타벅스 홍대점", "arrival_iso": "2027-04-01T15:00:00",
+                         "mode_this_time": "walk", "buffer_minutes": 10, "notify_lead_minutes": 10],
+                        [(key: "destination_query", query: "스타벅스 홍대점", candidates: acHongdae)])
+        ac1.drvCheck("AC-D1 후보 카드 맥락 줄에 '현재 위치' 토큰이 찍히지 않는다",
+                     ((ac1.drvLiveAsk()?.stated.joined(separator: " ") ?? "").contains("__")) == false,
+                     "stated=\(ac1.drvLiveAsk()?.stated ?? [])")
+        let ac2 = fresh()
+        _ = ac2.drvPark("create_activity",
+                        ["title": "AC-D1활동", "place_query": "스타벅스 홍대점",
+                         "travel_from_query": AIAssistant.drvNoOutboundToken(), "return_to_query": "회사",
+                         "start_iso": "2027-04-01T10:00:00", "end_iso": "2027-04-01T12:00:00",
+                         "return_mode_this_time": "walk", "notify_lead_minutes": 10],
+                        [(key: "place_query", query: "스타벅스 홍대점", candidates: acHongdae)])
+        ac2.drvCheck("AC-D1 '가는 편 없음' 토큰도 찍히지 않는다",
+                     ((ac2.drvLiveAsk()?.stated.joined(separator: " ") ?? "").contains("__")) == false,
+                     "stated=\(ac2.drvLiveAsk()?.stated ?? [])")
+
+        // D2 — 머무는 한 번짜리 카드에서 활동 장소와 **같은 이름**('집')을 고르면: 등록은 맞는데
+        //      요약에 "찾지 못해" 거짓 실패가 함께 나갔다(S-2). 활동만 등록 + 문구 부재로 뒤집는다.
+        let ac3 = fresh()
+        if let ask = ac3.drvAsk("create_activity", ["title": "AC-D2집점심", "place_query": "집",
+                                                    "start_iso": "2027-04-02T12:00:00",
+                                                    "end_iso": "2027-04-02T13:00:00"]) {
+            ac3.drvCheck("AC-D2 머무는 카드는 출발지 줄만 묻는다",
+                         ask.fields.map(\.key) == ["travel_from_query"],
+                         "keys=\(ask.fields.map(\.key))")
+            ac3.drvOpen(ask)
+            _ = ac3.drvPickLabel("travel_from_query", "집")
+            let reply = await ac3.drvResolvePendingAsk() ?? "nil"
+            ac3.drvCheck("AC-D2 같은 이름 선택 — 활동만 등록되고 거짓 실패 문구가 없다",
+                         store.activities.filter { $0.title == "AC-D2집점심" }.count == 1
+                             && store.events.filter { $0.title.contains("AC-D2집점심") }.isEmpty
+                             && reply.contains("찾지 못해") == false,
+                         "acts=\(store.activities.filter { $0.title == "AC-D2집점심" }.count) legs=\(store.events.filter { $0.title.contains("AC-D2집점심") }.count) reply=\(reply)")
+        } else { ac3.drvCheck("AC-D2 머무는 카드가 세워진다", false, "ask=nil") }
+
+        // D3a — 같은 좌표·다른 이름('우리집') 선택이 편도로 뒤집히지 않고 활동만 만든다(S-3b).
+        let ac4 = fresh()
+        if let ask = ac4.drvAsk("create_activity", ["title": "AC-D3우리집점심", "place_query": "집",
+                                                    "start_iso": "2027-04-03T12:00:00",
+                                                    "end_iso": "2027-04-03T13:00:00"]) {
+            ac4.drvOpen(ask)
+            _ = ac4.drvPickLabel("travel_from_query", "우리집")
+            let reply = await ac4.drvResolvePendingAsk() ?? "nil"
+            ac4.drvCheck("AC-D3 좌표가 같은 다른 이름 선택 — 활동만 등록된다",
+                         store.activities.filter { $0.title == "AC-D3우리집점심" }.count == 1
+                             && store.events.filter { $0.title.contains("AC-D3우리집점심") }.isEmpty
+                             && reply.contains("아직 만들지 않았어요") == false,
+                         "acts=\(store.activities.filter { $0.title == "AC-D3우리집점심" }.count) legs=\(store.events.filter { $0.title.contains("AC-D3우리집점심") }.count) reply=\(reply)")
+        } else { ac4.drvCheck("AC-D3 머무는 카드가 세워진다", false, "ask=nil") }
+
+        // D3b — '현재 위치' 선택(좌표를 '집'과 같게 주입): 50 m 절이 좌표로 도는지를 잰다(S-3a).
+        //        currentLocation을 미리 심으면 currentPlace()가 기다림 없이 그 좌표로 풀린다.
+        let ac5 = fresh()
+        ac5.drvSeedCurrentLocation(lat: 37.500, lng: 127.000)
+        if let ask = ac5.drvAsk("create_activity", ["title": "AC-D3현재위치점심", "place_query": "집",
+                                                    "start_iso": "2027-04-03T15:00:00",
+                                                    "end_iso": "2027-04-03T16:00:00"]) {
+            ac5.drvOpen(ask)
+            _ = ac5.drvPickLabel("travel_from_query", "현재 위치")
+            let reply = await ac5.drvResolvePendingAsk() ?? "nil"
+            ac5.drvCheck("AC-D3 현재 위치 선택(좌표 주입) — 활동만 등록된다",
+                         store.activities.filter { $0.title == "AC-D3현재위치점심" }.count == 1
+                             && store.events.filter { $0.title.contains("AC-D3현재위치점심") }.isEmpty
+                             && reply.contains("아직 만들지 않았어요") == false,
+                         "acts=\(store.activities.filter { $0.title == "AC-D3현재위치점심" }.count) legs=\(store.events.filter { $0.title.contains("AC-D3현재위치점심") }.count) reply=\(reply)")
+        } else { ac5.drvCheck("AC-D3 현재 위치 카드가 세워진다", false, "ask=nil") }
+
+        // D3c — 반복: 출발지='집'(목적지와 같은 값 → 머무는 줄)에서 '우리집'을 고르면 활동 블록만.
+        //        weeks는 선언 밖 인자라 정화가 버린다 — 카드의 weeks 줄은 반복 설계의 정상 모양.
+        let ac6 = fresh()
+        if let ask = ac6.drvAsk("create_recurring_schedule",
+                                ["title": "AC-D3반복", "origin_query": "집", "destination_query": "집",
+                                 "weekdays": ["mon"], "arrival_time": "12:00", "return_time": "13:00",
+                                 "start_date": "2027-04-05", "weeks": 4]) {
+            ac6.drvCheck("AC-D3 반복 머무는 카드는 수단·여유·알림을 묻지 않는다",
+                         Set(ask.fields.map(\.key)) == ["origin_query", "weeks"],
+                         "keys=\(ask.fields.map(\.key))")
+            ac6.drvOpen(ask)
+            _ = ac6.drvPickLabel("origin_query", "우리집")
+            _ = ac6.drvPickLabel("weeks", "4주")
+            let reply = await ac6.drvResolvePendingAsk() ?? "nil"
+            ac6.drvCheck("AC-D3 반복 '우리집' 선택 — 활동 블록만 만든다",
+                         store.activities.filter { $0.title == "AC-D3반복" }.isEmpty == false
+                             && store.events.filter { $0.title == "AC-D3반복" }.isEmpty
+                             && reply.contains("아직 만들지 않았어요") == false,
+                         "acts=\(store.activities.filter { $0.title == "AC-D3반복" }.count) legs=\(store.events.filter { $0.title == "AC-D3반복" }.count) reply=\(reply)")
+        } else { ac6.drvCheck("AC-D3 반복 카드가 세워진다", false, "ask=nil") }
+
+        // D4 — 한 카드에 호출 둘: A(못 푸는 장소 '사무실')+B(장소 없음). 사전 주입이 B의 빈
+        //      place_query에 A의 선택을 실어 '장소 없는 활동'이 남의 장소로 등록됐다(S-4).
+        let ac7 = fresh()
+        if let ask = ac7.drvAskTwo(["title": "AC-A회의", "place_query": "사무실",
+                                    "start_iso": "2027-04-04T12:00:00", "end_iso": "2027-04-04T13:00:00"],
+                                   ["title": "AC-B독서",
+                                    "start_iso": "2027-04-04T20:00:00", "end_iso": "2027-04-04T21:00:00"]) {
+            ac7.drvOpen(ask)
+            _ = ac7.drvPickLabel("place_query", "회사")
+            _ = ac7.drvPickLabel("travel_from_query", "이동 없음")
+            let reply = await ac7.drvResolvePendingAsk() ?? "nil"
+            let acA = store.activities.first { $0.title == "AC-A회의" }
+            let acB = store.activities.first { $0.title == "AC-B독서" }
+            ac7.drvCheck("AC-D4 A는 고른 장소로, B는 장소 없이 등록된다",
+                         acA?.location?.name == "회사" && acB != nil && acB?.location == nil,
+                         "A=\(acA?.location?.name ?? "nil") B=\(acB.map { $0.location?.name ?? "장소없음" } ?? "미등록") reply=\(reply)")
+        } else { ac7.drvCheck("AC-D4 두 호출 카드가 세워진다", false, "ask=nil") }
+
+        // D4b — S-4 변형: A의 장소가 즐겨찾기('집')면 카드는 출발지 줄 하나. 사전 주입이 이 줄의
+        //       답을 B에도 실어야 하되(카드 한 장·같은 답 전부 적용), B를 거절로 몰지 않는다(S-4v).
+        let ac8 = fresh()
+        if let ask = ac8.drvAskTwo(["title": "AC-vA", "place_query": "집",
+                                    "start_iso": "2027-04-05T12:00:00", "end_iso": "2027-04-05T13:00:00"],
+                                   ["title": "AC-vB",
+                                    "start_iso": "2027-04-05T20:00:00", "end_iso": "2027-04-05T21:00:00"]) {
+            ac8.drvCheck("AC-D4 두 호출 머무는 카드는 출발지 줄 하나다",
+                         ask.fields.map(\.key) == ["travel_from_query"],
+                         "keys=\(ask.fields.map(\.key))")
+            ac8.drvOpen(ask)
+            _ = ac8.drvPickLabel("travel_from_query", "이동 없음")
+            let reply = await ac8.drvResolvePendingAsk() ?? "nil"
+            ac8.drvCheck("AC-D4 카드가 없었으면 등록됐을 호출(B)이 거절되지 않는다",
+                         store.activities.contains { $0.title == "AC-vA" }
+                             && store.activities.contains { $0.title == "AC-vB" }
+                             && reply.contains("아직 만들지 않았어요") == false,
+                         "A=\(store.activities.contains { $0.title == "AC-vA" }) B=\(store.activities.contains { $0.title == "AC-vB" }) reply=\(reply)")
+        } else { ac8.drvCheck("AC-D4 변형 카드가 세워진다", false, "ask=nil") }
+
+        // D5 — AC-008 (5) 양성 대조: **모델이 보낸** '우리집' 편도는 가는 이동을 유지한다.
+        //      값 정화(R1)가 토큰만 버리고 일반 장소 이름은 살려야 이 선이 산다.
+        let ac9 = fresh()
+        let ac9Reply = await ac9.drvExecuteTool("create_activity",
+                                                ["title": "AC-D5편도", "place_query": "회사",
+                                                 "travel_from_query": "우리집",
+                                                 "start_iso": "2027-04-06T10:00:00",
+                                                 "end_iso": "2027-04-06T12:00:00",
+                                                 "mode_this_time": "walk", "buffer_minutes": 10,
+                                                 "notify_lead_minutes": 10])
+        ac9.drvCheck("AC-D5 모델이 보낸 '우리집' 편도 — 가는 이동 1건이 유지된다",
+                     store.events.filter { $0.title == "AC-D5편도" }.count == 1
+                         && store.events.first { $0.title == "AC-D5편도" }?.origin?.name == "우리집",
+                     "legs=\(store.events.filter { $0.title == "AC-D5편도" }.count) reply=\(ac9Reply)")
+
+        // R1 — 모델이 토큰을 **값으로** 실어 보내면(히스토리 에코) 정화가 버린다: 머무는 신호가
+        //      사용자 선택 없이 굳는 일이 없고, 사라진 자리는 부재 판정이 다시 묻는다.
+        let ac10 = fresh()
+        if let ask = ac10.drvAsk("create_activity",
+                                 ["title": "AC-R1에코", "place_query": "집",
+                                  "travel_from_query": AIAssistant.drvNoTravelToken(),
+                                  "start_iso": "2027-04-07T12:00:00",
+                                  "end_iso": "2027-04-07T13:00:00"]) {
+            ac10.drvCheck("AC-R1 모델이 보낸 토큰 값은 정화돼 사라진다",
+                          AIAssistant.drvCallArgs(ask)["travel_from_query"] == nil,
+                          "args=\(AIAssistant.drvCallArgs(ask))")
+            ac10.drvCheck("AC-R1 사라진 자리는 부재로 다시 묻는다(staying 출발지 줄)",
+                          ask.fields.map(\.key) == ["travel_from_query"],
+                          "keys=\(ask.fields.map(\.key))")
+        } else { ac10.drvCheck("AC-R1 카드가 세워진다", false, "ask=nil") }
+
+        store.favorites = acFavBackup
         store.events = []
         store.activities = []
 

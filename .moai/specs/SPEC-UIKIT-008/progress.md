@@ -382,7 +382,7 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | REQ-008 — 옛/새 캡션 | `가 여러 줄에 같은 이름으로 왔어요` = **0**, `이 다른 줄에도 있어요. 이 줄에 맞는 지점을 골라 주세요.` = **1**. 제외 신호 세 가지(즐겨찾기 `searchBoundPlace` · 확정 `confirmedPlaces` · 머무는 신호 `stayingOneShotActivity`가 같은 이름 줄을 건너뛴다)+반복 도구는 애초에 같은 이름 줄이 없다 |
 | REQ-009 — 옛/새 캡션 | `미리 정해진 출발지가 맞는지` = **0**, `에서 출발하는지 한 번 더 골라 주세요` = **1**(`roundTripOriginNote`). 칩 `가는 편 없음`·미리 선택 없음·사무실 unknown 무칩 회귀는 기존 단언(O-6 3·4번, AB-H07)이 지킨다 |
 | REQ-010 — 문구 | `'이동 없음'을 고르면 돼요` = **1**(stayingOriginNote, I-6 원문), `이동 없이 한 곳에서` = **0**, `return_time에 넣어` = **0**(< 1 — `stayingEndAsk`가 arg를 보간하므로 리터럴이 사라졌고, 문장은 `사용자에게 물어`를 포함한다), `가드는 create_schedule 경로 전용` = **0**(주석 교체 자리 **:2070** — `isSamePlace`의 사용처(create_schedule 거절 · 머무는 요청 판정)를 적는다, AC-008 (9)) |
-| REQ-010 — 새 지점 | `noTravelToken` **:2818**(카드 전용 토큰, 선언 키 무변경) · `stayingRecurrenceSignal` **:788** · `stayingOneShotActivity` **:797**(T-1) · `stayingOriginField` **:807**(I-2 칩) · `stayingEndAsk` **:1908**(B-2·B-3) · `makeStayingRecurrence` **:1916**(두 신호가 같은 길 — 계약 5) · 50 m 교체는 `executeCreateActivity`의 머무는 신호 게이트 안에서만(편도 실행부 일반 가드 없음 — AC-008 (5) 양성 대조 단언 `AB-REQ010 한 번짜리 다른 출발지 — 셋을 갖추면 편도`가 지킨다) |
+| REQ-010 — 새 지점 | `noTravelToken` **:2818**(카드 전용 토큰, 선언 키 무변경) · `stayingRecurrenceSignal` **:788** · `stayingOneShotActivity` **:797**(T-1) · `stayingOriginField` **:807**(I-2 칩) · `stayingEndAsk` **:1908**(B-2·B-3) · `makeStayingRecurrence` **:1916**(두 신호가 같은 길 — 계약 5) · 50 m 교체는 **두 곳**(M7 — 확인 때 `stayingTokenForColocatedPick`이 주입 전 판정·좌표로 먼저 굳히고, `executeCreateActivity`의 머무는 신호 게이트가 좌표를 미리 못 얻은 경로의 방어선이다. 편도 실행부 일반 가드는 여전히 없음 — AC-008 (5) 양성 대조 `AC-D5`·`AB-REQ010 한 번짜리 다른 출발지`가 지킨다) |
 | REQ-011 — AB-H08 | `executeUpdateRecurringSchedule` — 번호 없는 호출이 lastRecurrenceId의 그룹을 겨누는데 events에 그 rid가 없고 activities에만 있으면 "바꿀 이동 구간이 없어요" 사실 문구(`이동 구간` 포함, `이미 삭제됐을 수 있어요` 부재). `Shared/Store.swift` 무변경(`git diff aa7b792 -- Shared/Store.swift` 빈 출력) |
 | AC-002 (3) 회귀 | `grep '✗' m4-driver.log \| grep -c 'AA-1\|AB-H04'` = **0** |
 | 선언 무변경(REQ-013) | M4 diff(`e1a40a6` → HEAD)에서 `"type"`·`"required"`·`"enum"`·`"properties"`·`functionDeclarations` 줄 변경 **0**. `grep -c '"type": "[a-z]'` = **0**. aa7b792 → HEAD의 선언 영역 차이는 후보(e1a40a6)의 `origin_query` 설명 한 줄뿐(§1.2 "선언 설명 :1273" — 이 카드의 출발점이 채택한 diff) |
@@ -469,6 +469,38 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 | macOS | `macos-final.log` | `** BUILD SUCCEEDED **` 1 · `.swift` 경고 **0** · `^SwiftCompile` 38 · exit 0 |
 | 프록시 | `npm --prefix proxy test`(dbdb5b9 시점, 이후 proxy 무변경) | 7/7 통과 · exit 0 |
 
+### M7 — sync 1차 FAIL 수리 — D1~D5 · R1 · R6 (2026-09-28, run 레인 복귀)
+
+sync 1차 판정(`7a1b171` — `.moai/reports/t16/sync-verdict.md` §2·§3)의 차단 다섯와 포함 권고 둘을 같은 커밋에서 닫는다. 관측 트리는 **이번 커밋**, 변경은 `Shared/AIAssistant.swift`·`Shared/EditCard.swift`·`Tools/GuardDriver.swift`+이 progress.md. 선언·프록시 무변경(diff `proxy/`·`project.yml` 0줄, 툴 JSON·시스템 프롬프트 줄 0줄 — REQ-013 유지).
+
+#### (a) 수리 — 코드 자리와 이유
+
+| id | 수리 | 자리 |
+|---|---|---|
+| D1 | 세 내부 토큰의 값 판정을 단일 출처로 묶고(`isInternalPlaceToken`) stated 맥락 줄(`filledValueLabels.add`)이 세 토큰을 모두 거른다 — `__current_location__`·`__no_outbound_leg__`이 "말씀하신 대로" 줄에 찍히던 것(S-1) | AIAssistant |
+| D2·D3 | 확인 경로의 출발지 줄 주입이 **주입 전** 호출 모양으로 머묿을 확인하고, 고른 값(즐겨찾기·확정 장소·현재 위치)이 그 호출의 활동 장소·목적지와 50 m 안이면 `noTravelToken`으로 바꿔 싣는다(`stayingTokenForColocatedPick`) — 주입 뒤 인자로 판정하면 문자열 비교가 먼저 편도로 뒤집혀 missingAskedArguments에 막히거나(S-3) 거짓 실패 문구가 나갔다(S-2). 좌표는 로컬 두 단(`locallyResolvedPlace` — 즐겨찾기→확정 사전, `adoptPlace`가 같은 두 단으로 시작해 계약 5 유지)과 `currentPlace()`에서만 얻고, 못 얻으면 실행부의 기존 50 m 절이 방어선으로 남는다. 편도(create_schedule)에는 이 판정이 없다 | AIAssistant·resolvePendingAsk |
+| D4 | 후보 카드가 인자를 비운 키를 `EditCard.clearedKeys`로 기록하고 확인 경로의 사전 주입을 **그 키로 한정** — 카드가 비우지 않은 빈 키(같은 턴 다른 호출의 place_query)에 고른 값이 실려 장소 없던 활동이 남의 장소로 등록되던 것(S-4). 실행 전 카드는 비운 키가 없으므로 사전 주입이 원래 목적(주입 전 재계산 — H-1 조합8)인 후보 카드에만 작동한다 | EditCard·AIAssistant |
+| D5 | AC-008 (5) 양성 대조 단언 — 좌표가 '집'과 같은 두 번째 즐겨찾기('우리집') 픽스처 + **모델이 보낸** '우리집' 편도 → 가는 이동 1건(`AC-D5`) | GuardDriver AC절 |
+| R1 | `sanitizeModelArgs`가 **값** 정화를 함께 한다 — 내부 토큰은 카드가 정화 뒤에 얹히는 앱 문법이라 모델 턴의 토큰은 전부 히스토리 에코고, 키만 거르면 에코가 머무는 신호로 굳는다(REQ-010 "선택으로만 확정") | AIAssistant |
+| R6 | 주석 두 곳 — `isSamePlace` 사용처 나열(다섯 곳 — create_schedule 거절·활동 50 m 절·반복 갈래·확정 열쇠·카드 확인 교체)과 ask 카드 경로 좌표(`:433-436`) | AIAssistant |
+
+#### (b) AC절 단언 14 — 원장 T = 241 + 61 − 6 + 14 = **310**
+
+`AC-D1`×2(stated에 `__` 없음 — 현재 위치·가는 편 없음) · `AC-D2`×2(출발지 줄만 묻는다·같은 이름 선택 — 활동만+`찾지 못해` 부재) · `AC-D3`×5(우리집·현재 위치(좌표 주입 `drvSeedCurrentLocation`)·반복 우리집 — 활동만, 수단·여유·알림 미질의 포함) · `AC-D4`×4(두 호출 — A 고른 장소·B 장소 없이 등록, 변형 — B 거절 없음, 카드 줄 모양 2) · `AC-D5`(모델이 보낸 우리집 편도 — 가는 이동 1건) · `AC-R1`×2(토큰 값 정화로 소멸·부재 줄 재등장).
+
+#### (c) 게이트 — 판정 레인이 수리 트리에서 직접 재실행
+
+| 게이트 | 관측 |
+|---|---|
+| 드라이버 | CLAUDE.md 레시피 · 컴파일 exit 0 · 드라이버 **exit 0** · **`310/310 통과`** · `grep -c '✗'` = 0 · `[실제 데이터] 대조 통과` · 샌드박스 잔존 0(중간 1회 실행에서 C·J절 환경 전제 8줄이 일시 네트워크로 빨간 사례 — 재실행으로 소멸, AC절과 무관) |
+| iOS | `BUILD SUCCEEDED` · `.swift` 경고 **0** · exit 0 |
+| macOS | `BUILD SUCCEEDED` · `.swift` 경고 **0**(appintentsmetadataprocessor 1줄은 기존 동종) · exit 0 |
+| 프록시 | `npm --prefix proxy test` — **7/7 통과** |
+
+#### (d) sync 재현 하네스 재실행(판정문 §2의 repro — 수리 트리에서)
+
+S-1(토큰 stated 노출)·S-2(거짓 실패)·S-3b(우리집 → 활동만)·S-4(B 오염 `location=회사` → `location=nil`)·S-4v(B 거절 → 등록) — **전부 뒤집힘**. 단 **S-3a('현재 위치')는 이 하네스에서 여전히 막힌 문구**로 나온다 — repro는 LocationManager에 좌표를 심지 않아 `currentPlace()`가 nil이어서 교체가 일어나지 않는 것이고, 이 경로는 좌표 주입으로 잰 `AC-D3 현재 위치 선택(좌표 주입)` 단언이 통과한 것이 증거다. 재심사에서 repro S-3a를 읽을 때 이 각주를 함께 읽는다.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 - run_status: **audit-ready**
@@ -476,9 +508,11 @@ base `aa7b792`(= `origin/master`), HEAD `e1a40a6`(이전 세션의 미커밋 후
 - run 커밋: `0a3f59e`(M1 재현 절 — `draft → in-progress` 전이) · `a18154d`(M2 데이터 흐름) · `433439c`(M3 판정 술어) · `56d5e5a`(M4 카드 표면·머무는 요청) · `a73b6c2`(M5 U-2) · `dbdb5b9`(M6 죽은 가지·토큰 쌍 — 기준선 3,824) · `a9c63a5`(AB절 배너 ✗ 제거) · run 종결 커밋(F-1 가드 + 이 절 — SHA는 리드 보고에 명시)
 - AC 행렬: **AC-001 ✅**(11/11 재현, 극성 규칙·`[수용]` 1·`[경로 제거]` 1, M1 커밋 소스 경로 GuardDriver 하나) · **AC-002 ✅**(이름만 판정, 강남 주소 픽스처 4줄 모두 address, AB-H04 ✓) · **AC-003 ✅**(`✓ AB-H01` 10/10 조합) · **AC-004 🟡**(기계 몫 ✓ — AB-H02 ✓·AB-H03 [경로 제거] ✓·가드 자리 runLoop :446 + confirmAsk 거울 ; 사람 몫 AC-014 1번 대기) · **AC-005 🟡**((1)(2)(3)(5) 기계 ✓ — startsOpen·맥락 줄 단일 함수·grep 신호 ; (4) 사람 대기) · **AC-006 ✅**(음성·양성 대조) · **AC-007 ✅**(왕복 줄·캡션) · **AC-008 ✅**(아홉 절 — AB-H11 10줄·끝 시각 선행·점심 고지·주석 교체·return_time 특성화) · **AC-009 ✅**(AB-H08·Store diff 빈 출력) · **AC-010 ✅**(술어 한 자리·chip() cmp·양성 대조·4화면 0줄) · **AC-011 ✅**(범위·계약 8절 — 판정 레인 직접 대조) · **AC-012 ✅**(게이트 4종 + 토큰 쌍 3,824→3,946(+122)·기준선 교체·경고 집합 동일) · **AC-013 ⬜**(sync — 인용 재사상·원장·양성 대조) · **AC-014 ⬜**(사람 전용 — 시뮬레이터 1~16번, 빌드는 최종 커밋 `ios-final.log`의 것) · **AC-015 ⬜**(사람 전용 — 17~20번)
 - 게이트 최종 수치(판정 레인 직접, 최종 트리): 드라이버 `296/296 통과` · exit 0 · `grep -c '✗'` = 0 · 실제데이터 대조 통과 · 컴파일 경고 24(base 동일) · iOS `BUILD SUCCEEDED` 무경고(42) · macOS 무경고(38) · 프록시 7/7 · 토큰 쌍 산출물 `.moai/state/verify/t16/token-pair.json`
+- **M7 갱신(2026-09-28, sync 1차 FAIL 수리 뒤)**: sync 판정 `7a1b171`의 D1~D5·R1·R6를 수리(§E.2 M7) — 드라이버 **`310/310 통과`**(T = 241 + 61 − 6 + **14**) · exit 0 · `✗` 0 · 실제데이터 대조 통과 · iOS·macOS 무경고 · 프록시 7/7. AC-008 (5)의 양성 대조 증거 결손(D5)은 `AC-D5` 단언으로 채웠다. sync 재현 하네스의 S-1·S-2·S-3b·S-4·S-4v 뒤집힘 확인(S-3a 각주는 §E.2 M7 (d)). **상태: sync 재심사 대기**(판정문 §8 순서 3 — 재현 하네스 재실행·게이트 독립 재실측).
 - 렌즈: code-safety **차단 1(F-1) → 수리로 소멸** + 선택 3 기록 · ui-design PASS + 선택 2 · ai-tooling PASS + 선택 4(①③은 수리) — 보고서 `.moai/reports/t16/run-lens-{code-safety,ui-design,ai-tooling}.md`
 - 잔여(이 카드 밖으로 넘기는 것): F-2·F-3(선택)·F-4(`noTravelToken` 에코 — 잔여 위험) · ui 선택 2(debouncer 창·폴백 도달) · ai 선택 ②④ · 브랜드 단일어 채택 한계(spec §3) · 한 번짜리 오는 편 부재·끝 시각 문장 되묻기(t30 중간 동작) · 시뮬레이터·실기기 사람 증거(AC-014·015·기기 확인 목록)
 - 운영자 지시(리드 전달, 2026-09-26): run 완료 후 정지 — 다음 단계는 sync가 아니라 운영자 재개 지시.
+- 리드 지시(2026-09-28): sync 1차 FAIL(`7a1b171`)로 run 복귀 — D1~D5 + R1 포함(값 정화) + R6 수리 뒤 §E.2·§E.3 갱신과 통지까지.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 

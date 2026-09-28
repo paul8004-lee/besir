@@ -237,6 +237,11 @@ import Foundation
     /// 사용자가 말로 이미 정한 값(카드에 줄을 만들지 않은 것들). 무엇이 조용히 정해졌는지
     /// 카드에 적어 보여준다 — 줄이 사라진 자리를 사용자가 못 보면 그게 곧 조용한 적용이다.
     var stated: [String] = []
+    /// 후보 카드(parkForUnclearPlaces)가 인자를 **비워 둔** 키의 기록. 확인 경로의 사전 주입은
+    /// 이 키에만 실린다 — 빈 값이면 어디에나 있을 수 있어서다(모델이 안 보낸 키도 비어 있다).
+    /// 카드가 비우지 않은 빈 키(같은 턴 다른 호출의 같은 이름 키)에 고른 값을 실으면 그 호출이
+    /// 묻지 않은 장소로 조용히 등록된다(sync 1차 D4). 실행 전 카드는 비운 키가 없으므로 공집합.
+    var clearedKeys: Set<String> = []
     var fields: [EditField]
     var isReady: Bool { fields.allSatisfy { $0.chosen != nil } }
 }
