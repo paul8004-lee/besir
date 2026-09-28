@@ -503,6 +503,46 @@ sync 1차 판정(`7a1b171` — `.moai/reports/t16/sync-verdict.md` §2·§3)의 
 
 S-1(토큰 stated 노출)·S-2(거짓 실패)·S-3b(우리집 → 활동만)·S-4(B 오염 `location=회사` → `location=nil`)·S-4v(B 거절 → 등록) — **전부 뒤집힘**. 단 **S-3a('현재 위치')는 이 하네스에서 여전히 막힌 문구**로 나온다 — repro는 LocationManager에 좌표를 심지 않아 `currentPlace()`가 nil이어서 교체가 일어나지 않는 것이고, 이 경로는 좌표 주입으로 잰 `AC-D3 현재 위치 선택(좌표 주입)` 단언이 통과한 것이 증거다. 재심사에서 repro S-3a를 읽을 때 이 각주를 함께 읽는다.
 
+### M8 — sync 2차 FAIL 수리 — E1~E7 · O-1 (2026-09-28, run 복귀 2)
+
+sync 2차 판정(`2ce869f` — 판정문 §R2)의 실행 관측 여섯과 증거 갱신을 닫는다. 관측 트리는 **이번 커밋**, 변경은 `Shared/AIAssistant.swift`·`Shared/AIChatView.swift`·`Tools/GuardDriver.swift`+이 progress.md. 선언·프록시 무변경(REQ-013 — E8의 REQ-013·AC-011 개정은 **manager-spec 대기**, run은 손대지 않는다).
+
+#### (a) 수리 — 코드 자리와 이유
+
+| id | 수리 | 자리 |
+|---|---|---|
+| E1 | `sanitizeModelArgs`가 반복 도구의 출발지 '이동 없음' 에코를 **버리지 않고 destination_query 값으로 되돌린다**(리드 제시 두 옵션 중 상태 없는 쪽 — 앱 주입 티켓을 기록하는 쪽은 재심사 하네스가 재호출을 fresh 인스턴스로 재현하는 모양에서 살지 못한다). 그 토큰의 유일한 발원지는 앱이 카드 확인 때 심은 값이라 "같은 인자로 다시 호출해"를 받은 모델의 되울림은 에코가 아니라 재유입이다. 다른 도구·다른 키의 토큰은 여전히 버린다(R1 유지) | AIAssistant |
+| E2 | `chatGeneration` 세대 카운터 — resetConversation이 올리고, 확인 경로의 await(측위 최대 3초) 뒤 세대가 다르면 등록을 중단한다(말풍선 요약은 이미 카드를 대체한 뒤라 bubbles 검사로는 못 잡는다). 최소몫으로 새 대화 버튼에 `.disabled(assistant.isThinking)` | AIAssistant·AIChatView |
+| E3 | 머묿 판정만 주입 전 모양(preInjection)으로 하고 **앵커는 그 시점의 args**에서 읽는다 — 같은 카드의 앞 줄(못 푸는 장소 줄)에서 막 고른 즐겨찾기가 앵커가 되는 경우 | AIAssistant 헬퍼 |
+| E4 | 실행부 50 m 폴백에 `stayedByDistance` 표시를 세워 unresolved 집계에서 뺀다 — 교체는 해석 실패가 아니라 사용자 선택의 다른 표기다 | AIAssistant 실행부 |
+| E5 | 운영자 결정 **(가)**: 머무는 카드였다는 기록(`stayingAskMarker`, 선언 밖 카드 전용 키 — 토큰 셋과 같은 구조로 정화가 모델 값은 버린다)을 50 m를 **완료하지 못한** 선택에만 실어, 실행부가 장소 해석(필요하면 검색)한 뒤 50 m를 먼저 재게 부재 판정은 그다음에 오게 한다. 좌표를 얻었는데 50 m 밖이면 판정 완료 — 마커 없이 진짜 편도(AB-REQ010이 지키는 선) | AIAssistant 헬퍼·술어 |
+| E6 | `unresolvedQueryText`의 토큰 판정을 `isInternalPlaceToken` 하나로 — 위치를 못 잡은 '현재 위치' 토큰이 문구로 샜다 | AIAssistant 실행부 |
+| E7 | `AC-D5`를 원문 쌍('우리집'→'집', 좌표 같음)으로 교체 + 카드 확인 경로 단언(`AD-E7`) 추가 — '회사'(1.4 km)는 편도에 일반 50 m 가드를 넣어도 통과하는 약한 대조였다 | GuardDriver |
+| O-1 | `echoedPlaceToken`이 양끝 공백을 벗고 재고(공백 붙은 토큰 에코가 정화를 지났다). O-3(재호출 카드 출발지 줄 하나 더)은 "데이터는 맞다" 판정 그대로 유지 | AIAssistant |
+
+#### (b) 도중 잡은 자기 회귀 1건(기록)
+
+마커(needsDeferredCheck)를 처음엔 "머무는 카드였다" 전체에 걸었다가 AB-REQ010 세 단언이 빨개졌다 — 좌표를 얻었는데 50 m 밖인 **진짜 다른 출발지**(I-1: 수단·여유·알림을 물어야 함)까지 마커가 굳혔다. "50 m 판정을 완료하지 못한" 경우로 좁혀 복원 — 재현 절이 수리 자체의 회귀를 잡은 사례(M4 (d)와 같은 모양).
+
+#### (c) AD절 단언 14 — 원장 T = 241 + 61 − 6 + 14 + 14 = **324**
+
+`AD-E1`×4(재호출 지시·에코 교체·카드 모양['이동 없음' 칩 포함 확인줄+weeks]·등록 완주) · `AD-E3`×2 · `AD-E4`×3(카드 경로·모델 직행·"찾지 못해" 부재) · `AD-E5`×3(줄 모양·등록 — 앵커는 후보 확정 사전으로 시드, 검색 불가 환경의 결정성 확보) · `AD-E2`(세대 — 등록 안 됨·roles 유지) · `AD-E6`(토큰 무노출) · `AD-E7`×3(카드 줄 셋[정화가 선언 밖 여유·알림을 버려 물어지는 정상 모양]·가는 이동 1건·origin 우리집). AC-D5 원문 쌍 교체 포함.
+
+#### (d) 게이트 — 판정 레인이 수리 트리에서 직접 재실행, 로그 보존
+
+로그는 `.moai/state/verify/t16/gate5-*`(2026-09-28 — gate4 때의 교훈 그대로 처음부터 이 경로에 보존).
+
+| 게이트 | 로그 | 관측 |
+|---|---|---|
+| 드라이버 | `gate5-compile.log`·`gate5-driver.log` | 컴파일 exit 0 · 경고 **24**(base 집합과 동일 수) · 드라이버 **exit 0**(로그 말미 에코 포함) · **`324/324 통과`** · `grep -c '✗'` = 0 · `[실제 데이터] 대조 통과` · 샌드박스 잔존 0 |
+| iOS | `gate5-ios.log`(새 DerivedData `dd5`) | exit 0 · `BUILD SUCCEEDED` · `.swift` 경고 **0** |
+| macOS | `gate5-macos.log`(같은 `dd5`) | exit 0 · `BUILD SUCCEEDED` · `.swift` 경고 **0** |
+| 프록시 | `gate5-proxy.log` | exit 0 · **7/7 통과** |
+
+#### (e) sync 2차 재현 하네스 재실행(판정문 §R2.3의 repro3·repro4 — 수리 트리에서)
+
+repro3 — B-1 재호출 카드 `["origin_query", "weeks"]`(출발지 줄에 '이동 없음' 칩 — 판정문 수리 모양 그대로, 수단·여유·알림 없음) · B-3 등록(활동 1·이동 0) · B-2 등록+"찾지 못해" 없음. repro4 — C-1 수단 요구 거절이 사라지고 장소 해석 뒤 갈림("이동까지 만들려면 활동 장소가 필요해요" — 검색이 안 풀리는 하네스에서의 정상 안내; 결정적 증거는 확정 사전을 시드한 `AD-E5`) · **C-2 `registered = false`·`roles after await = []`** · C-3 `leaks token = false`. 전부 뒤집힘(C-1은 위 각주대로 읽는다).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 - run_status: **audit-ready**
@@ -515,6 +555,7 @@ S-1(토큰 stated 노출)·S-2(거짓 실패)·S-3b(우리집 → 활동만)·S-
 - 잔여(이 카드 밖으로 넘기는 것): F-2·F-3(선택)·F-4(`noTravelToken` 에코 — 잔여 위험) · ui 선택 2(debouncer 창·폴백 도달) · ai 선택 ②④ · 브랜드 단일어 채택 한계(spec §3) · 한 번짜리 오는 편 부재·끝 시각 문장 되묻기(t30 중간 동작) · 시뮬레이터·실기기 사람 증거(AC-014·015·기기 확인 목록)
 - 운영자 지시(리드 전달, 2026-09-26): run 완료 후 정지 — 다음 단계는 sync가 아니라 운영자 재개 지시.
 - 리드 지시(2026-09-28): sync 1차 FAIL(`7a1b171`)로 run 복귀 — D1~D5 + R1 포함(값 정화) + R6 수리 뒤 §E.2·§E.3 갱신과 통지까지.
+- **M8 갱신(2026-09-28, sync 2차 FAIL 수리 뒤)**: sync 판정 `2ce869f`(§R2)의 E1~E7·O-1을 수리(§E.2 M8) — 드라이버 **`324/324 통과`**(T = … + **14**, AD절) · exit 0 · `✗` 0 · 실제데이터 대조 통과 · iOS·macOS 무경고 · 프록시 7/7 — 게이트 로그 `.moai/state/verify/t16/gate5-*.log`(§E.2 M8 (d)). 2차 재현 하네스(repro3·repro4)의 여섯 관측 전부 뒤집힘(C-1 각주는 §E.2 M8 (e)). E8(SPEC 개정)은 **manager-spec 대기**. **상태: manager-spec(E8) → sync 3차 대기**(판정문 §R2.8 순서 3·4).
 
 ## §E.4 Sync-phase Audit-Ready Signal
 

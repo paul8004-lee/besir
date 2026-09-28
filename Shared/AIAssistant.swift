@@ -55,6 +55,10 @@ final class AIAssistant: ObservableObject {
     /// (현재 위치·가는 편 없음), 이름만 실으면 실행부가 같은 이름을 **다시 검색**해 다른 지점이
     /// 잡힌다('회사' → 농업회사법인 화조원). 대화가 끝날 때까지 산다(resetConversation이 지운다).
     private var confirmedPlaces: [String: Place] = [:]
+    /// 대화의 세대 번호 — resetConversation이 올릴 때마다 이전 세대의 진행 중 작업은 방금 버린
+    /// 대화의 몫이 된다. 확인 경로의 await(측위 최대 3초) 사이에 새 대화가 오면, 이미 카드를
+    /// 요약 말풍선으로 바꿔 놓아 bubbles·contents만으로는 그 순간을 못 잡는다(E2, sync 2차).
+    private var chatGeneration = 0
     /// 장소 줄별 검색 묶음(지연·취소·같은 질의 스킵). 정책 전부는 EditCard.swift의
     /// PlaceSearchDebouncer가 단독으로 소유한다. 줄 id는 카드마다 새로 만들어져 겹치지 않는다.
     private var placeDebounce = PlaceSearchDebouncer()
@@ -209,6 +213,8 @@ final class AIAssistant: ObservableObject {
     /// (예: tool 다음에 user가 바로 오면 Workers AI가 매 요청을 거부) 여기서 초기화하면 복구된다.
     func resetConversation() {
         contents = []
+        // 세대를 올린다 — 진행 중이던 확인(await 중)은 이 대화의 몫이 아니게 된다(E2).
+        chatGeneration += 1
         lastRecurrenceId = nil
         // 목록 번호도 같이 지운다 — 번호는 "이 대화에서 목록이 보여줬다"는 약속이라 새 대화에서
         // 옛 번호가 살아 있으면 아무 그룹이나 가리키게 된다.
@@ -790,7 +796,10 @@ final class AIAssistant: ObservableObject {
     /// '이동 없음'을 골랐다는 토큰도 머무는 요청으로 본다. 카드 뒤의 재호출(후보 카드·수단 확인)
     /// 에서 토큰이 인자로 실려 오는데 그것을 머무는 신호로 못 읽으면 수단·여유·알림 줄이 되살아
     /// 난다(I-1 위반). 카드(문자열)와 실행부가 같은 판정을 보게 하는 단일 출처다(계약 5).
+    /// 확인 경로의 머묿 기록(stayingAskMarker)도 여기서 본다(E5) — 문자열 신호가 주입으로 깨진
+    /// 호출도 카드가 세워질 때와 같은 머무는 요청으로 판정한다.
     private func stayingRecurrenceSignal(_ args: [String: Any]) -> Bool {
+        if args[Self.stayingAskMarker] != nil { return true }
         if Self.trimmedArg(args, "origin_query") == Self.noTravelToken { return true }
         return stayingRecurrence(args)
     }
@@ -798,8 +807,10 @@ final class AIAssistant: ObservableObject {
     /// 한 번짜리 활동이 머무는 요청인지(해석 T-1) — 장소가 있고 오는 편이 없으며, 가는 편 출발지가
     /// 비었거나 활동 장소와 같은 값(토큰 포함)인 호출. "가는 편 오는 편 이동일정을 선택하지 않은
     /// 활동 일정"을 호출 인자로 옮긴 모양이다(D-8 운영자 문구). 편도(다른 값)·왕복(오는 편 있음)·
-    /// 장소 없는 활동은 이미 이동을 정했거나 이동이 성립하지 않아 제외다.
+    /// 장소 없는 활동은 이미 이동을 정했거나 이동이 성립하지 않아 제외다. 확인 경로의 머묿 기록
+    /// (stayingAskMarker)도 여기서 본다(E5).
     private func stayingOneShotActivity(_ args: [String: Any]) -> Bool {
+        if args[Self.stayingAskMarker] != nil { return true }
         guard let place = Self.trimmedArg(args, "place_query"),
               Self.trimmedArg(args, "return_to_query") == nil else { return false }
         guard let from = Self.trimmedArg(args, "travel_from_query") else { return true }
@@ -951,7 +962,11 @@ final class AIAssistant: ObservableObject {
     /// **값**도 같은 자리에서 정화한다: 내부 토큰('이동 없음' 등)은 카드가 골라 넣은 값이 이 정화
     /// **뒤에** 얹히는 앱 문법이라 모델 턴에 오는 토큰은 전부 히스토리 에코다. 키만 거르고 값을
     /// 살려 두면 에코가 머무는 신호로 굳어, 사용자가 고르지 않은 '이동 없음'이 확정된다(REQ-010의
-    /// "선택으로만 확정" — sync 1차 R1).
+    /// "선택으로만 확정" — sync 1차 R1). 단 한 갈래가 재유입이지 에코가 아니다 — 반복 도구의
+    /// 출발지 토큰(E1, sync 2차): "같은 인자에 고쳐서 다시 호출해"를 받은 모델이 앱이 심은
+    /// '이동 없음'을 성실히 되울리는 것. 버리면 머무는 신호가 사라져 수단·여유·알림을 다시 묻는
+    /// 비머무는 카드가 되므로, 그 키만 목적지 값으로 되돌려 문자열 같음 신호
+    /// (stayingRecurrenceSignal)을 살린다. 다른 도구·다른 키의 토큰은 여전히 버린다.
     private func sanitizeModelArgs(_ parts: [[String: Any]]) -> [[String: Any]] {
         parts.map { part in
             guard var call = part["functionCall"] as? [String: Any],
@@ -959,8 +974,13 @@ final class AIAssistant: ObservableObject {
             let allowed = modelSuppliableKeys(for: name)
             // 선언에 없는 도구는 정화 대상이 아니다(어차피 실행부가 "알 수 없는 도구"로 거부).
             guard !allowed.isEmpty,
-                  let args = call["args"] as? [String: Any],
-                  args.contains(where: { !allowed.contains($0.key) || Self.echoedPlaceToken($0.value) })
+                  var args = call["args"] as? [String: Any] else { return part }
+            if name == "create_recurring_schedule",
+               Self.trimmedArg(args, "origin_query") == Self.noTravelToken,
+               let destination = Self.trimmedArg(args, "destination_query") {
+                args["origin_query"] = destination
+            }
+            guard args.contains(where: { !allowed.contains($0.key) || Self.echoedPlaceToken($0.value) })
             else { return part }
             call["args"] = args.filter {
                 allowed.contains($0.key) && !Self.echoedPlaceToken($0.value)
@@ -1185,6 +1205,9 @@ final class AIAssistant: ObservableObject {
         bubbles[idx] = .init(role: .user, text: chosenLine)
 
         var parts = ask.parts
+        // 확인이 시작된 세대 — 아래 주입 루프의 await(측위) 사이에 새 대화가 오면 이 등록은
+        // 버린 대화의 몫이므로 그대로 끝낸다(E2, sync 2차).
+        let generation = chatGeneration
         for i in parts.indices {
             guard var call = parts[i]["functionCall"] as? [String: Any] else { continue }
             let name = call["name"] as? String ?? ""
@@ -1225,9 +1248,24 @@ final class AIAssistant: ObservableObject {
                 case .place:
                     // 머무는 요청의 출발지 줄에서 고른 값이 그 호출의 장소와 50 m 안이면
                     // '이동 없음' 토큰으로 바꿔 싣는다(REQ-010 — 아래 헬퍼 주석에 이유).
-                    args[f.key] = await stayingTokenForColocatedPick(tool: name, key: f.key,
-                                                                     chosen: chosen,
-                                                                     preInjection: preInjection) ?? chosen
+                    let pick = await stayingTokenForColocatedPick(tool: name, key: f.key,
+                                                                  chosen: chosen,
+                                                                  args: args,
+                                                                  preInjection: preInjection)
+                    // await 사이 새 대화가 오면(측위 최대 3초) 이 카드의 등록이 아니라 버린
+                    // 대화의 등록이 된다 — 세대가 다르면 여기서 끝낸다(E2). 말풍선 요약은 이미
+                    // 세 대화 어디에도 속하지 않는 옛 사용자 답이므로 되돌리지 않고 끝내는 것으로
+                    // 족하다.
+                    guard chatGeneration == generation else { return nil }
+                    if let token = pick.token {
+                        args[f.key] = token
+                    } else {
+                        args[f.key] = chosen
+                        // 머무는 카드였는데 50 m를 완료하지 못한 선택이다(좌표를 미리 못 얻음) —
+                        // 실행부가 장소를 해석(필요하면 검색)한 뒤 50 m를 먼저 재게 한다(E5).
+                        // 좌표를 얻었는데 50 m 밖이면 판정 완료라 마커 없이 진짜 편도로 간다.
+                        if pick.needsDeferredCheck { args[Self.stayingAskMarker] = true }
+                    }
                 case .mode, .title, .toggle: args[f.key] = chosen
                 case .datetime:
                     // 접두가 곧 도착/출발 기준이다 — arrival·departure 중 정확히 하나만 쓴다.
@@ -1250,27 +1288,36 @@ final class AIAssistant: ObservableObject {
     /// '이동 없음' 토큰으로 바꿔 싣는다(REQ-010, sync 1차 D3). 좌표로 재는 이유: '우리집'처럼 이름은
     /// 다르고 좌표만 같은 선택도 이 절에 닿아야 하는데, 주입 **뒤** 인자로 staying을 판정하면 문자열
     /// 비교가 먼저 편도로 뒤집혀 카드가 묻지 않은 수단·여유·알림에 막히거나(S-3), 등록은 돼도
-    /// "찾지 못해" 거짓 실패 문구가 함께 나간다(S-2). 판정은 줄이 세워질 때의 모양(preInjection)으로
-    /// 하고, 고른 값·앵커는 로컬에서 좌표를 아는 값(즐겨찾기·확정 장소·현재 위치)만 잰다 — 여기는
-    /// 카드가 닫히는 자리라 검색을 기다릴 수 없고, 좌표를 모르는 선택은 교체하지 않은 채 실행부의
-    /// 50 m 절이 resolve 뒤에 본다. 편도(create_schedule)의 출발지 줄에는 이 판정을 하지 않는다 —
-    /// 모델이 보낸 '우리집'→'집' 정상 편도의 가는 이동을 깨지 않는다(AC-008 (5) 양성 대조).
+    /// "찾지 못해" 거짓 실패 문구가 함께 나간다(S-2). 머묿 판정만 줄이 세워질 때의 모양
+    /// (preInjection)으로 하고, **앵커는 그 시점의 args**에서 읽는다(E3, sync 2차) — 같은 카드의
+    /// 앞 줄에서 막 고른 값(못 푸는 장소 줄에서 고른 즐겨찾기)이 앵커가 되는 경우가 그것.
+    /// 고른 값·앵커는 로컬에서 좌표를 아는 값(즐겨찾기·확정 장소·현재 위치)만 잰다 — 여기는
+    /// 카드가 닫히는 자리라 검색을 기다릴 수 없다. 좌표를 **아예 못 얻어** 50 m를 완료하지 못한
+    /// 선택(needsDeferredCheck)은 호출부가 마커로 실어 실행부가 장소 해석(필요하면 검색) 뒤
+    /// 50 m를 먼저 재게 한다(E5). 좌표를 얻었는데 50 m 밖이면 판정 완료다 — 다른 출발지를 고른
+    /// 것이니 마커 없이 진짜 편도로 가고, 카드가 수단·여유·알림을 물은 뒤야 한다(I-1).
+    /// 편도(create_schedule)의 출발지 줄에는 이 판정을 하지 않는다 — 모델이 보낸 '우리집'→'집'
+    /// 정상 편도의 가는 이동을 깨지 않는다(AC-008 (5) 양성 대조).
     private func stayingTokenForColocatedPick(tool: String, key: String, chosen: String,
-                                              preInjection: [String: Any]) async -> String? {
+                                              args: [String: Any],
+                                              preInjection: [String: Any])
+                    async -> (token: String?, needsDeferredCheck: Bool) {
         guard (key == "travel_from_query" || key == "origin_query"),
-              tool == "create_activity" || tool == "create_recurring_schedule" else { return nil }
+              tool == "create_activity" || tool == "create_recurring_schedule"
+        else { return (nil, false) }
         let staying = tool == "create_activity"
             ? stayingOneShotActivity(preInjection)
             : stayingRecurrenceSignal(preInjection)
+        guard staying else { return (nil, false) }
         let anchorKey = tool == "create_activity" ? "place_query" : "destination_query"
-        guard staying,
-              let anchorQuery = Self.trimmedArg(preInjection, anchorKey),
-              let anchor = locallyResolvedPlace(anchorQuery) else { return nil }
+        guard let anchorQuery = Self.trimmedArg(args, anchorKey)
+                ?? Self.trimmedArg(preInjection, anchorKey),
+              let anchor = locallyResolvedPlace(anchorQuery) else { return (nil, true) }
         let picked = chosen == Self.currentLocationToken
             ? await currentPlace()
             : locallyResolvedPlace(chosen)
-        guard let picked, Self.isSamePlace(picked, anchor) else { return nil }
-        return Self.noTravelToken
+        guard let picked else { return (nil, true) }
+        return Self.isSamePlace(picked, anchor) ? (Self.noTravelToken, false) : (nil, false)
     }
 
     /// 장소 해석 사다리의 로컬 두 단 — 즐겨찾기 → 확정 사전. 네트워크 없이 풀리는 자리만 본다
@@ -1881,24 +1928,30 @@ final class AIAssistant: ObservableObject {
         // 머무는 요청의 확인 경로에서만: 고른 출발지가 활동 장소와 50 m 안이면 "이동 없음"과 같은
         // 뜻으로 받는다(REQ-010). 확인 카드의 출발지 선택은 대부분 resolvePendingAsk에서 이미
         // 토큰으로 바꿔 실려 여기까지 오지 않고(stayingTokenForColocatedPick), 이 절은 확인 때
-        // 좌표를 미리 못 얻은 경로가 resolve 뒤에 잡히는 마지막 방어선이다. 머무는 신호가 없는
-        // 편도 호출에는 이 판정을 하지 않는다 — 이름은 다르고 좌표만 같은 정상 편도('우리집'→'집')
-        // 의 가는 이동을 깨지 않는다(AC-008 (5) 양성 대조).
+        // 좌표를 미리 못 얻은 경로(마커가 실린 호출)가 장소 해석 뒤에 잡히는 마지막 방어선이다
+        // (E5). 머무는 신호가 없는 편도 호출에는 이 판정을 하지 않는다 — 이름은 다르고 좌표만 같은
+        // 정상 편도('우리집'→'집')의 가는 이동을 깨지 않는다(AC-008 (5) 양성 대조).
+        var stayedByDistance = false
         if stayingOneShotActivity(input), let pickedFrom = from, let place,
            Self.isSamePlace(pickedFrom, place) {
             from = nil
+            // 이 갈래는 해석 실패가 아니라 사용자 선택의 다른 표기다 — 표시를 세워 아래 실패
+            // 집계에서 빼지 않으면 등록은 됐는데 "찾지 못해"가 따라 나가는 거짓 실패가 된다(E4).
+            stayedByDistance = true
         }
         // 이동 질의가 **비어 있지 않은데 해석에 실패한 것**을 따로 모은다 — "안 만들기로 한 것"
         // (가는 편 없음 칩·빈 값)과 "만들려 했는데 실패한 것"은 다른 사건인데 결과가 같아 통째로
         // 묻혔다(2026-09-16 실측: 카드에서 수단까지 골랐는데 다리가 0개였고 요약은 성공 문구만
-        // 남겼다). 토큰·빈 값은 여기서 실패로 세지 않는다.
+        // 남겼다). 토큰·빈 값은 여기서 실패로 세지 않는다 — 토큰 판정은 세 토큰의 단일 출처
+        // (isInternalPlaceToken)로 본다: 위치를 못 잡은 '현재 위치' 토큰이 문구로 샌 적이 있다(E6).
         func unresolvedQueryText(_ key: String, _ label: String) -> String? {
             guard let q = (input[key] as? String)?.trimmingCharacters(in: .whitespaces),
-                  !q.isEmpty, q != Self.noOutboundToken, q != Self.noTravelToken else { return nil }
+                  !q.isEmpty, !Self.isInternalPlaceToken(q) else { return nil }
             return "\(label) '\(q)'"
         }
         var unresolved: [String] = []
-        if from == nil, let t = unresolvedQueryText("travel_from_query", "가는 편 출발지") { unresolved.append(t) }
+        if from == nil, !stayedByDistance,
+           let t = unresolvedQueryText("travel_from_query", "가는 편 출발지") { unresolved.append(t) }
         if to == nil, let t = unresolvedQueryText("return_to_query", "오는 편 도착지") { unresolved.append(t) }
         // 장소 질의도 같은 클래스다 — 말해 둔 장소가 해석 못 해 위치 없는 활동으로 조용히 등록되면
         // 사용자는 자기가 고른 값이 적용된 줄 안다. (이동이 필요한데 장소가 없는 경우는 위의
@@ -2904,9 +2957,19 @@ final class AIAssistant: ObservableObject {
         v == currentLocationToken || v == noOutboundToken || v == noTravelToken
     }
 
-    /// 모델 인자 **값**의 에코 판정 — 문자열이 아니면 토큰일 수 없다.
+    /// 머무는 카드였다는 확인 경로의 기록(E5, sync 2차 — 운영자 결정 (가)). 출발지 줄에서 고른
+    /// 값의 좌표를 미리 알 수 없어 토큰 교체를 못 한 호출에만 실린다 — 실행부가 장소를 해석
+    /// (필요하면 검색)한 뒤 50 m를 먼저 재게 하고, 부재 판정은 그 다음에 오게 한다. 선언에 없는
+    /// 카드 전용 키라 모델이 지어 보낼 수 없고(정화가 키로 버린다), 앱이 확인 때 얹는 값은
+    /// 정화 뒤라 살아남는다(토큰 셋과 같은 구조).
+    private static let stayingAskMarker = "__staying_pick__"
+
+    /// 모델 인자 **값**의 에코 판정 — 문자열이 아니면 토큰일 수 없다. 양끝 공백은 벗고 재는데,
+    /// 이 모델이 "비움"을 빈 문자열로 보내는 것과 같은 습관이 낱말에도 있어 공백이 붙은 토큰이
+    /// 정화를 지나 머무는 신호로 읽힌 적이 있다(sync 2차 O-1).
     private static func echoedPlaceToken(_ value: Any) -> Bool {
-        (value as? String).map(isInternalPlaceToken) ?? false
+        guard let s = value as? String else { return false }
+        return isInternalPlaceToken(s.trimmingCharacters(in: .whitespaces))
     }
     private func currentPlace() async -> Place? {
         if location.currentLocation == nil {
