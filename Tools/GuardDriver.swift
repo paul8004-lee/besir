@@ -3206,11 +3206,12 @@ struct Drv {
             ae7.drvOpen(ask)
             _ = ae7.drvPickLabel("origin_query", "현재 위치")
             _ = ae7.drvPickLabel("weeks", "4주")
-            _ = await ae7.drvResolvePendingAsk()
+            let ae7Reply = await ae7.drvResolvePendingAsk() ?? "nil"
             ae7.drvCheck("AE-S-3r 반복 현재 위치(같은 좌표) — 활동 블록만 만든다",
-                         store.activities.filter { $0.title == "AE-S3r재택" }.isEmpty == false
-                             && store.events.filter { $0.title == "AE-S3r재택" }.isEmpty,
-                         "acts=\(store.activities.filter { $0.title == "AE-S3r재택" }.count)")
+                         store.activities.filter { $0.title == "AE-S3r재택" }.count == 4
+                             && store.events.filter { $0.title == "AE-S3r재택" }.isEmpty
+                             && ae7Reply.contains("이동 구간은 만들지 않았어요"),
+                         "acts=\(store.activities.filter { $0.title == "AE-S3r재택" }.count) legs=\(store.events.filter { $0.title == "AE-S3r재택" }.count) reply=\(ae7Reply.prefix(70))")
         } else { ae7.drvCheck("AE-S-3r 카드가 세워진다", false, "ask=nil") }
         store.activities = []
         store.events = []
@@ -3311,13 +3312,20 @@ struct Drv {
                           first == nil && followUp != nil
                               && Set(followUp?.fields.map(\.key) ?? []) == ["mode_this_time", "buffer_minutes", "notify_lead_minutes"],
                           "reply=\(first ?? "nil") keys=\(followUp?.fields.map(\.key) ?? [])")
+            // 보류 토큰 검사를 C-1 이름 아래에도 둔다 — S-3a/3c가 앵커 변형에서 이미 재지만,
+            // (10) 시나리오가 이 단언 셋만으로 자체 완결해야 실제 상호 경로 관측이 성립한다.
+            ae11.drvCheck("AE-C-1 보류 출발지는 '현재 위치' 토큰 그대로다(토큰은 모델을 거치지 않는다)",
+                          (AIAssistant.drvCallArgs(followUp)["travel_from_query"] as? String)
+                              == AIAssistant.drvCurrentLocationToken(),
+                          "held=\(AIAssistant.drvCallArgs(followUp)["travel_from_query"] ?? "nil")")
             _ = ae11.drvPickLabel("mode_this_time", "도보")
             _ = ae11.drvPickLabel("buffer_minutes", "0분")
             _ = ae11.drvPickLabel("notify_lead_minutes", "출발 시각")
             let reply = await ae11.drvResolvePendingAsk() ?? "nil"
             ae11.drvCheck("AE-C-1 두 번째 확인 — 활동 1·가는 이동 1로 완주한다(등록까지 간다)",
-                          store.activities.filter { $0.title == "AE-C1로비점심" }.count == 1,
-                          "acts=\(store.activities.filter { $0.title == "AE-C1로비점심" }.count) reply=\(reply.prefix(70))")
+                          store.activities.filter { $0.title == "AE-C1로비점심" }.count == 1
+                              && store.events.filter { $0.title == "AE-C1로비점심" }.count == 1,
+                          "acts=\(store.activities.filter { $0.title == "AE-C1로비점심" }.count) legs=\(store.events.filter { $0.title == "AE-C1로비점심" }.count) reply=\(reply.prefix(70))")
         } else { ae11.drvCheck("AE-C-1 카드가 세워진다", false, "ask=nil") }
         store.activities = []
         store.events = []
@@ -3412,7 +3420,7 @@ struct Drv {
                                                    "start_iso": "2027-07-06T12:00:00",
                                                    "end_iso": "2027-07-06T13:00:00"])
         ae14.drvCheck("AE-R3-b 한 번짜리 50 m 밖 직행 — 수단을 물어받고 등록은 0건이다",
-                      ae14Reply.contains("이동수단")
+                      ae14Reply.contains("이동수단") && ae14Reply.contains("도착 여유") && ae14Reply.contains("알림")
                           && store.activities.filter { $0.title == "AE-R3b활동" }.isEmpty,
                       "reply=\(ae14Reply.prefix(70))")
         store.activities = []
@@ -3423,7 +3431,7 @@ struct Drv {
                                                    "arrival_time": "09:00", "return_time": "18:00",
                                                    "start_date": "2027-07-05"])
         ae15.drvCheck("AE-R3-b 반복 50 m 밖 직행 — 수단을 물어받고 등록은 0건이다",
-                      ae15Reply.contains("이동수단")
+                      ae15Reply.contains("이동수단") && ae15Reply.contains("도착 여유") && ae15Reply.contains("알림")
                           && store.events.filter { $0.title == "AE-R3b통근" }.isEmpty,
                       "reply=\(ae15Reply.prefix(70))")
         store.events = []

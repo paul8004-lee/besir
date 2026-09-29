@@ -1284,8 +1284,10 @@ final class AIAssistant: ObservableObject {
         // 수 없고, 재호출의 출발지 토큰은 정화가 버려 같은 질문이 되풀이일 뿐이다(REQ-010의
         // "고른 뒤에는 활동과 이동을 만든다"에 도달하지 못한다). 그 줄들로 두 번째 카드를 열고
         // 이번 확인은 실행 없이 끝낸다(parkForUnclearPlaces와 같은 모양 — 주입 뒤 인자를 앱이
-        // 그대로 쥐므로 내부 토큰이 모델을 거치지 않는다. confirmAsk의 카드 뒤 가드가 모델
-        // 재호출도 끊는다). stated의 토큰은 filledValueLabels이 걸러 낸다(D1).
+        // 그대로 쥐므로 내부 토큰이 모델을 거치지 않는다. 이 불침투는 카드가 열려 있는 주기에만
+        // 성립한다 — 카드가 닫힌 뒤의 아웃바운드 히스토리에는 토큰이 실릴 수 있어 그쪽은
+        // 인바운드 정화(R1/E1)가 닫는다. confirmAsk의 카드 뒤 가드가 모델 재호출도 끊는다).
+        // stated의 토큰은 filledValueLabels이 걸러 낸다(D1).
         var followUpFields: [AskField] = []
         var followUpStated: [String] = []
         for call in parts.compactMap({ $0["functionCall"] as? [String: Any] }) {
