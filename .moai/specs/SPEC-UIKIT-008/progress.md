@@ -683,7 +683,14 @@ N3의 drvCheck 신설 한 줄이 유일한 줄 수 변화다. L-1·N1·N2는 기
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+- sync_status: **audit-ready**
+- sync_complete_at: 2026-09-29
+- sync_commit_sha: pending-backfill-close
+- **sync 6차 재심사 — PASS(2026-09-29, 판정 레인 = 칸반 리드 직접, 대상 `8fb23a0` = SPEC 0.1.10 `e1af85c`)**: L-1 닫힘(AE-C-1 술어 `acts==1 && events==1` — 라벨·(10) 특성화 정합, 판정 레인 직독) + N1·N2·N3·N7 채택(T 356).
+  게이트 4종 격리 재실측 전부 통과(드라이버 **356/356**(T = 355 + 1 — N3 신설) · 경고 집합 동일 · iOS 42/macOS 38 신규 빌드 무경고 · 프록시 7/7 · 토큰쌍 본문 불변 귀속).
+  AE 31단언(C-1 세 단언 자체 완결 · AD-E5=3). 원장 8fb23a0 재계산·**적용**(178토큰) + 수동 재작성(A3·G4·G9·G10·G17·O3·O4·P3·이월 7번·plan 후속 14 grep·Phase 1.7 t16 행) —
+  검증 존재 180/180 · 내용 295/295 · 양성 대조 1 검출. 판정문 §R6, 증거 `t16-sync/r6/`·`t16/gate10-*`. 잔여: 시뮬레이터 AC-014·015(사람 전용, 이월)·005 앵커(manager-spec 진행)·N8(§E.3 기록).
+- **3-phase close(2026-09-29)**: 아래 FAIL 기록 1~5차를 거쳐 6차 PASS로 plan → run → sync 완주. 본 커밋이 `implemented → completed` 전이를 싣는다(단일 sync 커밋).
 
 - **sync 1차 판정 — FAIL(2026-09-28, sync 레인)**: 코드 차단 4(D1~D4) · 증거 결손 1(D5 — AC-008 (5) `우리집` 양성 대조 단언 부재).
   판정문 `.moai/reports/t16/sync-verdict.md`, 렌즈 원문 `.moai/reports/t16/sync-lens-{code-safety,ai-tooling}.md`, 증거 `.moai/state/verify/t16-sync/`.
