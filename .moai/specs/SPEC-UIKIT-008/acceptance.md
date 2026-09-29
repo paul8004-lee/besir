@@ -278,13 +278,24 @@
      `executeListSchedules` 본문도 같은 방법으로 무변경. `sanitizeModelArgs`는 R1 결정(sync 1차 판정문 §4 R1 — 리드가 포함을 정했다, `8ad3abd`)과 sync 2차 E1 처방
      (`.moai/reports/t16/sync-verdict.md` §R2.3 — 재호출의 `origin_query` 토큰을 버리지 말고 `destination_query` 값으로 되돌린다, `bf5fbd9`)으로 본문이 바뀌었으므로
      `cmp` 대신 두 본문을 대조한다. base 본문은 `git show aa7b792:Shared/AIAssistant.swift | sed -n '/private func sanitizeModelArgs/,/^    }$/p'`(15줄),
-     head 본문은 같은 `sed`를 `Shared/AIAssistant.swift`에 건 것(23줄)이다. 넷이 함께 성립해야 한다:
+     head 본문은 같은 `sed`를 `Shared/AIAssistant.swift`에 건 것이다(줄 수는 적지 않는다 — (d)). 넷이 함께 성립해야 한다:
      (a) **키 필터 보존** — head 본문 `grep -c 'allowed.contains(\$0.key)'` = **2**(guard·filter 두 줄, base는 1).
      (b) **값 필터 추가(R1)** — head 본문 `grep -c 'echoedPlaceToken(\$0.value)'` = **2**(base 0).
      (c) **E1 복원절** — head 본문 `grep -c 'args\["origin_query"\] = destination'` = **1**(base 0)이고, 그 줄이 `if name == "create_recurring_schedule"` 블록 안에 있다 —
      `grep -A3 'if name == "create_recurring_schedule",' <head 본문> | grep -c 'args\["origin_query"\] = destination'` = **1**.
-     (d) **줄 귀속** — `diff <base 본문> <head 본문>`이 헝크 하나(`8,10c8,18`, `<` 3줄 · `>` 11줄)이고, 빠진 줄은 base의 `let args` 바인딩과 키 필터 두 줄(guard·filter)뿐이며,
-     더한 줄은 모두 (a)(b)(c) 또는 (c)가 요구하는 `let`→`var` 바인딩에 속한다. 판정 레인이 줄마다 귀속을 자기 판정 기록(run은 §E.3, sync는 판정문)에 적는다.
+     (d) **구조 대조**(0.1.9 — 고정 줄 수·헝크 좌표 대신) — (d1)~(d4)가 모두 성립한다. head 본문의 줄 수와 `diff` 헝크 좌표는 수리마다 바뀌므로 **더는 통과 조건이 아니다**.
+     (d1) **빠진 줄** — `diff <base 본문> <head 본문> | grep '^<' | sed 's/^<[[:space:]]*//'`가 base의 세 줄만 찍는다: `let args = call["args"] as? [String: Any],`(바인딩) ·
+     `args.keys.contains(where: { !allowed.contains($0) }) else { return part }`(키만 보는 guard) · `call["args"] = args.filter { allowed.contains($0.key) }`(키만 보는 filter).
+     그래서 `grep -c '^<'` = **3**이고, 이 방어 함수의 다른 base 줄은 하나도 빠지지 않는다. base가 `aa7b792`로 고정이라 이 값은 수리에 따라 움직이지 않는다.
+     (d2) **키+값 이중 guard와 키+값 filter** — head 본문 `grep -c '!allowed.contains(\$0.key) || Self.echoedPlaceToken(\$0.value)'` = **1**,
+     `grep -c 'allowed.contains(\$0.key) && !Self.echoedPlaceToken(\$0.value)'` = **1**.
+     (d3) **E1 복원이 출력에 닿는다** — 교체 자체가 guard 조건의 하나라서, 버릴 키가 없는 호출(선언 키만 실린 되울림)도 원본이 아니라 교체판을 돌려받는다(sync 3차 F2 — 판정문 §R3.4, 수리 `fa75e6e`).
+     변수 이름이 아니라 드라이버의 행동 단언으로 본다: `Tools/GuardDriver.swift`의 `AE-F2a`(repro5 R3-a의 선언 키만 변형 — `weeks` 없이 되울린다, `grep -c '("AE-F2a", false)' Tools/GuardDriver.swift` = 1)가
+     판정 레인 자신의 드라이버 로그(AC-012 (1))에서 `grep -c '✓ AE-F2a '` = **1**, `grep -c '✗ AE-F2a'` = **0**. 기준값은 `fa75e6e`의 `.moai/state/verify/t16/gate6-driver.log`
+     (추적 밖 로그, `330/330 통과`)에서 잰 `✓` **1** · `✗` 0이다.
+     (d4) **더한 줄 귀속** — `>` 줄은 모두 다섯 범주 가운데 하나에 속한다: `let`→`var` 바인딩 · 주석 · E1 복원(교체 표시 포함) · 키+값 guard · 키+값 filter. 판정 레인이 줄마다 귀속을
+     자기 판정 기록(run은 §E.3, sync는 판정문)에 적고, 범주 밖의 줄이 하나라도 있으면 FAIL이다. 기준값은 `fa75e6e` 실측 1 / 3 / 7(교체 표시 선언 1 + 복원 블록 6) / 3 / 3 = **17**이다 —
+     범주별 줄 수는 대조용 기준값이고 통과 조건이 아니다.
   6. 후보 때문에 생긴 죽은 경로가 없다 — `resolveOrigin`의 `orDefault` 기본값 `false` 갈래가 사라졌거나 호출처가 생겼고(`orDefault: true` 사다리와 `resolveOriginAdoption`의
      기본값 경로는 남아 있다), 후보 카드 맥락 줄에 늘 빈 항이 없다(코드 대조, §E.2). **권고(통과 조건 아님)**: 튜플 타입 `(key: String, query: String, candidates: [Place])`의
      반복이 후보 트리의 5자리보다 줄었다(`grep -c` 두 파일 합).
