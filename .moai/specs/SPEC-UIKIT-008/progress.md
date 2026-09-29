@@ -668,6 +668,12 @@ _<pending sync-phase>_
   반복 (나) 갈래 단언 0; 단언 추가 또는 `manager-spec` 개정은 리드 결정). 개정 AC-010 (4)·AC-011 (1)~(5)는 (d1)~(d4) 포함 성립, 1~3차 결함은 모두 닫혔거나 (나)대로 전환됐다.
   J-6: `AIAssistant.swift:1260` "세 대화"가 남아 §E.2 M9 (a) ⑦ 기록과 다르다. 판정문 §R4, 렌즈 원문 `sync-lens-{code-safety,ai-tooling}-r4.md`, 증거 `.moai/state/verify/t16-sync/r4/`.
   게이트 통과(드라이버 `330/330` · 경고 집합 동일 · iOS 42/macOS 38 Swift 경고 0 · 프록시 7/7).
+- **sync 5차 재심사 — FAIL(2026-09-29, 판정 레인 = 칸반 리드 직접·GLM 인계, 대상 `daa77c1` = SPEC 0.1.9)**: **코드 차단 0** — 증거 1(L-1 `Tools/GuardDriver.swift:3318-3320` AE-C-1 특성화 술어가 라벨과 달리 가는 이동 1을 검사 안 함 —
+  두 렌즈 독립 도달, 심도는 cs 비차단/ai 차단으로 갈렸고 판정 레인이 직접 열람해 차단으로 매김) · SPEC 문구 1(L-2 acceptance (10)(13) 산문이 J-1 뒤 동작 — 카드 경로 앞단계 = 두 번째 카드 — 과 모순, 4차 리드 결정 '단언 실물화'가 산문에 미기록).
+  게이트 4종은 격리 재실측으로 전부 통과(드라이버 `355/355` · 경고 집합 동일 · iOS 42/macOS 38 무경고 · 프록시 7/7 · 토큰쌍 본문 cmp 귀속 3,824→3,946). repro 6벌 재실행 — J-1(두 번째 카드)·J-3(캡션 표시 문구) 뒤집힘,
+  1~3차 결함 유지(옛 하네스 다섯은 번들 스냅샷이라 꼬리 조각을 떼어 재연결). J-1·J-3·J-6·K-5 닫힘, J-2는 세는 명령(✓ AE 30·21 id·C-1/C-1r 각 2)만 닫힘. 렌즈: cs PASS-obs(0/6) · ai FIX-FIRST(2/4).
+  판정문 §R5, 렌즈 원문 `sync-lens-{code-safety,ai-tooling}-r5.md`, 증거 `.moai/state/verify/t16-sync/r5/`·`t16/gate8-*`. 비차단 N4·N5·N6 → **새 카드 t36**(토큰 표시 위생 묶음).
+  순서: `manager-spec` 0.1.10((10)(13) 산문 분할·낡은 고정값 정예·리드 결정 기록) → run L-1 한 줄(+재량 N1~N3·N7)+게이트+§E.2 M11 → sync 6차(드라이버·빌드·프록시·AE-C-1로 좁힘) → PASS면 원장 적용·3-phase close·병합·done.
 
 ## §F Phase 4 Mode Selection
 
