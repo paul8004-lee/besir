@@ -685,7 +685,7 @@ N3의 drvCheck 신설 한 줄이 유일한 줄 수 변화다. L-1·N1·N2는 기
 
 - sync_status: **audit-ready**
 - sync_complete_at: 2026-09-29
-- sync_commit_sha: pending-backfill-close
+- sync_commit_sha: 02936b1
 - **sync 6차 재심사 — PASS(2026-09-29, 판정 레인 = 칸반 리드 직접, 대상 `8fb23a0` = SPEC 0.1.10 `e1af85c`)**: L-1 닫힘(AE-C-1 술어 `acts==1 && events==1` — 라벨·(10) 특성화 정합, 판정 레인 직독) + N1·N2·N3·N7 채택(T 356).
   게이트 4종 격리 재실측 전부 통과(드라이버 **356/356**(T = 355 + 1 — N3 신설) · 경고 집합 동일 · iOS 42/macOS 38 신규 빌드 무경고 · 프록시 7/7 · 토큰쌍 본문 불변 귀속).
   AE 31단언(C-1 세 단언 자체 완결 · AD-E5=3). 원장 8fb23a0 재계산·**적용**(178토큰) + 수동 재작성(A3·G4·G9·G10·G17·O3·O4·P3·이월 7번·plan 후속 14 grep·Phase 1.7 t16 행) —
