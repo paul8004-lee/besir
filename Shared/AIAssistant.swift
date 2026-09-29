@@ -825,13 +825,16 @@ final class AIAssistant: ObservableObject {
 
     /// 머무는 요청 출발지 줄의 캡션(해석 I-6, 채택 문안 원문). 모델이 값을 보냈을 때만 붙는다 —
     /// 보내지 않은 한 번짜리 활동의 줄은 평범한 부재 줄의 관례대로 캡션 없이 둔다(T-1).
+    /// 값이 내부 토큰이면 표시 문구로 적는다(displayText).
     private static func stayingOriginNote(_ value: String) -> String {
-        "'\(value)'에서 출발하는지 골라 주세요. 이동이 필요 없으면 '이동 없음'을 고르면 돼요."
+        "'\(displayText(value))'에서 출발하는지 골라 주세요. 이동이 필요 없으면 '이동 없음'을 고르면 돼요."
     }
 
-    /// 왕복 가는 편 줄의 캡션(D-7 (a), 채택 문안 원문) — 채워 온 값 자체를 적는다.
+    /// 왕복 가는 편 줄의 캡션(D-7 (a), 채택 문안 원문) — 채워 온 값 자체를 적는다. 토큰도
+    /// 표시 문구로(displayText — J-3: 후보 카드의 이 캡션에 '__current_location__'이
+    /// 그대로 보인 적이 있다).
     private static func roundTripOriginNote(_ value: String) -> String {
-        "'\(value)'에서 출발하는지 한 번 더 골라 주세요. 가는 이동이 필요 없으면 '가는 편 없음'을 고르면 돼요."
+        "'\(displayText(value))'에서 출발하는지 한 번 더 골라 주세요. 가는 이동이 필요 없으면 '가는 편 없음'을 고르면 돼요."
     }
 
     /// 같은 이름이 여러 줄에 온 줄의 캡션(채택 문안 원문). unknownPlaceNote와 같은 자리 — 줄이
@@ -1257,7 +1260,7 @@ final class AIAssistant: ObservableObject {
                                                                    preInjection: preInjection)
                     // await 사이 새 대화가 오면(측위 최대 3초) 이 카드의 등록이 아니라 버린
                     // 대화의 등록이 된다 — 세대가 다르면 여기서 끝낸다(E2). 말풍선 요약은 이미
-                    // 세 대화 어디에도 속하지 않는 옛 사용자 답이므로 되돌리지 않고 끝내는 것으로
+                    // 새 대화 어디에도 속하지 않는 옛 사용자 답이므로 되돌리지 않고 끝내는 것으로
                     // 족하다.
                     guard chatGeneration == generation else { return nil }
                     args[f.key] = token ?? chosen
@@ -1273,6 +1276,34 @@ final class AIAssistant: ObservableObject {
             }
             call["args"] = args
             parts[i]["functionCall"] = call
+        }
+
+        // (J-1, sync 4차) 주입 뒤 이 호출의 모양을 같은 함수(askFields)로 다시 묻는다: 카드가
+        // 세워질 때는 답이 필요 없었는데 주입으로 편도가 되는 등 해서 수단·여유·알림이 새로
+        // 필요해지면, 거절 문구를 모델에 되돌리지 않는다 — 이 셋은 카드 전용 키라 모델이 채울
+        // 수 없고, 재호출의 출발지 토큰은 정화가 버려 같은 질문이 되풀이일 뿐이다(REQ-010의
+        // "고른 뒤에는 활동과 이동을 만든다"에 도달하지 못한다). 그 줄들로 두 번째 카드를 열고
+        // 이번 확인은 실행 없이 끝낸다(parkForUnclearPlaces와 같은 모양 — 주입 뒤 인자를 앱이
+        // 그대로 쥐므로 내부 토큰이 모델을 거치지 않는다. confirmAsk의 카드 뒤 가드가 모델
+        // 재호출도 끊는다). stated의 토큰은 filledValueLabels이 걸러 낸다(D1).
+        var followUpFields: [AskField] = []
+        var followUpStated: [String] = []
+        for call in parts.compactMap({ $0["functionCall"] as? [String: Any] }) {
+            let name = call["name"] as? String ?? ""
+            let args = call["args"] as? [String: Any] ?? [:]
+            let fresh = askFields(tool: name, args: args).filter { line in
+                !ask.fields.contains(where: { $0.key == line.key })
+                    && !followUpFields.contains(where: { $0.key == line.key })
+            }
+            followUpFields.append(contentsOf: fresh)
+            guard ["create_schedule", "create_activity", "create_recurring_schedule"].contains(name) else { continue }
+            followUpStated += filledValueLabels(tool: name, args: args, fields: fresh)
+        }
+        if !followUpFields.isEmpty {
+            bubbles.append(.init(role: .assistant, text: "",
+                                 ask: PendingAsk(parts: parts, stated: followUpStated,
+                                                 fields: followUpFields)))
+            return nil
         }
 
         contents.append(["role": "model", "parts": parts])
@@ -1639,9 +1670,12 @@ final class AIAssistant: ObservableObject {
     /// 판정은 카드를 그릴 때와 **같은 askFields**로 한다 — 두 벌로 적으면 한쪽만 고쳐져
     /// "카드는 물었는데 실행부는 딴 값을 쓰는" 어긋남이 생긴다(계약 5).
     ///
-    /// 도달할 일이 없는 경로다(카드를 통과하지 않은 호출이 여기 올 수 없다). 그래도 조용한
-    /// 기본값 대신 멈추는 쪽으로 두는 이유: 도달했다면 askFields에 구멍이 뚫렸다는 뜻이고,
-    /// 그 구멍은 0분짜리 일정으로 조용히 새어 나가는 대신 여기서 보여야 한다.
+    /// 카드를 통과하지 않은 호출이 여기 오는 일은 드물다 — 0.1.8부터는 확인 카드의 주입 뒤
+    /// 모양이 카드가 묻지 않은 줄을 요구하는 갈래가 두 번째 카드(resolvePendingAsk의 J-1
+    /// 갈래)로 갈라져 이 문구 대신 카드가 열린다. 남는 도달 경로는 모델이 카드 없이 보낸
+    /// 편도성 호출 같은 실패 신호인데, 그때도 조용한 기본값 대신 멈춘다 — 도달했다면
+    /// askFields에 구멍이 뚫렸다는 뜻이고 그 구멍은 0분짜리 일정으로 조용히 새어 나가는
+    /// 대신 여기서 보여야 한다.
     private func missingAskedArguments(tool: String, input: [String: Any]) -> String? {
         // note가 붙은 줄(값은 차 있는데 앱이 못 푸는 장소)은 여기서 세지 않는다 — "비어 있다"가
         // 아니라서 문구가 거짓이 되고, 그 경우의 올바른 안내는 placeNotFound가 즐겨찾기 목록과
@@ -1937,11 +1971,12 @@ final class AIAssistant: ObservableObject {
         // 남겼다). 토큰·빈 값은 여기서 실패로 세지 않는다 — 토큰 판정은 세 토큰의 단일 출처
         // (isInternalPlaceToken)로 본다: 위치를 못 잡은 '현재 위치' 토큰이 문구로 샌 적이 있다(E6).
         // '현재 위치'는 걸러내지 않는다 — 위치를 못 잡은 실패를 조용히 묻히면 사용자는 자기
-        // 선택이 적용된 줄 알고 등록을 받아버린다(F3, sync 3차). 토큰 대신 표시 문구로 알린다.
+        // 선택이 적용된 줄 알고 등록을 받아버린다(F3, sync 3차). 토큰 대신 표시 문구로
+        // 알린다(displayText — 캡션·실패 문구가 같은 매퍼를 지난다).
         func unresolvedQueryText(_ key: String, _ label: String) -> String? {
             guard let q = (input[key] as? String)?.trimmingCharacters(in: .whitespaces),
                   !q.isEmpty else { return nil }
-            if q == Self.currentLocationToken { return "\(label) '현재 위치'" }
+            if q == Self.currentLocationToken { return "\(label) '\(Self.displayText(q))'" }
             guard !Self.isInternalPlaceToken(q) else { return nil }
             return "\(label) '\(q)'"
         }
@@ -2951,6 +2986,18 @@ final class AIAssistant: ObservableObject {
     /// 단일 출처다(계약 5).
     private static func isInternalPlaceToken(_ v: String) -> Bool {
         v == currentLocationToken || v == noOutboundToken || v == noTravelToken
+    }
+
+    /// 내부 토큰을 사람이 읽는 표시 문구로 바꾼다. 토큰이 문구로 새는 결함이 네 라운드에 걸쳐
+    /// 자리마다 따로 나왔으므로(stated — D1 · 요약 실패 문구 — E6·F3 · 왕복 재확인 캡션 — J-3)
+    /// 어디를 거치든 이 매퍼 하나로 모은다(계약 5).
+    private static func displayText(_ value: String) -> String {
+        switch value {
+        case currentLocationToken: return "현재 위치"
+        case noOutboundToken: return "가는 편 없음"
+        case noTravelToken: return "이동 없음"
+        default: return value
+        }
     }
 
     /// 모델 인자 **값**의 에코 판정 — 문자열이 아니면 토큰일 수 없다. 양끝 공백은 벗고 재는데,
