@@ -2854,8 +2854,8 @@ struct Drv {
         let noTravel = AIAssistant.drvNoTravelToken()
 
         // E1 — 머무는 반복('이동 없음' 주입) 뒤 앱이 지시한 재호출: 정화가 토큰을 버리면 비머무는
-        //      카드(수단·여유·알림 줄)로 뒤집혔다. 토큰을 목적지 값으로 되돌려 머묿 신호가 살아
-        //      카드는 weeks 줄만, 확인하면 머무는 등록까지 완주한다.
+        //      카드(수단·여유·알림 줄)로 뒤집혔다. 토큰을 목적지 값으로 되돌려 머무는 신호가 살아
+        //      카드는 출발지 확인줄('이동 없음' 칩 포함)과 weeks만, 확인하면 머무는 등록까지 완주한다.
         let ad1 = fresh()
         let ad1Args: [String: Any] = ["title": "AD-E1재택", "origin_query": "집", "destination_query": "집",
                                       "weekdays": ["mon", "wed", "fri"], "arrival_time": "12:00",
@@ -2874,7 +2874,7 @@ struct Drv {
             echo["weeks"] = 4
             echo["confirm_recurrence"] = true
             if let ask2 = ad1.drvAsk("create_recurring_schedule", echo) {
-                ad1.drvCheck("AD-E1 재호출 에코의 '이동 없음'은 목적지 값으로 되돌아가 머묿이 산다",
+                ad1.drvCheck("AD-E1 재호출 에코의 '이동 없음'은 목적지 값으로 되돌아가 머무는 요청이 산다",
                              (AIAssistant.drvCallArgs(ask2)["origin_query"] as? String) == "집",
                              "args=\(AIAssistant.drvCallArgs(ask2))")
                 // 머무는 출발지 줄이 '이동 없음' 칩과 함께 다시 선다(판정문 R2.3 수리 모양) —
@@ -2948,9 +2948,11 @@ struct Drv {
                       "reply=\(ad4bReply.prefix(100))")
         store.activities = []
 
-        // E5 — 앵커가 로컬에서 안 풀리는 실제 상호: 머묿 기록(마커)을 실어 실행부가 장소 해석 뒤
-        //      50 m를 먼저 재고 부재는 그다음에 온다(운영자 결정 (가)). 앵커는 후보 카드에서 확정한
-        //      사전으로 시드한다(실제 확정 경로가 남기는 상태와 같은 모양).
+        // E5 — REQ-010 0.1.8(E5 (나)): 50 m 판정은 앱이 **양쪽 좌표를 아는 경우에만**. 앵커를 후보
+        //      카드에서 확정한 사전으로 시드한 경우(실제 확정 경로가 남기는 상태)는 판정이 일어나
+        //      활동만 만들고, 앵커 좌표를 모르는 경우(확정 사전 없는 실제 상호)는 고른 값을 그대로
+        //      실어 실행부가 수단·여유·알림을 물어본다(I-1 — 안전한 쪽. 0.1.8로 마커 장치를 걷고
+        //      이 판정을 좁혔다).
         let ad5 = fresh()
         let lobby = Place(name: "OO빌딩 로비", address: "서울", latitude: 37.5500, longitude: 127.0500)
         ad5.drvConfirmPlace("OO빌딩 로비", lobby)
@@ -2964,12 +2966,26 @@ struct Drv {
             ad5.drvOpen(ask)
             _ = ad5.drvPickLabel("travel_from_query", "현재 위치")
             let reply = await ad5.drvResolvePendingAsk() ?? "nil"
-            ad5.drvCheck("AD-E5 현재 위치 선택 — 실행부가 장소를 해석한 뒤 50 m로 활동만 만든다",
+            ad5.drvCheck("AD-E5 두 좌표를 아는 선택(확정 사전 앵커) — 50 m로 활동만 만든다",
                          store.activities.filter { $0.title == "AD-E5로비점심" }.count == 1
                              && store.events.filter { $0.title.contains("AD-E5로비점심") }.isEmpty
                              && reply.contains("아직 만들지 않았어요") == false,
                          "acts=\(store.activities.filter { $0.title == "AD-E5로비점심" }.count) reply=\(reply.prefix(100))")
         } else { ad5.drvCheck("AD-E5 카드가 세워진다", false, "ask=nil") }
+        store.activities = []
+        let ad5b = fresh()
+        ad5b.drvSeedCurrentLocation(lat: 37.5500, lng: 127.0500)
+        if let ask = ad5b.drvAsk("create_activity", ["title": "AD-E5b로비점심", "place_query": "OO빌딩 로비",
+                                                     "start_iso": "2027-06-01T15:00:00",
+                                                     "end_iso": "2027-06-01T16:00:00"]) {
+            ad5b.drvOpen(ask)
+            _ = ad5b.drvPickLabel("travel_from_query", "현재 위치")
+            let reply = await ad5b.drvResolvePendingAsk() ?? "nil"
+            ad5b.drvCheck("AD-E5b 앵커 좌표를 모르는 선택 — 교체 없이 수단·여유·알림을 물어본다(0.1.8 (나))",
+                         store.activities.filter { $0.title == "AD-E5b로비점심" }.isEmpty
+                             && reply.contains("이동수단"),
+                         "acts=\(store.activities.filter { $0.title == "AD-E5b로비점심" }.count) reply=\(reply.prefix(100))")
+        } else { ad5b.drvCheck("AD-E5b 카드가 세워진다", false, "ask=nil") }
         store.activities = []
 
         // E2 — 확인 대기(측위) 중 새 대화: 세대 가드가 버린 등록을 새 대화에 실리지 않는다.
@@ -2990,7 +3006,11 @@ struct Drv {
                          "roles=\(ad2.drvRoles()) registered=\(store.activities.contains { $0.title == "AD-E2버린등록" }) reply=\(reply.prefix(60))")
         } else { ad2.drvCheck("AD-E2 카드가 세워진다", false, "ask=nil") }
 
-        // E6 — 위치를 못 잡은 '현재 위치' 토큰이 요약 문구로 새지 않는다(세 토큰 단일 판정).
+        // E6 — 위치를 못 잡은 '현재 위치' 토큰: 토큰은 문구로 새지 않되(F3의 토큰 무노출),
+        //      실패 자체는 조용히 묻히지 않는다(F3 — 표시 문구로 알린다). 실패 갈래 도달 여부가
+        //      IP 폴백 응답에 달려 흔들리므로(판정문 §R3.8) 두 갈래 정합으로 잰다: 위치를 잡으면
+        //      가는 이동이 등록되고, 못 잡으면 "'현재 위치' 위치를 찾지 못해"가 나온다 — 어느 쪽도
+        //      아닌 상태(이동 0 + 문구 없음)가 1차 E6의 조용한 실패였다.
         let ad6 = fresh()
         let ad6Reply = await ad6.drvExecuteTool("create_activity",
                                                 ["title": "AD-E6편도", "place_query": "집",
@@ -2999,9 +3019,11 @@ struct Drv {
                                                  "end_iso": "2027-06-03T13:00:00",
                                                  "mode_this_time": "walk", "buffer_minutes": 10,
                                                  "notify_lead_minutes": 10])
-        ad6.drvCheck("AD-E6 위치 실패 '현재 위치' 토큰이 문구로 새지 않는다",
-                     ad6Reply.contains("__") == false,
-                     "reply=\(ad6Reply)")
+        let ad6Legs = store.events.filter { $0.title == "AD-E6편도" }.count
+        ad6.drvCheck("AD-E6 '현재 위치' — 실패는 표시 문구로 알리고 토큰은 새지 않는다",
+                     ad6Reply.contains("__") == false
+                         && (ad6Reply.contains("'현재 위치' 위치를 찾지 못해") || ad6Legs >= 1),
+                     "legs=\(ad6Legs) reply=\(ad6Reply)")
 
         // E7 — AC-008 (5) 원문 쌍의 카드 확인 경로: '우리집'을 보낸 편도는 수단·여유·알림을 물은
         //      뒤에도 가는 이동 1건으로 등록된다(모델 직행은 AC-D5가 잰다). 셋은 선언 밖 인자라
@@ -3027,6 +3049,91 @@ struct Drv {
         } else { ad7.drvCheck("AD-E7 카드가 세워진다", false, "ask=nil") }
 
         store.favorites = acFavBackup
+        store.events = []
+        store.activities = []
+
+        // ── AE. t16 sync 3차 수리 — 판정문 하네스 다섯 벌의 미이관 시나리오 이관(REQ-010 0.1.8,
+        //        AC-008 (10)(13)). 이미 AC·AD절이 재는 시나리오(S·B·C 계열 전부와 R3-a의 weeks
+        //        섞임변형·R3-c·R3-d)는 §E.2 M9 (c)의 대응표가 매핑한다 — 여기는 하네스에만 있던
+        //        표본(50 m 밖 현재 위치·검색 확정 같은 지점·반복 현재 위치·선언 키만 에코)을 옮긴다.
+        print("\nAE. t16 sync 3차 수리 — 하네스 미이관 시나리오 이관(REQ-010 0.1.8)")
+        let aeFavBackup = store.favorites
+        store.favorites = [FavoritePlace(label: "집", place: Place(name: "집", address: "", latitude: 37.500, longitude: 127.000)),
+                           FavoritePlace(label: "회사", place: Place(name: "회사", address: "", latitude: 37.510, longitude: 127.010))]
+
+        // AE-S3c — 현재 위치가 1 km 넘게 떨어진 선택은 다른 출발지다: 교체가 일어나지 않고
+        //           수단·여유·알림을 물어받는다(I-1, 판정문 §R2.2 S-3c).
+        let ae1 = fresh()
+        ae1.drvSeedCurrentLocation(lat: 37.6000, lng: 127.1000)
+        if let ask = ae1.drvAsk("create_activity", ["title": "AE-S3c집점심", "place_query": "집",
+                                                    "start_iso": "2027-04-06T12:00:00",
+                                                    "end_iso": "2027-04-06T13:00:00"]) {
+            ae1.drvOpen(ask)
+            _ = ae1.drvPickLabel("travel_from_query", "현재 위치")
+            let reply = await ae1.drvResolvePendingAsk() ?? "nil"
+            ae1.drvCheck("AE-S3c 먼 현재 위치 — 활동만으로 굳지 않고 수단을 물어받는다",
+                         store.activities.filter { $0.title == "AE-S3c집점심" }.isEmpty
+                             && reply.contains("이동수단"),
+                         "acts=\(store.activities.filter { $0.title == "AE-S3c집점심" }.count) reply=\(reply.prefix(90))")
+        } else { ae1.drvCheck("AE-S3c 카드가 세워진다", false, "ask=nil") }
+
+        // AE-S3e — 출발지 줄에서 검색으로 확정한 지점(좌표가 확정 사전에 있는 선택)이 앵커와 같은
+        //           좌표면 활동만 만든다(choose(field:place:)가 남기는 실제 경로 — 판정문 §R2.2 S-3e).
+        let ae2 = fresh()
+        if let ask = ae2.drvAsk("create_activity", ["title": "AE-S3e집점심", "place_query": "집",
+                                                    "start_iso": "2027-04-07T12:00:00",
+                                                    "end_iso": "2027-04-07T13:00:00"]) {
+            ae2.drvOpen(ask)
+            if let f = ae2.drvLiveAsk()?.fields.first(where: { $0.key == "travel_from_query" }) {
+                ae2.choose(field: f.id, place: Place(name: "OO아파트 101동", address: "서울",
+                                                     latitude: 37.5001, longitude: 127.0001))
+            }
+            let reply = await ae2.drvResolvePendingAsk() ?? "nil"
+            ae2.drvCheck("AE-S3e 검색 확정 같은 지점 — 50 m로 활동만 만든다",
+                         store.activities.filter { $0.title == "AE-S3e집점심" }.count == 1
+                             && store.events.filter { $0.title.contains("AE-S3e집점심") }.isEmpty,
+                         "acts=\(store.activities.filter { $0.title == "AE-S3e집점심" }.count) legs=\(store.events.filter { $0.title.contains("AE-S3e집점심") }.count) reply=\(reply.prefix(90))")
+        } else { ae2.drvCheck("AE-S3e 카드가 세워진다", false, "ask=nil") }
+        store.activities = []
+
+        // AE-S3r — 반복 머무는 요청(출발지=목적지 '집')에서 현재 위치(같은 좌표)를 고르면
+        //           활동 블록만 만든다(판정문 §R2.2 S-3r).
+        let ae3 = fresh()
+        ae3.drvSeedCurrentLocation(lat: 37.5000, lng: 127.0000)
+        if let ask = ae3.drvAsk("create_recurring_schedule",
+                                ["title": "AE-S3r재택", "origin_query": "집", "destination_query": "집",
+                                 "weekdays": ["mon"], "arrival_time": "09:00", "return_time": "18:00",
+                                 "start_date": "2027-04-05"]) {
+            ae3.drvOpen(ask)
+            _ = ae3.drvPickLabel("origin_query", "현재 위치")
+            _ = ae3.drvPickLabel("weeks", "4주")
+            let reply = await ae3.drvResolvePendingAsk() ?? "nil"
+            ae3.drvCheck("AE-S3r 반복 현재 위치(같은 좌표) — 활동 블록만 만든다",
+                         store.activities.filter { $0.title == "AE-S3r재택" }.isEmpty == false
+                             && store.events.filter { $0.title == "AE-S3r재택" }.isEmpty,
+                         "acts=\(store.activities.filter { $0.title == "AE-S3r재택" }.count) legs=\(store.events.filter { $0.title == "AE-S3r재택" }.count) reply=\(reply.prefix(90))")
+        } else { ae3.drvCheck("AE-S3r 카드가 세워진다", false, "ask=nil") }
+        store.activities = []
+
+        // AE-F2 — 앱이 지시한 재호출 에코가 선언 키만 실렸을 때(weeks 같은 선언 밖 인자 없음):
+        //         E1 교체가 정화 guard를 지나 살아야 한다(교체만 일어나고 버릴 게 없어도 원본이
+        //         아닌 교체판이 간다 — 판정문 §R3.4 F2). 선언 밖 weeks가 섞인 변형은 AD-E1이 잰다.
+        for (tag, withWeeks) in [("AE-F2a", false), ("AE-F2b", true)] {
+            var echo: [String: Any] = ["title": "AE-F2재택", "origin_query": AIAssistant.drvNoTravelToken(),
+                                       "destination_query": "집", "weekdays": ["mon", "wed", "fri"],
+                                       "arrival_time": "12:00", "return_time": "13:00",
+                                       "start_date": "2027-07-05", "every_n_weeks": 2,
+                                       "confirm_recurrence": true]
+            if withWeeks { echo["weeks"] = 4 }
+            let ai = fresh()
+            if let ask = ai.drvAsk("create_recurring_schedule", echo) {
+                ai.drvCheck("\(tag) 재호출 에코의 출발지는 목적지 값으로 되돌아간다(교체가 guard를 지난다)",
+                            (AIAssistant.drvCallArgs(ask)["origin_query"] as? String) == "집",
+                            "held=\(AIAssistant.drvCallArgs(ask)["origin_query"] ?? "nil") keys=\(ask.fields.map(\.key))")
+            } else { ai.drvCheck("\(tag) 재호출 카드가 세워진다", false, "ask=nil") }
+        }
+
+        store.favorites = aeFavBackup
         store.events = []
         store.activities = []
 
