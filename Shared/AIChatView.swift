@@ -64,6 +64,10 @@ struct AIChatView: View {
                         Button { assistant.resetConversation() } label: {
                             Image(systemName: "arrow.counterclockwise")
                         }
+                        // 확인 대기 중(측위 최대 3초)에 새 대화를 시작하면 진행 중 등록이 버린
+                        // 대화 쪽에서 완료된다 — 앱 쪽 세대 가드(E2)가 잡지만 버튼도 이때는
+                        // 잠가 둔다. 등록·응답 대기와 같은 조건이다.
+                        .disabled(assistant.isThinking)
                         .help("새 대화 시작(이전 대화 기록 지우기)")
                     }
                 }

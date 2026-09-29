@@ -1,0 +1,254 @@
+---
+id: SPEC-UIKIT-008
+title: "AI 카드의 장소 해석 UX — 첫 검색 결과 무확인 채택(U-4)·되묻기 장소 줄(AC-009 7·9)·왕복 가는 편 줄·머무는 요청·검색 재오픈 강조(U-2)"
+version: "0.1.10"
+status: completed
+created: "2026-09-26"
+updated: "2026-09-29"
+author: "manager-spec"
+priority: P1
+phase: "Phase 1.7 — 일정·활동 화면 UI 통일"
+module: "shared-ui"
+lifecycle: spec-anchored
+tags: "place-resolution, candidate-card, u-4, ac-009, round-trip, staying-recurrence, u-2, ai-tooling, candidate-diff"
+tier: M
+related_specs: [SPEC-UIKIT-005, SPEC-UIKIT-007, SPEC-UIKIT-003, SPEC-ASK-001]
+kanban_card: t16
+---
+
+# SPEC-UIKIT-008 — AI 카드의 장소 해석 UX
+
+## HISTORY
+
+| 버전 | 날짜 | 변경 |
+|---|---|---|
+| 0.1.0 | 2026-09-26 | 최초 작성. 칸반 카드 t16 본문(`moai todo`)을 GEARS로 정식화했다. **출발점은 이전 세션이 남긴 미커밋 후보 구현을 보존한 `e1a40a6`이고, 이 SPEC은 그 diff를 채택된 답이 아니라 후보로 다룬다.** 연구 입력은 읽기 전용 렌즈 보고서 둘(`.moai/reports/t16/plan-lens-ai-tooling.md`·`plan-lens-ui-design.md`)이며 본문을 옮기지 않고 절 번호로 인용한다. 게이트 수치는 오케스트레이터가 이 세션에서 다시 돌려 `.moai/state/verify/t16-plan/`에 남긴 로그를 읽어 인용했다(드라이버 base `217/217`·head `241/241`, iOS·macOS 전체 빌드 swift 경고 0/0). **줄번호는 전부 이 트리(`e1a40a6`)에서 명령으로 쟀고 세는 명령을 옆에 적었다.** 이전 기록 `.moai/reports/t16/progress.md`의 부류 "Class B"는 운영자가 Class C(plan → run → sync)로 바꿨다 — 그 파일은 고치지 않고 이 SPEC의 `progress.md` §E.1에 적었다. 미해소 결정 10건은 `plan.md` §2에만 게이트 표식으로 둔다(`spec.md`·`acceptance.md`에는 두지 않는 관례, SPEC-UIKIT-005 HISTORY 0.1.0) |
+| 0.1.1 | 2026-09-26 | **plan 감사 1회차(FAIL 0.77, `.moai/reports/plan-audit/SPEC-UIKIT-008-review-1.md`) 반영 — 게이트 전 작성 수리.** 코드는 무변경이고 REQ 15 · AC 15 그대로다. **D2** REQ-008의 적용을 `create_schedule`·`create_activity`로 좁히고, `create_recurring_schedule`의 같은 값은 REQ-010의 머무는 반복 신호라 이 규칙에서 뺐다(AC-006 (5) 신설). **D3** REQ-010의 발동 조건을 카드(문자열 같음)와 실행부(50 m)로 갈랐고, 이름은 다르고 좌표만 같은 경우를 잔여 위험으로 적었다. **D4** REQ-001에 단언 극성 규칙을 넣었다 — 고칠 가설은 바라는 동작, 게이트가 수용한 가설은 M1 재현 뒤 관측 동작을 적는 특성화 단언(`[수용]` 표지)으로 바꾼다. 그래서 REQ-014의 ✗ 0과 모든 선택지가 함께 선다(AC-001 (5)·AC-008 (5)). **D5** `plan.md` D-7 (b)를 거뒀다 — 발화 파서(`:338-344`)는 출발지를 읽지 않는다. **D6** 재현 단언 이름을 두 자리(`AB-H01`~`AB-H10`)로 바꿔 `AB-H1`이 `AB-H10`을 세던 충돌을 없앴다. **D7** REQ-015에 원장 범주 "대상 제거·재작성"과 "수리 전 상태 문장은 그 SPEC의 base 커밋에 고정" 규칙을 넣고, SPEC-UIKIT-005 인용 지목을 그 규칙으로 다시 썼다. 후보가 `isSamePlace`의 둘째 사용처(`:1812`)를 만들어 `:1869` 주석이 거짓이 된 사실을 §1.4·§3에 적고, 그 주석 교정을 REQ-010(run 범위)에 넣었다. **D8**(오케스트레이터 결정) 렌즈 보고서 둘은 plan 커밋에 SPEC 디렉터리·plan 감사 보고서와 함께 들어간다 — REQ-013 예외 목록에 넣고 AC-011 (1)을 `e1a40a6` 기준 예외 목록 방식으로 바꿨다. **D9** REQ-015·AC-013 (1)에 GuardDriver 파일명 토큰 계수(`CHECKLIST.md` 1건)를 더했다. **D12** D-10 권장 문안을 `plan.md` §2에 원문으로 적고 AC-005·006·007·008·010에 문자열 신호를 넣었으며, 조사·줄표 규칙을 REQ-008 본문으로 올렸다. **D11** D-1 (c)·D-3 (c)·D-5 (c)의 "바뀌는 것"을 AC 절과 스크립트 번호까지 적고, D-5 (a)의 전제가 깨질 때의 경로를 넣었다(D10 겸). **D13** 통과 수를 T = 241 − 뺀 수 + 더한 수로 정했다. **D14** AC-003 제목("열 조합")·AC-014 대응 REQ·`plan.md` 대응표(011→014)를 고쳤다. 한 줄 수리로 함께 반영한 선택 결함: **D15**(REQ-012에 `chip()` 무변경을 올리고 튜플 반복 감소는 권고로 낮춤) · **D16**(REQ-011 트리거·사실 문장) · **D17**(REQ-006 Where 절, REQ-014 When 절) · **D19**(AC-010 색 검사 정규식·양성 대조) · **D20**(REQ-013 죽은 경로 서술) · **D21**(잔여 위험 한 줄) · **D22**(경고 "24줄, 진단 12"). **D18**은 프로젝트 관례(SPEC-UIKIT-005·007)라 두었다. 게이트 표식 10건(MP-7, D1)은 리드 몫이라 그대로다 |
+| 0.1.2 | 2026-09-26 | **plan 감사 2회차(FAIL 0.89 — must-pass 실패는 게이트 표식 MP-7뿐, `.moai/reports/plan-audit/SPEC-UIKIT-008-review-2.md`) 반영.** 0.1.1은 `2313e38`로 커밋됐다. 코드는 무변경이고 REQ 15 · AC 15 그대로다. 번호는 2회차 결함 번호다. **D2** `plan.md` D-10 (b)를 "다른 결정이 허락하는 곳에서만 유지"로 고쳤다 — D-6 (b)면 후보 캡션(`:735`), D-7 (a)면 왕복 캡션(`:560`)을 (b)에서도 표의 원문으로 새로 쓴다. 그래서 D-10의 두 안이 D-6·D-7의 어느 안과도 함께 선다. AC-005 (5)·AC-007 (2)에 (D-10 (b)) 분기를 넣었다. **D3** D-6 (b)가 H-5를 받아들이는 선택임을 REQ-001 수용 목록·AC-001 (5)·AC-005 (1)·`plan.md` D-6 (b)에 적었다(`AB-H05 [수용]`). 같은 자리에서 수용이 아닌 경로 제거·되돌림(D-3 (c)·D-7 (c))의 단언 처리를 REQ-001에 한 문장으로 일반화했다. **D4** REQ-013의 sync 경로 목록에 `manager-spec` 재위임으로 들어오는 SPEC-UIKIT-005/007 `spec.md`·`plan.md`·`acceptance.md` 인용 줄(`c5396b3` 표기 포함)을 넣어 REQ-015·AC-013 (5)와 맞췄고, AC-011 (1)의 표현을 같게 고쳤다. 선택 결함: **D5** AC-005 (2)에 (D-3 (c)) 표지 · **D7** REQ-015 근거와 AC-013 (5)의 "스크립트 7·8번이 005 AC-009 7·9번을 다시 적는다" 문구 · **D8** 옮겨 적은 인용 문장의 처리(살아 있는 문서는 고치고 완료된 SPEC은 원장에만)를 REQ-015와 AC-013 (2)에 한 줄씩. 나머지 선택 결함(D6·D9~D12)은 지시대로 두었다 |
+| 0.1.3 | 2026-09-26 | **착수 승인 게이트 해소.** 운영자가 결정했고 칸반 리드가 이 plan 세션에 전했다 — 이 세션은 운영자의 답을 직접 보지 않았다. 채택: D-1 (a) · D-2 (a) · D-3 (a) · D-4 (a) · D-5 (a) · D-6 (a) · D-7 (a) · D-9 (a) · D-10 (a) · Tier M 유지, 그리고 **D-8은 나열한 안이 아니라 운영자 자신의 문구**(원문은 `plan.md` §2 — "집에서 점심식사라 하더라도 … 출발지 또한 물어봐야 함"). `plan.md` §2의 게이트 표식 10건을 채택 사실로 바꾸고 채택하지 않은 안은 결정 기록으로만 남겼다. **다시 쓴 요구사항**: REQ-001(가설 H-11 추가, 수용 목록을 I-5의 H-9 하나로, D-5 (a)로 경로가 없어진 H-3의 `[경로 제거]` 처리) · REQ-002(이름만 판정) · REQ-003(수리 방식 확정, 머무는 반복 조합을 "출발지 `이동 없음` 뒤 목적지 모호"로 — 두 키가 같은 모호한 질의인 상태는 REQ-010 뒤 카드로 닿지 않는다) · REQ-004(카드 한 장, 뒤의 호출에 사실대로) · REQ-005(턴 종료 + 전제 미확인 시 블로커) · REQ-006(후보를 첫 화면에) · REQ-009 · REQ-010(**D-8 번역** — 같은 값이면 카드가 출발지를 묻고 "이동 없음" 선택지를 주며, 수단·여유·알림은 다른 출발지를 고른 뒤에만 받고, 출발지 = 목적지는 사용자의 선택으로만 확정) · REQ-012 · REQ-013 — 결정 조건절을 모두 걷었다. 후보의 머무는 반복 동작(같은 값 → 출발지를 묻지 않고 이동 없이 등록)은 이제 고칠 결함 H-11이다(§1.5). §3에 한 번짜리 활동의 범위 밖 절, §4를 해소 기록으로. `acceptance.md`의 결정 분기를 모두 걷어 AC마다 기대값이 하나다 — AC-001·002·003(10번 조합 교체)·004·005·006·007·008(재작성)·010·011·012·014·015와 시뮬레이터 스크립트(파트 D 재작성 — 새 14번은 다른 출발지 경로, U-2 단계는 16~19로 이동). `plan.md` §2의 `repairDanglingToolTurn()` 인용을 실측 `:292`로 바로잡았다. D-8 번역에서 계약을 바꾸는 해석 여섯(I-1~I-6)은 `progress.md` §E.1에 리드 확인 대상으로 적었다. REQ 15 · AC 15 그대로 |
+| 0.1.4 | 2026-09-26 | **D-8 해석 확인 반영.** 운영자의 답을 칸반 리드가 전했다 — 이 세션은 직접 보지 않았다. I-1·I-2·I-5·I-6은 적은 대로 확정, **I-3은 거부**(운영자 선택 "한 번짜리 활동까지"), **I-4는 운영자 문구**("끝 시각 없는 경우에는 되물어서 활동일정 생성. 기본적으로 반복 일정이더라도 단일 일정과 같은 프로세스. 반복 된다는 점만 차이가 있는 것."). 그래서 REQ-010을 **머무는 요청** 전체로 넓혔다 — 반복의 같은 값 신호에 더해 이동을 말하지 않았거나 가는 편 출발지가 활동 장소와 같은 한 번짜리 `create_activity`도 카드가 출발지를 묻고 "이동 없음" 선택지를 주며, 끝 시각이 없으면 출발지를 묻기 전에 사용자에게 받아 활동을 만든다("끝 시각 없으면 가는 구간만" 갈래 삭제). "반복도 단일과 같은 절차"를 번역 규칙으로 삼아 두 도구가 같은 것을 같은 방식으로 묻게 했고, 그 규칙이 파일 한도·선언 계약에 걸리는 곳은 경계로 적었다(`plan.md` §2 · `progress.md` §E.1 B-1~B-3 · T-1, 리드 확인 포인트). H-11을 두 도구로 넓혔고(§1.5), REQ-001의 H-9 수용 근거를 확정으로, REQ-008의 제외 신호에 한 번짜리 머무는 요청을 더했다. §3의 한 번짜리 활동 범위 밖 절을 지우고 `isSamePlace` 절·끝 시각 절을 고쳐 썼다. `acceptance.md` — AC-003 5번 조합 · AC-006 (5) · AC-008(재작성, 한 번짜리 절과 끝 시각 절) · AC-012 (1)(O-6 첫 단언 교체) · AC-014·015와 시뮬레이터 스크립트(3·12~16번, 새 16번 한 번짜리 활동, U-2는 17~20번). REQ 15 · AC 15 그대로 |
+| 0.1.5 | 2026-09-26 | **경계 해소 — 분리.** 운영자가 비용 측정을 보고 다시 정했고 칸반 리드가 전했다(이 세션은 직접 보지 않았다). B-1(운영자 문구 — 단일·반복 AI 카드에 활동 추가 카드와 같은 가는/오는 이동 생성 줄)과 B-2 (b)(카드의 시각 줄)는 **후속 카드 t30**("C21 AI 카드 문법 통일", t17 C8 방향과 묶음)으로 옮겼다 — 운영자 원문은 t30 카드 본문에 있다. 이 카드는 0.1.4의 경계 동작(한 번짜리는 편도, 끝 시각은 문장으로 되묻기)을 **중간 동작**으로 유지한다("운영자 결정, 후속 카드 t30으로 이관"). REQ-010·AC-008·스크립트의 계약은 그대로이고 근거 문장만 해소로 바꿨다. §3에 t30 범위 밖 절(경로 A는 계약 5 위반, 경로 B는 무거운 파일 한도·Tier M 초과 — 측정 근거)을 더했다. T-1·B-3은 리드에게 확인용으로 제시했고 명시 답변은 없었으며 이의도 없었다. 파일 4개·Tier M 유지. REQ 15 · AC 15 그대로 |
+| 0.1.6 | 2026-09-26 | **3회차 PASS 0.89 뒤 선택 D1~D4 반영 — 재감사 없음, 상한**(`.moai/reports/plan-audit/SPEC-UIKIT-008-review-3.md`). D1 — 한 번짜리 활동의 50 m 판정을 머무는 요청 카드의 확인 경로로 한정하고(REQ-010 근거·§3), AC-008 (5)에 양성 대조(`우리집`·`집` 편도 → 일반 가드 없음)를 더했다. D2 — O-6 첫 단언을 빼지 않고 기대 키를 새 계약으로 고쳐 남긴다(AC-008 (5)·AC-012 (1)·`plan.md` §0). D3 — 다른 출발지를 고른 뒤 재호출이 `return_time`을 빠뜨리면 통근 호출이 되어 가는 구간만 생긴다는 점을 잔여 위험으로 적고 AC-008 (4)에 특성화 절, (7) 끝 문장을 두 경로로 좁혔으며 스크립트 14에 기록 줄을 더했다(`plan.md` §3). D4 — "선언을 바꿔야 한다"(§3·`plan.md` §2 B-1 (가)·REQ-010 근거)를 0.1.5 측정대로 "카드 전용 키와 실행부 경로가 필요하고 선언 키는 늘지 않는다"로 바로잡았다(t30이 물려받는 근거). D5~D10은 기록된 부채. REQ 15 · AC 15 그대로 |
+| 0.1.7 | 2026-09-28 | **sync 2차 판정(`2ce869f`, 판정문 `.moai/reports/t16/sync-verdict.md` §R2.3 E8·§R2.5 2번) 반영 — SPEC과 실제의 어긋남 개정.** 기준 트리는 run 복귀 2의 수리(E1~E7)를 마친 `bf5fbd9`다. 개정 내용은 칸반 리드가 이 plan 세션에 전했고, 이 세션은 운영자의 답을 직접 보지 않았다(0.1.3·0.1.4와 같다). **파일 한도의 읽기**: `CLAUDE.md` 원문 "새로 만들거나 크게 고치는 파일"대로 한 Day 한도는 크게 고친 파일만 센다 — 크게 고침 2(AIAssistant·GuardDriver)이고, 작은 고침(EditCardView·EditCard·AIChatView)은 한도 밖이다(§0 표와 한도 문단, `plan.md` §0 Tier L 조건). **규모 실측**: `git diff --shortstat aa7b792 HEAD -- Shared Tools` = 5파일 +1983/−90(앱 소스 `Shared/` +746/−84, 그중 AIAssistant +723/−81 · 드라이버 하네스 `Tools/GuardDriver.swift` +1237/−6)이라 plan 때의 "1000줄 아래" 어림은 빗나갔다. Tier 재판정: 리드가 M 유지 — 크게 고친 앱 소스는 AIAssistant 하나뿐이고 초과분은 전부 드라이버 단언(Tools)이라 Tier M 규모에 부합(2026-09-28, §0·`plan.md` §0). **REQ-013·AC-011 (1)**: run 목록에 `Shared/EditCard.swift`의 `clearedKeys` 저장 속성(sync 1차 D4, `8ad3abd`), `Shared/AIChatView.swift` 새 대화 버튼의 `.disabled(assistant.isThinking)` 한 줄(sync 2차 E2, `bf5fbd9`), run 렌즈 보고서 `.moai/reports/t16/run-lens-*.md`를, sync 목록에 `.moai/reports/t16/sync-lens-*.md`·`sync-verdict.md`를 넣었다. AIChatView 한 줄의 편입 근거는 리드 원문 "E2 회귀 수리의 최소몫으로 run 디스패치가 지시한 1줄 — 리드 승인 아래 목록에 편입"이다. **AC-010 (4)**: 세 화면의 `--name-only` diff는 0줄 그대로이고, AIChatView는 주석이 아닌 diff가 그 한 줄뿐임을 본다. **AC-011 (5)**: `sanitizeModelArgs`의 `cmp`를 키 필터 보존 · 값 필터 추가(R1) · E1 복원절 · diff 줄 귀속의 네 대조로 바꿨다. **범위 밖 O-1**: "다섯째 파일" 근거를 새 읽기에 맞게 고쳐 썼다. §E.3의 AC-011 재판정은 sync 3차 몫이다(AC-010·AC-011 표지는 ⬜ 그대로). REQ 15 · AC 15 그대로 |
+| 0.1.8 | 2026-09-29 | **sync 3차 판정(`0f8ca1b`, 판정문 `.moai/reports/t16/sync-verdict.md` §R3.7) 반영 — E5의 수리 방향을 (나)(§R2.5 1번 (나))로 다시 정했다.** 기준 트리는 `bf5fbd9`다 — `0f8ca1b`·`25ad48d`는 문서만 바꿨다(`git diff --quiet bf5fbd9 0f8ca1b -- Shared Tools` exit 0). 결정은 칸반 리드가 이 plan 세션에 전했고, 이 세션은 운영자의 답을 직접 보지 않았다(0.1.3·0.1.4와 같다). **경위**: E5는 운영자 결정 (가)(머무는 카드였다는 기록을 호출에 실어 실행부가 장소를 해석한 뒤 50 m를 재게 하는 방식, `bf5fbd9`)로 수리를 시작했다. 같은 설계 영역에서 sync가 세 번 연속 FAIL했고 수리 라운드마다 새 결함이 생겼다(§R3.7 — 1차 수리가 E1·E2, 2차 수리가 F1·F3·F4). 3차의 회귀 F1과 노출 F4가 그 기록 장치(마커)에서 나왔으므로 리드와 운영자가 (나)로 다시 정했다(운영자 승인, 2026-09-29). 마커는 2차 수리에서 들어왔으므로 1차의 E1·E2는 마커와 무관하고, 3차의 F3도 마커에서 나오지 않았다. 판정문이 세 라운드의 공통점으로 지목한 것은 좁은 드라이버 표본이다(§R3.7) — 그래서 판정문의 재현 하네스 다섯 벌을 드라이버 단언으로 옮기는 일을 run 지시에 넣었다(`acceptance.md` AC-008 (13)). **(나)의 내용**: REQ-010의 50 m 절을 앱이 앵커(활동 장소·목적지)와 선택 둘 다의 좌표를 이미 아는 경우로 좁히고, 앵커나 선택의 좌표를 모르면 "이동 없음" 밖의 선택을 다른 출발지로 보아 수단·여유·알림을 묻는다(해석 I-1 — `8ad3abd`가 E5에서 낸 모양, 판정문 §R2.3). 확인 경로를 넘어 머무는 판정을 미루는 선언 밖 카드 전용 키(마커)는 두지 않는다. **이 세션의 읽기(리드 확인 대상)**: 판정문의 "앵커와 선택의 좌표를 앱이 이미 아는 경우"와 리드의 예시 "(즐겨찾기·확정 장소)"를 — 앵커는 즐겨찾기이거나 이 카드·대화에서 이미 확정된 장소(예: 후보 카드에서 고른 장소), 선택은 즐겨찾기·확정 장소, 또는 확인 시점에 위치 값이 있을 때의 현재 위치 — 로 읽었다. 현재 위치를 선택에 넣은 근거는 sync가 S-3a+(위치를 심은 현재 위치, 즐겨찾기 앵커 → 활동만)를 받아들인 것이다(§R2.2). 선택의 좌표를 모르는 경우(위치 값이 없는 현재 위치)까지 다른 출발지로 적은 것은 50 m 절이 두 좌표를 요구하는 데서 나온 보충이고, sync 2차가 받아들인 S-3a 각주와 같은 동작이다(§R2.2). **바뀐 곳**: spec — REQ-010(50 m 절 축소 · 좌표를 모르는 경우 · 마커 금지, 근거에 결정 출처와 잔여 위험) · §3 `isSamePlace` 절 첫 줄. acceptance — AC-008((10)~(13) 신설: 앵커를 모르는 머무는 요청 · 좌표를 아는 양성 대조 · 마커 부재 grep과 수리 전 기준값 · 하네스 21 시나리오 이관, 머리말 계수 아홉 → 열셋) · AC-003 끝에 한 항목(열 조합은 그대로, 후보 카드에서 고른 장소는 좌표를 아는 앵커) · 시뮬레이터 스크립트 16a 신설(번호를 밀지 않는 하위 단계 — AC 매트릭스·AC-014·AC-008 머리말의 범위 표기와 P5에 16a를 적었다). plan — §1 'R3 수리' 행(F2가 `sanitizeModelArgs` 본문을 바꿔 AC-011 (5) (d)의 고정값이 깨진다는 점과 그 개정 여부가 리드 몫이라는 점을 함께 적었다 — AC-011은 이 개정에서 고치지 않았다) · §3 잔여 위험 한 줄 · §2 D-8 번역의 50 m 줄에 (나) 표기. REQ 15 · AC 15 그대로 |
+| 0.1.9 | 2026-09-29 | **AC-011 (5) (d)를 고정값에서 구조 대조로 — 재감사 없는 기록 부채(0.1.7 E8 전례).** 출처는 칸반 리드의 전달과 `progress.md` §E.2 M9 (g)이고, 이 세션은 운영자를 직접 보지 않았다(0.1.3·0.1.4와 같다). 기준은 코드 `fa75e6e`, SPEC `f335c42`다. **경위**: sync 3차 F2 수리(`fa75e6e`)가 `sanitizeModelArgs` 본문을 다시 바꿔, 0.1.7에서 (d)에 적은 고정값(head 23줄 · 헝크 `8,10c8,18` · `>` 11줄)이 맞지 않게 됐다. 오케스트레이터가 `fa75e6e`에서 같은 `sed`로 잘라 잰 값은 base 15줄 · head 29줄이고, 두 본문의 `diff`는 **여전히 헝크 하나 `8,10c8,24`**(`<` 3줄 · `>` 17줄)다. §E.2 M9 (g)의 "`@@ -659,25 +860,93 @@`로 병합돼 단독 헝크가 아니다"는 파일 단위 `git diff`의 헝크이고, (d)가 비교하는 잘라 낸 두 본문의 diff가 아니다 — 리드 요청으로 plan 레인이 `progress.md` §E.2 M9 (g)와 §E.3 M9 갱신 줄의 그 문장을 실측대로 고치고 정정 표기를 남겼다(아는 오기를 기록에 두지 않는다). `<` 3줄은 base의 `let args` 바인딩 · 키만 보는 guard · 키만 보는 filter 그대로이고, (a)(b)(c)의 grep 값(2 · 2 · 1, `if` 블록 안 1)은 적힌 대로 성립한다. `>` 17줄은 바인딩 1 · 주석 3 · E1 복원 7(교체 표시 선언 1 + 복원 블록 6) · 키+값 guard 3 · 키+값 filter 3이다. **고른 모양**: 다음 수리에 또 깨지지 않게 줄 수·좌표 대신 구조를 본다 — (d1) 빠진 줄은 base의 그 세 줄뿐(`grep -c '^<'` = 3, base가 `aa7b792`로 고정이라 안정) · (d2) 키+값 이중 guard와 키+값 filter가 있다(grep 각 1) · (d3) E1 복원이 출력에 닿는다 — 변수 이름이 아니라 드라이버 행동 단언 `AE-F2a`(repro5 R3-a의 선언 키만 변형)의 ✓ 1 · ✗ 0으로 · (d4) 더한 줄은 모두 다섯 범주 가운데 하나에 귀속하고, `fa75e6e` 실측 1 / 3 / 7 / 3 / 3 = 17을 대조용 기준값으로 적었다. head 줄 수와 헝크 좌표는 통과 조건에서 뺐고, 같은 이유로 (5) 머리말의 "(23줄)"도 걷었다. REQ 15 · AC 15 그대로 |
+| 0.1.10 | 2026-09-29 | **sync 5차 판정(FAIL — 증거 1 · SPEC 문구 1, 판정문 `.moai/reports/t16/sync-verdict.md` §R5, 수리 `daa77c1` · 판정 기록 `545a754`)의 L-2 정예 — AC-008 산문을 J-1 뒤 동작에 맞춘다.** 출처는 칸반 리드의 전달이고 이 세션은 운영자를 직접 보지 않았다(0.1.3·0.1.4와 같다). **경위**: 4차 판정 §R4.5가 J-2를 "단언 추가 또는 SPEC 개정 — 리드 결정"으로 열었고(§R4.8 1번) 리드가 **단언 실물화**(M10 — 판정문 재현 하네스 21 시나리오를 `AE-` 단언으로 드라이버에 이관, `daa77c1`)를 채택했으나 그 결정이 산문에 기록되지 않았다 — 5차 L-2(§R5.5)가 그 어긋남이다(ai-tooling 차단, code-safety는 같은 자리를 비차단으로 매겼고 판정 레인이 차단으로 확정). J-1 수리(`daa77c1`)는 머무는 요청 카드의 확인 경로에서 50 m에 닿지 못하는 선택(현재 위치 등)을 받았을 때 내보내던 세 낱말 거절("아직 만들지 않았어요 — 이동수단, 도착 여유, 알림이(가) 비어 있어요")을 **두 번째 카드**(줄 키 집합 `{mode_this_time, buffer_minutes, notify_lead_minutes}`)로 바꿨고, 세 낱말 거절은 카드 없는 직접 실행부 호출에만 남는다(§R5.2 — repro6에서 앞 단계 `reply = nil`·에코 재호출 토큰 재유입 없음 관측). **바꾼 곳(acceptance.md AC-008, 문서만)**: (10) 앞단계를 카드 경로(레코드 0건 + 두 번째 카드 — `AE-C-1 ` (1/2)·`AE-S-3a`/`AE-S-3c`, 반복 `AE-C-1r `가 잰다)와 직접 경로(0건 + 세 낱말 — `AE-R3-b`가 잰다)로 분할하고, 특성화 값(한 번짜리 활동 1·가는 이동 1, 반복 활동 블록 4·이동 0)과 특성화 절은 그대로 두었으며, 앞단계 이력(`bf5fbd9` 마커 → 4차 세 낱말 → J-1 두 번째 카드)과 리드 결정 기록을 (10)에 넣었다 · (13) 도입문에 J-1 개명 한 절, 표 S-3a·S-3c·C-1행 기대를 두 번째 카드로(이에 따라 S-3c의 3차 로그 대조 칸을 "다름 — 세 낱말"로) · (11) `✓ AD-E5` 기대 **2 → 3**(J-2 재편으로 AD-E5 두 줄·AD-E5b 한 줄 — 5차 게이트8 실측 §R5.4; `실행부가 장소를 해석` 부재 = 0은 유지) · (5) (d3)의 낡은 라벨 `AE-F2a`를 `AE-R3-a`(선언 키만 변형, `✓` 2)로 — 행동 요구(선언 키만 실린 되울림도 교체판을 돌려받는다)는 동일. 같은 판정의 L-1(`AE-C-1` 특성화 단언이 가는 이동을 검사하지 않는다 — 드라이버 한 줄)은 run 레인 몫이라 이 개정에 넣지 않았다(§R5.8 2번). 코드는 무변경이고 REQ 15 · AC 15 그대로다 |
+
+## 0. 이 SPEC의 성격과 예산
+
+**후보 구현을 고쳐서 받는 변경의 계약이다.** run은 `e1a40a6`에서 시작한다. 후보는 카드 항목 다섯 중 넷을 AI 쪽에서 이미 건드렸고(§1.2), 오케스트레이터가 다시 돌린 게이트도 통과한다. 그러나 두 렌즈는 서로를 보지 않고 **같은 결함 셋**에 도달했고(§1.4), 그 결함은 전부 드라이버가 지나지 않는 경로에 있다. 그래서 이 SPEC은 후보를 출발점으로만 쓰고, 렌즈가 코드 추적으로만 찾은 결함은 run이 **먼저 재현한 뒤에** 고치게 한다(REQ-001).
+
+**Tier: M.**
+
+| 측정 | 값 | 세는 명령 |
+|---|---|---|
+| 후보 diff | `Shared/AIAssistant.swift` +333/−64 · `Tools/GuardDriver.swift` +179/−1 (소스 합 577줄) | `git diff --numstat aa7b792 e1a40a6` |
+| 파일 길이 | AIAssistant 2484 → **2753** · GuardDriver 1813 → **1991** · EditCardView 528 · EditCard 350 | `git show aa7b792:<파일> \| wc -l` · `wc -l <파일>` |
+| AIAssistant diff 헝크 | **35개**, 첫 헝크가 `:495`에서 시작 | `git diff -U0 aa7b792 e1a40a6 -- Shared/AIAssistant.swift \| grep -c '^@@'` |
+| run이 여는 소스 파일 | **5**(0.1.7 실측) — 크게 고침 2(AIAssistant·GuardDriver), 작게 고침 3(EditCardView — D-1 · EditCard 주석 한 줄 — D-6 + `clearedKeys` 저장 속성 — sync 1차 D4 · AIChatView 새 대화 버튼 한 줄 — sync 2차 E2). 한 Day 한도는 새로 만들거나 크게 고치는 파일만 센다(`CLAUDE.md`) | `git diff --name-only aa7b792 HEAD -- Shared Tools` · §2 REQ-013 |
+
+후보 diff만으로 Tier S 기준(< 300 LOC)을 넘는다. plan 때는 재현 절과 수리가 더해져도 1000줄 아래로 어림했으나 빗나갔다 — `bf5fbd9`에서 `git diff --shortstat aa7b792 HEAD -- Shared Tools`는 5파일 **+1983/−90**이고, `--numstat`으로 가르면 앱 소스 `Shared/`가 +746/−84(그중 `Shared/AIAssistant.swift` +723/−81), 드라이버 하네스 `Tools/GuardDriver.swift`가 +1237/−6이다. **Tier 재판정(2026-09-28): 리드가 M 유지 — 크게 고친 앱 소스는 AIAssistant 하나뿐이고 초과분은 전부 드라이버 단언(Tools)이라 Tier M 규모에 부합.** 파일 수는 5지만 한 Day 한도는 크게 고친 파일(2)을 기준으로 센다(아래 한도 문단). 변경량, 결정 10건(게이트에서 해소), **사람만 볼 수 있는 증거의 설계**가 `acceptance.md`를 요구한다(SPEC-UIKIT-005 §0과 같은 판단).
+
+**REQ·AC 예산.** `grep -c '^- \*\*REQ-' spec.md` = **15**, `grep -c '^## AC-' acceptance.md` = **15**. Tier M 상한 16 아래이고 여유는 각 1건이다. 16에 닿으면 분할 신호다.
+
+**한 Day 파일 한도(3~4).** 한도는 `CLAUDE.md` 원문대로 "새로 만들거나 크게 고치는 파일"만 센다 — 크게 고치는 파일 2(AIAssistant·GuardDriver)로 한도 안이고, 작게 고치는 파일 3(EditCardView·EditCard·AIChatView)은 한도 밖이다(0.1.7에서 읽기를 밝혔다). 착수 승인 게이트는 한도 안의 안만 골랐다(`plan.md` §2). U-2는 D-1 (a)로 셋째 파일(`Shared/EditCardView.swift`)이 되어 이 카드에 들어왔다 — 새 후보 카드가 장소 검색 편집기를 주 경로로 만들기 때문이다(ui 렌즈 §1.4).
+
+**드라이버 초록은 이 SPEC의 증거로 반만 센다.** 241/241이 통과한 바로 그 트리에 렌즈 결함이 있다. 이 프로젝트에는 드라이버 88/88 다음 날 실기기 결함 7건이 나온 이력이 있다(2026-09-15). 드라이버는 도구 실행부와 카드 판정을 모델 없이 직접 부르지만 `runLoop`의 모델 왕복(`callAI`)은 지나지 못한다(드라이버가 프록시 설정을 비우므로 — `CLAUDE.md` § 빌드 · 배포). 모델 루프의 행동과 화면은 사람 증거(AC-014·015)로만 닫힌다.
+
+## 1. 배경
+
+### 1.1 카드 항목 다섯 — 관측된 원형
+
+| 항목 | 관측 | 출처 |
+|---|---|---|
+| U-4 지점 불일치 | "스타벅스 홍대점" 요청이 **대학로점**으로(2026-09-23), "강남"이 **서울선릉과정릉**으로(2026-09-24, 최종 빌드 `5a357cc`) 등록 — 첫 검색 결과를 확인 없이 채택 | 공용 메모리 이월 목록(t7 세션·14항목 세션) · `day-close-20260924.md` §6 #23 |
+| AC-009 7·9 | 되묻기·`create_activity` 카드에 장소 줄이 서지 않고 모델이 텍스트로 재질문(2026-09-23, `dd-a` 빌드) | `day-close-20260924.md` §6 #24 · SPEC-UIKIT-005 `acceptance.md` AC-009 |
+| 왕복 가는 편 줄 | 왕복 `create_activity` 카드는 뜨지만 가는 편 출발지 줄과 '가는 편 없음' 칩이 없다(2026-09-24) | 카드 t16 본문 |
+| 머무는 반복 | "집에서 점심식사" 반복이 통근형(회사↔집, 76건)으로 등록됐고 모델이 스스로 잘못을 고지했다(2026-09-24) | 공용 메모리 이월 목록 |
+| U-2 강조 잔존 | 장소를 고른 뒤 장소 검색을 다시 열면 옛 선택 강조가 남는다(2026-09-23, SPEC-UIKIT-003 AC-010) | 공용 메모리 이월 목록 · `day-close-20260924.md` §6 #21 |
+
+### 1.2 후보 구현이 한 일 (`e1a40a6`, 코드 열람)
+
+세는 명령: `grep -n 'func parkForUnclearPlaces\|func adoptPlace\|enum PlaceAdoption\|func searchTopClearlyMatches\|func stayingRecurrence\|func filledValueLabels\|func repeatedSearchQuery\|func searchBoundPlace\|func resolvePendingAsk\|func askFields' Shared/AIAssistant.swift`와 해당 범위의 `awk 'NR>=a && NR<=b'`.
+
+| 무엇 | 자리 |
+|---|---|
+| 해석 사다리의 단일 출처 — 즐겨찾기 → 확정 장소 → 일반명사 가드 → 검색 채택, 삼태 `resolved/notFound/unclear` | `adoptPlace` `:2653` · `PlaceAdoption` `:2645` · 후보 5건 자르기 `:2675`(`maxPlaceSuggestions` `:927`) |
+| 채택 판정 — 결과 **이름 + 주소**를 공백 없이 이어 붙여 질의 낱말을 찾는다 | `searchTopClearlyMatches` `:2685` · 이어 붙이기 `:2686` |
+| 등록 실행부 갈래 — `unclear`가 하나라도 있으면 등록을 멈추고 후보 카드 | `create_schedule` `:1457-1485` · `create_activity` `:1630-1661` · `create_recurring_schedule` `:1784-1805` |
+| 후보 카드 — 모호한 키를 보류 인자에서 비우고 후보를 줄에 얹는다 | `parkForUnclearPlaces` `:786` · 중복 가드 `:790-792` · 비우기 `:796` · 후보 얹기 `:801` · 맥락 줄 `:805` |
+| 같은 이름 줄(AC-009 7·9) | `create_schedule` `:495-505` · `create_activity` `:537-548` · 판정 `repeatedSearchQuery` `:708` · `searchBoundPlace` `:700` |
+| 왕복 가는 편 줄 | `:549-562`(재확인 캡션 `:560`) · 탈출 칩 `:644` |
+| 머무는 반복 | 카드 억제 `stayingRecurrence` `:720`(적용 `:525-529`) · 실행부 `:1812-1830` · 프롬프트 `:1193` · 선언 설명 `:1273` |
+| 드라이버 새 절 | `Tools/GuardDriver.swift` AA절 `:1826-1977` · 판정 도우미 `drvTopMatches` `:137`(주소 기본값 `""`) · `drvPark` `:143` |
+
+### 1.3 후보 카드의 확인 주입 — 도구×키 여덟 조합 (코드 추적, 미실행)
+
+`parkForUnclearPlaces`는 모호한 키를 `""`로 비운다(`:796`). 확인 때 `resolvePendingAsk`는 `askFields(tool:args:)`를 다시 구해 **그 함수가 돌려준 키에만** 고른 값을 싣는다(`:1050-1051`). 그런데 `askFields`는 여러 키에서 빈 값을 "물을 값"으로 보지 않는다. ai-tooling 렌즈 A-1 (c)의 표를 이 트리에서 다시 읽었다(`awk 'NR>=467 && NR<=579' Shared/AIAssistant.swift`).
+
+| 도구 | 모호한 키 | 빈 값에 줄이 서는가 | 후보 트리에서의 예측 |
+|---|---|---|---|
+| `create_schedule` | `origin_query` | 선다 `:493` | 주입된다 |
+| `create_schedule` | `destination_query` | 선다 `:491` | 주입된다(AA-6·AA-7이 덮는 유일한 조합) |
+| `create_recurring_schedule` | `origin_query` | 선다 `:521` | 주입된다 |
+| `create_recurring_schedule` | `destination_query` | **안 선다** — `:520`은 `unknownPlace`만 본다 | 선택이 버려지고 `:1760` "반복 일정 정보가 부족합니다"로 끝난다 |
+| `create_activity` | `place_query` | **안 선다** — `:534`는 `unknownPlace`만 본다 | 이동이 없으면 장소 없는 활동이 성공 문구로 등록된다(빈 값은 `:1667-1668`에서 실패로 세지 않는다) |
+| `create_activity` | `travel_from_query`(왕복) | 선다 `:556` | 주입된다 |
+| `create_activity` | `travel_from_query`(편도) | **안 선다** — `:550`의 guard가 빠져나간다 | 가는 편 없이 성공 등록, 경고 문구 없음 |
+| `create_activity` | `return_to_query` | **안 선다** — 왕복이 편도로 바뀌며 `:567`이 수단 줄을 새로 요구 | `missingAskedArguments`(`:1403`)가 "이동수단이 비어 있어요"로 막는다 |
+
+화면은 체크 칩으로 "골랐다"를 보여주므로(ui 렌즈 §2.6 X2) 사용자 쪽에서는 조용한 실패다. 2026-09-23 홍대점 관측이 어느 도구에서 났는지는 기록에 없다 — `create_activity`였다면 **관측 사례 자체가 후보로 닫히지 않는다**(ai 렌즈 A-1 (c) 끝, 추론).
+
+### 1.4 두 렌즈의 판정 — 독립으로 수렴한 셋
+
+두 렌즈는 서로의 보고서를 보지 않고 썼다. ui-design 렌즈는 아래 셋을 "뷰 밖이지만 화면 결과를 바꾸는 교차 가설"로 넘겼고(§2.6 X1·X2, §2.2 B1), ai-tooling 렌즈는 같은 셋을 코드 경로 끝까지 따라가 결함으로 판정했다(A-1 (b)(c)(f)).
+
+1. **'강남' 판정 누락.** 술어가 주소까지 보므로 선릉·정릉 주소의 '강남구'에서 '강남'이 맞는다. 드라이버 AA-1은 이 사례를 **빈 주소**로 단언해 그 경로를 뺀 채 통과한다(`Tools/GuardDriver.swift:1834-1835`, `grep -n 'drvTopMatches("강남"' Tools/GuardDriver.swift` → `:1835`에 주소 인자 없음).
+2. **확인 주입 구멍.** §1.3의 네 조합.
+3. **보이지 않는 후보.** 후보는 편집기 안에서만 그려지고(`Shared/EditCardView.swift:316` `placeSearchEditor`, 열림 조건 `:132`), 편집기의 씨앗은 `startsOpen` 줄뿐인데(`:68-70`) 기본값이 false이고(`Shared/EditCard.swift:164`) 후보 카드는 이를 켜지 않는다(`grep -c 'startsOpen' Shared/AIAssistant.swift` = **0**). 캡션은 "아래 후보에서 골라 주세요"다(`:735`).
+
+그 밖의 판정(각 렌즈 절 번호로만 적는다):
+
+- **한 턴 다중 호출 소실** — 중복 가드 `:790`은 "카드가 하나라도 열려 있는가"만 보고, 두 번째 모호 호출은 카드에 실리지 않은 채 "자동으로 진행돼요"(`:791`)라는 거짓 안내를 받는다. 한 턴 다중 호출은 설계된 경로다(`:738-740` 주석). (ai A-1 (d))
+- **보류 뒤 루프 지속** — `runLoop` 카드는 세워지는 즉시 턴을 끝내지만(`:428-431`) 후보 카드는 도구 실행 안에서 세워져 루프가 이어진다(`:433-434`, 상한 `:380`). 모델이 인자를 바꿔 재호출하면 그것이 등록되고, 카드를 확인하면 한 건이 더 생길 수 있다. (ai A-1 (e), ui B4)
+- **맥락 줄이 빈다** — 후보 카드의 "말씀하신 대로"는 `statedLabels() + filledValueLabels(...)`(`:805`)인데, `executeTool`이 실행 직전 `statedArgs`를 비우므로(`:1414`) 앞 항은 늘 비고, `filledValueLabels`는 `create_schedule`만 다룬다(`:765`). 활동·반복 후보 카드에는 제목조차 없다. (ai A-1 (g), ui B5)
+- **왕복 가는 편 캡션이 가리키는 값이 카드에 없다** — `:560` "미리 정해진 출발지가 맞는지…". (ai A-4, ui S3)
+- **지어낸 출발지가 보이지 않는다** — 76건 사고는 모델이 출발지를 '회사'로 지어낸 것이고, 이를 막는 것은 프롬프트(`:1193`)와 선언 설명(`:1273`)뿐이며 반복 카드는 모델이 채운 출발지를 보여주지 않는다(`:765`). (ai A-5)
+- **깨어난 잠복 결함** — 머무는 반복은 `lastRecurrenceId`를 활동만 있는 그룹으로 둔다(`:1825`). `Store.updateRecurringSeries`는 events만 센다(`Shared/Store.swift:698-700` `recurringSeries`, `:728` 선언). 번호 없는 `update_recurring_schedule`은 0건이 되어 "이미 삭제됐을 수 있어요"(`:2058`)라는 거짓 문구로 끝난다. (ai A-5)
+- **머무는 반복의 조용한 버림·이중 질문** — `lunch_*` 인자는 요약(`:1829`)에 나오지 않고 버려진다(ai A-5). 끝 시각이 없으면 모델에게 재호출을 요구하는데(`:1814`) `weeks`는 선언에 없어(`grep -n '"weeks"' Shared/AIAssistant.swift` → `:530`·`:677`·`:1954`뿐) 재호출 때 정화로 빠지고 '반복 기간' 줄이 다시 뜰 수 있다(ui X3).
+- **U-2** — 강조 생산자가 둘이다: 값 칩 `EditCardView.swift:116`과 검색으로 고른 값의 칩 `:122-123`(상수 `selected: true`). 관측 경로의 생산자는 `:123`이다. 강조만 끄면 파일 머리말의 약속(`:3-5` "정해진 값도 전부 화면에 보인다")과 긴장한다. 공유 카드를 쓰는 화면은 넷이다(`grep -rn 'EditCardView(' Shared/` → `AIChatView.swift:106`·`AddEventView.swift:68`·`AddActivityView.swift:72`·`ActivityDetailView.swift:64`). (ui §1)
+- **문안** — 같은 이름 캡션의 조사('강남역'**가**)·UI 문구에 처음 쓰는 줄표, 후보 캡션의 구현 용어("첫 검색 결과"), 왕복 캡션의 보이지 않는 값. (ui §2.1 S1~S3·S6)
+- **`isSamePlace`의 둘째 사용처** — 후보는 머무는 반복 분기에 `isSamePlace(origin, dest)`를 새로 불렀다(`:1812`, 기존 `create_schedule` `:1492`). 그래서 점심 구간 주석 `:1869`의 "(`isSamePlace` 가드는 create_schedule 경로 전용)"은 글자 그대로는 거짓이 됐다(`grep -n 'isSamePlace(origin, dest)\|가드는 create_schedule 경로 전용' Shared/AIAssistant.swift` → `:1492`·`:1812`·`:1869`). 이 주석은 루트 `plan.md:562`·`CHECKLIST.md:535`(base 좌표 `:1654`)가 인용한다. SPEC-UIKIT-005 `spec.md` §3의 "넓히지 않는다"는 그 카드의 범위 판단이었고(0분 통근 가드가 아니라 "고른 좌표가 덮인다"를 닫는 카드), 이 카드는 머무는 반복을 가르는 데에만 가드를 쓴다(spec §3). (감사 1회차 D7)
+
+**통과한 계약 점검**(ai 렌즈 §B): Gemini 와이어 포맷·대문자 스키마(`grep -n '"type": "[a-z]' Shared/AIAssistant.swift` 0건), 새 AI 클래스 없음, `isSamePlace` 본문(`:2538`)과 `create_schedule` 거절(`:1492`) 무변경(호출처는 `:1812`가 늘었다 — 위), `sanitizeModelArgs`(`:819`) 무변경, 프록시 무변경.
+
+### 1.5 가설 H-1~H-11 — run이 먼저 재현한다
+
+아래는 전부 **코드 추적**이고 실행으로 재현되지 않았다. 드라이버가 닿을 수 있는 경로인지도 함께 적었다 — 열한 개 모두 도구 실행부·카드 판정 도우미(`drvPark`·`drvExecuteTool`·`drvResolvePendingAsk`·`drvAsk`)로 닿는다. H-11은 착수 승인 게이트의 D-8(운영자 문구)이 후보의 현재 동작을 결함으로 판정하면서 생겼고, 0.1.4에서 해석 I-3 거부("한 번짜리 활동까지")로 한 번짜리 활동까지 넓어졌다.
+
+| H | 가설 | 근거 | 후보에서의 예측 |
+|---|---|---|---|
+| H-1 | 후보 카드에서 고른 값이 확인 때 버려진다 | §1.3 | 여덟 조합 중 넷 실패, 두 키 동시 모호(머무는 반복 포함)도 실패 |
+| H-2 | 두 번째 모호 호출이 카드에 실리지 않고 거짓 안내를 받는다 | `:790-792` | 두 번째 호출의 결과 문구가 "자동으로 진행"을 말하고 카드는 한 장 |
+| H-3 | 카드가 열린 동안 인자를 바꾼 재호출이 등록되고, 확인하면 한 건이 더 생긴다 | `:433-434` · `:790` | 같은 요청의 레코드 2건 |
+| H-4 | '강남'이 실제 주소 모양에서 채택된다 | `:2686` | `drvTopMatches("강남", name: "서울선릉과정릉", address: "서울 강남구 선릉로100길 1")` = true |
+| H-5 | 후보가 첫 렌더에 보이지 않는다 | `:801` · `EditCard.swift:164` | 후보 카드 줄의 `startsOpen` = false |
+| H-6 | 활동·반복 후보 카드의 맥락 줄이 비어 제목이 없다 | `:765` · `:805` · `:1414` | `stated`가 빈 배열 |
+| H-7 | 왕복 가는 편 줄의 캡션이 가리키는 값이 카드에 없다 | `:557-560` · `:765` | 줄의 `chosen` nil, 캡션·맥락 줄 어디에도 그 값 없음 |
+| H-8 | 머무는 반복 뒤 번호 없는 반복 수정이 거짓 문구로 끝난다 | `:1825` · `Store.swift:698-700` · `:2058` | "이미 삭제됐을 수 있어요" |
+| H-9 | 머무는 반복의 끝 시각 재호출에서 '반복 기간' 줄이 다시 뜬다 | `:1814` · `:530` · 정화 `:819` | `weeks` 없는 재호출 인자에 기간 줄이 선다 |
+| H-10 | 머무는 반복에서 점심 인자가 조용히 버려진다 | `:1812-1830` | 결과 문구에 점심 언급 없음 |
+| H-11 | 머무는 요청에서 카드가 출발지를 묻지 않고 출발지 = 목적지(이동 없음)를 조용히 확정한다 — 출발지·목적지가 같은 값인 반복(수단·여유·알림만 빼고 기간만 묻는다), 그리고 이동을 말하지 않은 한 번짜리 활동(이동 줄 없이 곧바로 실행) | 반복 `:521-529` · `:720-725` · 드라이버 AA-4(`Tools/GuardDriver.swift:1888-1890`, 기대 키 `["weeks"]`) · 한 번짜리 `:549-550`(`guard outbound \|\| back else { break }`) · 드라이버 O-6(`Tools/GuardDriver.swift:1595-1597`, 기대 키 `["place_query"]`) | 반복 카드 줄 키가 `weeks` 하나 · 이동 없는 한 번짜리 활동에 가는 편 출발지 줄이 없음 — 둘 다 "이동 없음" 선택지가 없다 |
+
+### 1.6 무엇을 보고 판정하나
+
+- 좌표는 화면에 찍히지 않는다. 대리 신호는 **등록된 목적지·활동 장소의 이름과 주소**(상세 화면), **이동시간이 0분인가**, 그리고 **편집 시트의 출발지 칩**이다. 일정 상세는 출발지를 그리지 않으므로(SPEC-UIKIT-007 `plan.md` §6) 출발지는 편집 시트를 열어 보고 "취소"한다.
+- 카카오의 실제 응답(선릉·정릉의 주소 문자열, '스타벅스 홍대점'의 첫 결과)은 어느 렌즈도 관측하지 않았다. 드라이버 픽스처의 주소는 가정이고, 시뮬레이터 단계가 실제 값을 본다(AC-014).
+
+## 2. 요구사항 (GEARS)
+
+### 2.1 출발점과 재현
+
+- **REQ-001 (Ubiquitous · Event-driven)**: The run phase shall start from commit `e1a40a6` and shall treat each hypothesis H-1 through H-11 (§1.5) as unverified; when run takes up a hypothesis, it shall first add a guard-driver assertion that exercises that hypothesis's path, run it against the unmodified candidate, and record the observed output — the assertion's ✓/✗ line and the `P/T 통과` line — in `progress.md` §E.2 before changing any code for it; when the assertion passes on the candidate, run shall record the hypothesis as not reproduced and shall make no code change for it. The M1 assertion shall state the desired behavior, so that ✗ on the candidate means reproduced. For H-9, which the gate's D-8 wording does not address and which this SPEC accepts as a residual under interpretation I-5 (confirmed by the operator and relayed by the lead, `progress.md` §E.1), run shall afterwards rewrite that assertion as a characterization assertion stating the observed behavior, tag its name with `[수용]`, and record "재현됨 — 수용(I-5)" in §E.2 next to the M1 ✗ line; for H-3, whose path D-5 (a) removes by ending the turn when a candidate card is raised (a later user utterance cancels the open card, `:285`), run shall rewrite that assertion as a characterization of the executor-level behavior tagged `[경로 제거]` and record "경로 제거(D-5 (a))" in §E.2 together with the code locations that remove the path; no other assertion shall be rewritten to match observed behavior. 근거 (극성): 이 규칙이 있어야 수용 선택지와 REQ-014의 "✗ 0"이 함께 선다 — 바라는 동작으로 남기면 ✗가 끝까지 남고, 처음부터 관측 동작으로 적으면 후보에서 ✓가 나와 "재현 안 됨"이라는 거짓 기록이 된다(감사 1회차 D4). 근거: 결함 주장은 도구가 확인하기 전까지 가설이다. 두 렌즈 모두 이 결함들을 "코드 추적, 실행하지 않음"으로 적었다. 재현 없이 고치면 고친 것이 결함이었는지 알 길이 없고, 재현 절은 수리 뒤 회귀 방지선으로 남는다. 후보 트리에서 드라이버가 exit 1로 끝나는 것은 이 단계의 기대값이다 — 단 `P/T 통과` 줄이 찍혀야 컴파일 실패와 구별된다(`CLAUDE.md` § 빌드 · 배포의 종료 코드).
+
+### 2.2 U-4 — 후보 카드
+
+- **REQ-002 (Event-driven)**: When a creation-path place query — `create_schedule` origin or destination, `create_activity` place, outbound origin, or return destination, `create_recurring_schedule` origin or destination — is resolved by search and the top result does not clearly match the query, the executor shall not register and shall open a candidate card carrying up to five candidates; the clear-match predicate shall judge the result's name only, so that `'스타벅스 홍대점'` against `'스타벅스 대학로점'` and `'강남'` against `'서울선릉과정릉'` are classified as not matching whatever the result's address. 근거: 후보 카드 자체는 후보가 이미 구현했다(§1.2). '강남' 사례는 §1.4 수렴 1이고, 착수 승인 게이트가 D-2 (a)(이름만 본다)를 골랐다 — 주소로 말한 질의는 한 번 더 고르는 비용(후보 카드)을 치른다. 빈 주소 픽스처만으로는 이 사례를 닫은 것으로 보지 않는다.
+
+- **REQ-003 (Event-driven)**: When the user picks a candidate on a candidate card and confirms, the record that the confirmation creates shall carry the picked candidate's place for every tool-and-key combination in §1.3, including one call with two ambiguous keys and a staying recurrence whose destination is ambiguous after the user picked "이동 없음" on the origin row, and a candidate shown as chosen on the card shall never be discarded at confirmation. 근거: §1.3의 네 조합이 H-1의 예측이다. 수리 방식은 게이트가 D-3 (a)로 정했다 — 후보 카드가 비운 키를 카드와 함께 기록하고, 확인 때 그 키에 고른 값을 싣는다(`askFields` 재계산은 그대로).
+
+- **REQ-004 (State-driven · Unwanted)**: While a candidate card is open, a further creation call in the same turn that also needs a candidate card shall not be carried by a second card and shall receive a tool result stating that it was not registered and should be re-issued after the open card is resolved; no tool result shall claim that a call the open card does not carry will proceed automatically. 근거: H-2(`:790-792`). 게이트가 D-4 (a)(카드는 한 장, 뒤의 호출에는 사실대로)를 골랐다.
+
+- **REQ-005 (Event-driven · Unwanted)**: When a candidate card is raised during tool execution, the assistant shall end that model turn without calling the model again, and the candidate-card path shall not produce two records for one user request. 근거: H-3(`:433-434`). 게이트가 D-5 (a)(후보 카드가 서면 턴을 끝낸다)를 골랐다 — `runLoop` 카드가 이미 그렇게 끝난다(`:428-431`). 이 안의 전제(도구 결과 턴 뒤에 사용자 턴이 오는 히스토리를 프록시·백엔드가 받아들인다)는 미확인이다. run은 이 코드를 쓰기 전에 전제를 확인하고, 깨지면 블로커를 돌려주며 리드가 D-5를 다시 묻는다(`plan.md` §2).
+
+- **REQ-006 (Ubiquitous)**: The candidate card shall make its preloaded candidates visible on first render without an extra tap, and no caption shall describe a screen state that is not true at that moment or use implementation terms such as "첫 검색 결과". 근거: §1.4 수렴 3(H-5). 게이트가 D-6 (a)(카드가 뜰 때 후보 줄의 편집기를 연다)를 골랐다.
+
+- **REQ-007 (Ubiquitous)**: Every card the assistant raises for `create_schedule`, `create_activity`, or `create_recurring_schedule` — the card raised before execution and the candidate card alike — shall show in text the title and each place value the model filled that the card does not ask about, and one function shall produce that text for both card paths. 근거: `EditCardView.swift:3-5`의 약속("정해진 값도 전부 화면에 보인다")이 AI 카드의 최소 방어다. 지금은 `create_schedule`만 적고(`:765`) 후보 카드의 앞 항은 늘 빈다(`:805`·`:1414`, H-6). 76건 사고의 지어낸 출발지 '회사'도 이 줄이 있었다면 카드에서 보였다(ai A-5). 한 함수로 두는 것은 계약 5다.
+
+### 2.3 같은 이름 줄 · 왕복 · 머무는 반복
+
+- **REQ-008 (Event-driven)**: When one `create_schedule` or `create_activity` call carries the same search-bound place name in two or more of its place keys, the card shall show a row for each such key with a caption stating why it is asked, and that caption shall attach no particle directly to the quoted name and shall contain no dash; when the shared name is a favorite label or a place already confirmed in this conversation, the card shall not show such rows. The staying signals of REQ-010 — the same value in `origin_query` and `destination_query` of `create_recurring_schedule`, and the same value in `travel_from_query` and `place_query` of a `create_activity` call without `return_to_query` — are excluded from this rule. 근거: AC-009 7·9번의 수리이며 후보가 구현했다(`:495-505`·`:537-548`). 반복 분기(`:517-530`)에는 같은 이름 줄이 없다 — 그 도구에서 같은 값은 프롬프트(`:1193`)·선언(`:1273`)·`stayingRecurrence`(`:720-725`)가 정한 머무는 반복이라, 같은 이름 줄을 띄우면 REQ-010과 맞선다(감사 1회차 D2). 조사·줄표 규칙은 '강남역'**가** 같은 받침 오류와 UI 문구에 없던 줄표를 막는다(ui §2.1 S1). 드라이버 AA-2의 즐겨찾기 제외 단언(`Tools/GuardDriver.swift:1856-1863`)은 서로 다른 이름 '회사'/'집'을 쓰므로 제외 규칙이 애초에 발동하지 않는다 — 양성 대조가 아니다(ai A-2).
+
+- **REQ-009 (Event-driven)**: When `create_activity` arrives with a non-empty `return_to_query`, the card shall show the outbound-origin row with the '가는 편 없음' chip, except where that row is raised because the outbound origin is an unknown place; where `travel_from_query` was filled, the row's caption shall name the filled value and the row shall not start selected. 근거: 2026-09-24 관측과 후보 `:549-562`. 게이트가 D-7 (a)(왕복이면 늘 묻는다)를 골랐다. 지금 캡션(`:560`)은 카드 어디에도 없는 값을 확인하라고 한다(H-7).
+
+- **REQ-010 (Event-driven · Unwanted)**: When a creation call is a staying request — a `create_recurring_schedule` call whose `origin_query` and `destination_query` carry the same value, or a `create_activity` call with a non-empty `place_query`, an empty `return_to_query`, and a `travel_from_query` that is empty or carries the same value as `place_query` — the card shall ask for the origin in one row that does not start selected, names the model's value in its caption when the model sent one, and offers an explicit "이동 없음" choice besides the favorites, current location, and place search, and shall not ask for mode, buffer, or notification lead; when the user's pick is "이동 없음", or when the app already knows the coordinates of both the anchor (the destination or the activity place) and the pick — the anchor being a favorite or a place already confirmed in this card or conversation, and the pick a favorite, a confirmed place, or the current location when a location fix exists at confirm time — and the pick lies within 50 m of the anchor, the executor shall create the activity (the activity blocks, for a recurrence) and no travel legs; where the app does not know the coordinates of the anchor (a place only a search would resolve) or of the pick, a pick other than "이동 없음" shall be treated as another origin; when the user's pick is another origin, the executor shall not register until mode, buffer, and notification lead have been obtained from the user, and shall then create the activity together with the travel through that tool's existing path; the staying judgement shall not be deferred past the confirm path through a card-only key outside the tool declaration; the origin = destination case shall never be confirmed without the user's pick; when a staying request lacks its end time, the assistant shall obtain the end time from the user before raising the origin card, the tool result shall not invite the model to supply one, and no staying request shall be registered as travel legs without its activity; the tool result shall name any lunch arguments it did not apply; and no source comment shall state that the `isSamePlace` guard is exclusive to `create_schedule`. 근거: 착수 승인 게이트의 D-8 — 운영자 문구 "집에서 점심식사라 하더라도 현재 위치가 집이 아닌 다른 곳이면 출발지 = 목적지라 확정할 수 없음. 따라서 출발지 또한 물어봐야 함."(원문 전체와 리드 종합은 `plan.md` §2). D-8 해석 확인(2026-09-26, 리드 전달): I-3을 거부하고 "한 번짜리 활동까지"를 골랐고, I-4는 운영자 문구 "끝 시각 없는 경우에는 되물어서 활동일정 생성. 기본적으로 반복 일정이더라도 단일 일정과 같은 프로세스. 반복 된다는 점만 차이가 있는 것."이다. 그래서 이 요구사항은 두 도구에 같은 질문을 같은 방식으로 건다 — 출발지 줄(이동 없음), 다른 출발지를 고른 뒤의 수단·여유·알림(해석 I-1 확정), 끝 시각. 후보의 현재 동작(같은 값 반복은 출발지를 묻지 않고, 이동을 말하지 않은 한 번짜리 활동은 줄 없이 곧바로 실행한다 — `:525`·`:549-550`)은 결함 H-11이다. 출발지 줄의 모양은 D-7 (a)의 왕복 가는 편 줄과 같다. 한 번짜리 활동의 50 m 판정은 머무는 요청 카드의 확인 경로에서, 앱이 앵커와 선택의 좌표를 이미 아는 경우에만 한다 — 고른 출발지가 활동 장소와 50 m 안이면 확인 때 "이동 없음"으로 바꿔 싣고, 편도 호출의 실행부에는 일반 가드를 넣지 않는다(§3, 감사 3회차 D1). **50 m 절의 범위(0.1.8)**: sync 3차 판정문(`0f8ca1b`) §R3.7이 제시한 두 방향 가운데 (나)를 리드와 운영자가 골랐다(2026-09-29, 리드 전달 — 판정문 §R2.5 1번 (나)). 확인 경로가 판정을 끝내지 못한 호출에 선언 밖 기록(마커)을 실어 실행부로 판정을 미루던 (가)의 장치가 3차의 회귀 F1(50 m 밖으로 판정된 호출이 묻지 않은 기본값 대중교통·0분·0분으로 이동을 등록)과 노출 F4(후보 카드 캡션의 내부 토큰, 마커를 떼는 경로 없음)를 만들었고, (나)는 그 장치를 두지 않는다. 좌표를 아는 경우의 정의(앵커 — 즐겨찾기 또는 이 카드·대화에서 확정된 장소, 선택 — 즐겨찾기·확정 장소 또는 확인 시점에 위치 값이 있는 현재 위치)는 이 plan 세션의 읽기이고 리드 확인 대상이다(HISTORY 0.1.8). 좌표를 모를 때 수단·여유·알림을 묻는 것은 해석 I-1의 안전한 쪽이고 `8ad3abd`가 E5에서 낸 모양이다(판정문 §R2.3). 잔여 위험: 검색으로만 풀리는 장소에 머물면서 그 자리를 출발지로 고르면(예: 현재 위치) 사용자는 수단·여유·알림을 더 답해야 하고, 답을 이어 가면 한 번짜리 활동에는 약 0분 가는 이동이 생길 수 있다. 반복은 실행부의 좌표 판정이 이동 구간 없이 활동 블록만 만든다 — 물은 값이 쓰이지 않을 뿐이다(`plan.md` §3, `acceptance.md` AC-008 (10)). 출발지를 고른 뒤의 재호출은 정의상 머무는 요청이 아니다 — 모델이 그 재호출에서 `return_time`을 빠뜨리면 통근 호출과 같아 가는 구간만 생기는 모양이 잔여 위험으로 남는다(`plan.md` §3, AC-008 (4), 감사 3회차 D3). 모델이 값을 보내지 않은 한 번짜리 활동의 줄에는 캡션을 달지 않는다 — 평범한 부재 줄의 기존 관례(`:558-560`)이고, 판정 범위와 함께 해석 T-1로 적었다(`progress.md` §E.1). "이동 없음" 선택지는 이 줄에 새로 생기고 선언 키는 늘지 않는다(해석 I-2 확정). 다른 출발지를 고른 뒤의 이동은 각 도구의 기존 경로를 탄다 — 반복은 통근 경로(가는 구간 + 오는 구간 + 활동 블록, `:1848-1864` — 끝 시각이 재호출에 실렸을 때), 한 번짜리는 편도 경로(가는 구간 + 활동). 오는 편의 이 비대칭은 파일 한도와 이 카드의 크기 안에서 그은 경계 B-1이고(오는 편 줄은 카드 전용 키와 실행부 경로로 되며 선언 키는 늘지 않는다 — 0.1.5 측정), 운영자가 이를 중간 동작으로 두고 단일·반복 카드의 가는/오는 이동 생성 줄을 후속 카드 t30으로 옮겼다. 끝 시각은 카드 줄이 아니라 사용자에게 되묻는 문장으로 받는다(경계 B-2 — 운영자는 카드의 시각 줄을 골랐으나 그 변경은 t30으로 옮겼고, 이 카드는 중간 동작으로 문장으로 되묻는다). 끝 시각을 출발지 카드보다 먼저 받는 이유(경계 B-3): 출발지를 실제 장소로 바꾼 반복 호출은 끝 시각이 선택인 통근 호출과 인자로 구별되지 않아, 머무는 신호가 보일 때 끝 시각을 받아야 "가는 구간만" 등록이 생기지 않는다. 카드는 실행 전에 문자열로, 실행부는 좌표로 판정한다(`:525`·`:1812`, 감사 1회차 D3) — 이름은 다르고 좌표만 같은 경우('집'/'우리집')는 머무는 요청 카드가 아니어서 수단을 묻고 반복 실행부는 구간을 만들지 않는다(코드 주석 `:716-719`, 잔여 위험). 주석 절은 `:1869`가 후보의 둘째 사용처(`:1812`) 때문에 거짓이 됐기 때문이다(§1.4, 감사 1회차 D7). 점심 인자 버림은 H-10, `:1814`의 "끝나는 시각을 return_time에 넣어 … 다시 호출해"는 모델이 끝 시각을 스스로 채우게 만드는 문구다(가드 재질문 문구 원칙 — 공용 메모리 `feedback_besir_guard_messages`). 기간 이중 질문(H-9)은 D-8이 다루지 않아 잔여 위험으로 받아들인다(해석 I-5 확정).
+
+- **REQ-011 (State-driven · Event-driven)**: While the most recent recurrence of this conversation (`lastRecurrenceId`) is a staying group, when `update_recurring_schedule` arrives without a series number asking to change mode, buffer, or notification lead, the tool result shall state that the group has no travel legs to change and shall not claim the group may have been deleted. 근거: H-8. `lastRecurrenceId`는 마지막으로 만든 그룹을 가리키므로(`:1825`·`:1841`) 트리거를 "마지막 그룹이 머무는 반복일 때"로 좁혔다(감사 1회차 D16). 이 변경이 도달 가능하게 만든 잠복 경로다(공용 메모리 `feedback_besir_dormant_hazard`). `Shared/Store.swift`는 고치지 않는다(REQ-013).
+
+### 2.4 U-2 — 장소 검색 재오픈
+
+- **REQ-012 (State-driven)**: While the place-search editor is open on a place row that already has a value, no chip on that row shall render as selected and the current value shall remain visible as text on that row; the "searching" predicate shall be computed in one place, the chip rendering function `chip()` shall stay unchanged, and the change shall reach all four screens that use the shared card without per-screen code. 근거: §1.4 U-2. 생산자 둘(`:116`·`:122-123`)이 같은 술어를 읽어야 한다(계약 5). 네 화면은 `fieldRow` → `chip()`을 함께 거치므로 수리 자리는 공유 컴포넌트 하나다. 칩 렌더링의 단일 출처 `chip()`(`EditCardView.swift:265`)은 바꾸지 않는다. 게이트가 D-1 (a)(이 카드에 넣고, 강조를 끄고, "지금 고른 곳" 캡션)를 골랐다.
+
+### 2.5 범위 · 게이트 · 문서
+
+- **REQ-013 (Unwanted)**: The change shall not modify repository paths outside its declared set — in run, `Shared/AIAssistant.swift`, `Tools/GuardDriver.swift`, `Shared/EditCardView.swift` (D-1 (a)), the comment lines of `Shared/EditCard.swift` (D-6 (a)) and its `clearedKeys` stored property (sync round-1 D4 repair), the `.disabled(assistant.isThinking)` line on the new-conversation button of `Shared/AIChatView.swift` with the comment lines above it (sync round-2 E2), the run-lens reports `.moai/reports/t16/run-lens-*.md`, this SPEC directory (`progress.md` §E.2·§E.3, `spec.md` frontmatter `status`·`updated`), and root `plan.md` limited to plan-versus-reality updates for t16; in sync, `CHECKLIST.md`, root `plan.md`, this SPEC directory, the sync-lens reports `.moai/reports/t16/sync-lens-*.md` and the sync verdict `.moai/reports/t16/sync-verdict.md`, coordinate comments in `Tools/GuardDriver.swift`, and the `progress.md` files of SPEC-UIKIT-005 and SPEC-UIKIT-007, and, through `manager-spec` re-delegation, the citation lines of the SPEC-UIKIT-005 and SPEC-UIKIT-007 `spec.md`·`plan.md`·`acceptance.md` that REQ-015 names (including the `c5396b3` anchors) — with the plan-phase paths committed in the plan commit excepted (this SPEC directory, `.moai/reports/t16/plan-lens-ai-tooling.md`, `.moai/reports/t16/plan-lens-ui-design.md`, and `.moai/reports/plan-audit/SPEC-UIKIT-008-*`); and it shall not add a source file, change `proxy/` or `project.yml`, add a tool declaration, parameter key, or schema type, add an AI class, or weaken `isSamePlace`, the `resolveOrigin` fallback ladder, `sanitizeModelArgs`, or the `list_schedules` total count; code paths the candidate introduced that no caller reaches shall be removed. 근거: 계약 1·4·5와 `CLAUDE.md`의 "모델을 바꿨다고 이 방어들을 먼저 걷어내지 않는다". 새 소스 파일이 없으므로 `xcodegen generate`도 서명 계정 리셋도 없다. 렌즈 보고서 둘을 예외에 넣은 것은 오케스트레이터 결정이다 — 이 SPEC이 절 번호로 인용하는 연구 입력이 워크트리 폐기와 함께 사라지지 않게 plan 커밋에 넣는다(감사 1회차 D8). `Shared/AIChatView.swift`의 한 줄은 리드 원문 "E2 회귀 수리의 최소몫으로 run 디스패치가 지시한 1줄 — 리드 승인 아래 목록에 편입"에 따라 이 목록에 들었다(0.1.7). `sanitizeModelArgs`에 더해진 R1 값 필터(`echoedPlaceToken`)와 E1 복원절은 키 필터를 그대로 둔 채 덧붙인 것이라 약화가 아니다(AC-011 (5)). 후보 때문에 생긴 죽은 경로는 둘이다 — ① `resolveOrigin`의 `orDefault` 기본값 `false` 갈래: base에서는 `:1323`·`:1486`·`:1612`가 그 갈래를 불렀으나 후보가 셋을 `resolveOriginAdoption`으로 옮겨(`git show aa7b792:Shared/AIAssistant.swift | grep -n 'resolveOrigin('`) 남은 호출처가 `:2380`(`true`) 하나다. 없앨 것은 이 기본값 갈래뿐이고 `orDefault: true` 사다리(빈 값이면 집 → 현재 위치, `:2589-2593`)와 `resolveOriginAdoption`의 기본값 경로(`:1459`·`:1648`·`:1786`이 부른다)는 남긴다(감사 1회차 D20). ② 후보 카드 맥락 줄의 늘 빈 앞 항(`:805`). 같은 튜플 타입이 다섯 자리에 반복되는 것(`grep -c '(key: String, query: String, candidates: \[Place\])'` → AIAssistant 4 · GuardDriver 1)은 정리 **권고**다(감사 1회차 D15). SPEC-UIKIT-005/007의 `spec.md`·`plan.md`·`acceptance.md` 본문은 sync 레인이 직접 고치지 않는다(REQ-015).
+
+- **REQ-014 (Event-driven)**: When the card is about to leave run, and again when it is about to leave sync, the lane that judges the phase shall itself run, on the final tree, the guard driver by the `CLAUDE.md` recipe (exit 0, a pass count T equal to 241 minus the assertions it removed plus the assertions it added, with the removed and added assertion names recorded in §E.2, no ✗ line, the real-data comparison passed), iOS and macOS builds with fresh DerivedData (`BUILD SUCCEEDED`, zero warnings that name a `.swift` file), the driver compile with a warning set identical to the base's after normalizing line and column numbers (the base's `grep -c 'warning:'` is 24 lines — 12 diagnostics plus 12 caret-context lines, all MapKit·CoreLocation deprecations in `DirectionsService.swift`·`LocationManager.swift`), and `cd proxy && npm test` with every test passing; and it shall measure the per-request fixed token cost by the root `plan.md:230-233` method on `aa7b792` and on the final tree as one pair, keep both outputs under `.moai/state/verify/`, replace the root `plan.md:230` baseline only with that pair's base value, and report the increment. 근거: 이 세션의 게이트는 `e1a40a6`에서만 관측됐다. 프록시 테스트는 `git diff --name-only aa7b792 e1a40a6`에 `proxy/`가 없어 돌리지 않았다 — 갭이다. 토큰은 증분(+122~123)만 같은 방법으로 두 번 쟀고, 절대값은 `plan.md:230`의 4,425와 이전 기록의 base 3,824가 어긋난 채다. 이전 측정 산출물은 `/tmp`에 있어 보존 위치를 벗어났다(ai 렌즈 §B).
+
+- **REQ-015 (Event-driven)**: When sync runs, it shall re-map every live line citation of `Shared/AIAssistant.swift` and `Tools/GuardDriver.swift` in `CHECKLIST.md`, root `plan.md`, and the SPEC-UIKIT-005 and SPEC-UIKIT-007 documents to the final tree by atomic token replacement — a ledger row per citation token (document, old token, the source text it pointed to, new token), each target located in the final tree by content fingerprint rather than by line offset, whole tokens replaced including range ends and bare `:N` tokens resolved through the row's default file — and shall prove zero residue by comparing the ledger's strings against the final tree together with a positive control that shows the comparison catches a planted miss; a citation whose target text this card removed or rewrote shall stay in the ledger as a "대상 제거·재작성" row that records the new text and the REQ or commit that changed it, and is excluded from the byte comparison, and where the citing sentence transcribed the old target's content, living documents (root `plan.md`, `CHECKLIST.md`) shall update that sentence to match while completed SPEC bodies keep it and record it in the ledger; citations explicitly anchored to a named historical commit shall stay unchanged, and a citation in a completed SPEC that describes the state before that SPEC's own fix shall not be re-mapped but shall carry an explicit anchor to that SPEC's base commit — for SPEC-UIKIT-005 that is `c5396b3`, covering its AC-005 Given (`:748`·`:1297`·`:1613`·`:2322`·`:2371`·`:2393`) and its AC-009 steps 7·9 (`:1297`·`:1613`). 근거: 오프셋이 구간마다 다르다 — `:494`까지는 그대로이고 그 뒤는 35개 헝크를 따라 제각각 밀린다(§0 표). 파일명이 붙은 인용 토큰 수는 `grep -o 'AIAssistant\(\.swift\)\{0,1\}:[0-9]\{1,4\}' <문서> \| wc -l`로 `CHECKLIST.md` 14 · 루트 `plan.md` 4 · SPEC-UIKIT-005 `spec.md` 6·`plan.md` 1·`progress.md` 3 · SPEC-UIKIT-007 `spec.md` 1이고, `GuardDriver` 파일명 토큰은 같은 명령으로 `CHECKLIST.md` **1**(`:619`의 `GuardDriver.swift:264`), 나머지 0이다 — 그 1건도 후보가 이미 밀었다(base `:264` = `setenv("CFFIXED_USER_HOME", …)`, head에서는 `:275`, 감사 1회차 D9). SPEC-UIKIT-005의 여섯 좌표는 `c5396b3`에서는 서술과 맞고 `aa7b792`에서는 모두 다른 줄이며, 그중 `:748`의 원문(`confirmedPlaces[place.name] = place`)은 005의 수리로 사라졌다 — 지문으로 찾을 대상이 없는 행이라 재사상하지 않고 고정한다(감사 1회차 D7). 이 SPEC의 스크립트 7·8번(`acceptance.md` § 시뮬레이터 스크립트)이 SPEC-UIKIT-005 AC-009 7·9번 단계를 현재 트리 기준으로 다시 적으므로 운영자는 005의 옛 좌표에 기대지 않는다. `:1869` 주석은 REQ-010이 고쳐 쓰므로 그 주석을 가리키는 루트 `plan.md:562`·`CHECKLIST.md:535`의 인용은 "대상 제거·재작성" 행이 된다. 파일명 없는 맨몸 `:N` 인용은 이 계수에 잡히지 않는다 — t15에서 파일명 계수 18이 실제 87이었다(공용 메모리 `feedback_besir_refactor_breaks_citations`). 완료된 SPEC-UIKIT-005/007의 `spec.md`·`plan.md`·`acceptance.md` 본문 인용은 sync가 원장을 만들고, 편집은 오케스트레이터가 `manager-spec`에 재위임한다(본문 소유권).
+
+## 3. 범위 밖
+
+### Out of Scope — `update_schedule`의 `new_place_query` (D-9 (a))
+
+- 수정 경로도 첫 결과를 그대로 채택한다(`Shared/AIAssistant.swift:2430-2431`). 저장된 데이터를 바꾸는 쓰기 경로라 U-4와 같은 부류다(ai 렌즈 §D 2).
+- 관측된 실패가 없고, 넣으면 보류 카드·확인 주입 조합이 수정 경로에 하나 더 생긴다. 게이트가 D-9 (a)(등록 경로 셋만)를 골랐다.
+
+### Out of Scope — O-1 `Store.modifyEvent`의 출발지 대체 (카드 C11)
+
+- `CHECKLIST.md` C7 항목(`:530-535`)이 t7발 O-1 가설을 함께 적었으나 카드 t16 본문에는 없다. `day-close-20260924.md` §6 8b가 이미 카드 C11로 배치했다.
+- 넣으면 `Shared/Store.swift`가 크게 고치는 셋째 소스 파일이 된다 — 한 줄 가드가 아니라 동작 수리이고, 이 카드의 범위는 `AIAssistant`의 장소 해석이며, 그 일은 카드 C11이 이미 맡았다(0.1.7에서 파일 한도의 읽기에 맞춰 근거를 고쳐 썼다).
+
+### Out of Scope — 점심 장소의 되묻기
+
+- `lunch_place_query`는 후보 카드를 열지 않고 첫 결과를 쓴다(`:1876-1878` 주석 — 실패·틀린 지점이 결과 문구에 이름으로 드러나고 통근 전체를 멈춰 물을 자리가 아니다). 이 경계를 유지한다(D-9 (a)).
+
+### Out of Scope — `isSamePlace`를 통근 반복의 0분 가드로 넓히기
+
+- 이 카드가 `isSamePlace`를 쓰는 것은 **머무는 요청을 가르는 데**뿐이다 — 반복 실행부(`:1812`)와, 머무는 요청 카드의 **확인 경로**(앱이 앵커와 고른 출발지 둘 다의 좌표를 이미 알 때만 — 고른 출발지가 활동 장소와 50 m 안이면 "이동 없음"으로 바꿔 싣는다, REQ-010 0.1.8). 출발지≈목적지인 통근 반복을 거절하는 가드나, 편도·왕복 활동 실행부의 0분 구간을 막는 일반 가드로 넓히지 않는다 — 이름은 다르고 좌표가 같은 편도 활동(`우리집`→`집`)은 가는 이동을 그대로 만든다(AC-008 (5) 양성 대조).
+- SPEC-UIKIT-005 `spec.md` §3("`isSamePlace` 가드의 적용 범위 확대 — 넓히지 않는다", `:237-240`)은 그 카드의 범위 판단이었다. 이 카드의 사용은 그 판단과 다른 목적이라 충돌하지 않으며, 거짓이 된 `:1869` 주석은 REQ-010이 고친다.
+
+### Out of Scope — 브랜드 단일어의 채택 한계
+
+- '스타벅스' 한 낱말은 어느 지점이 와도 "확실히 맞다"로 채택된다(ai A-1 (b) 표). 판정 술어의 설계 한계이며 같은 이름 줄(REQ-008)이 일부만 덮는다. 잔여 위험으로 기록한다.
+
+### Out of Scope — AI 카드의 가는/오는 이동 생성 줄 · 카드 시각 줄 (후속 카드 t30)
+
+- 운영자 결정 B-1(단일·반복 AI 카드에 활동 추가 카드와 같은 "가는/오는 이동 생성" 줄 — 반복이라는 점만 다르다)과 B-2 (b)(끝 시각을 카드의 시각 줄로)는 후속 카드 **t30**("C21 AI 카드 문법 통일", t17 C8 방향과 묶음)으로 옮겼다. 운영자 원문은 t30 카드 본문에 있다.
+- 이 카드에 넣지 않는 이유(0.1.5 비용 측정). 줄의 종류는 있지만(`EditCard.swift:119` 토글, `:165-169` 기준 없는 시각) 토글에 따라 줄을 넣고 빼는 멤버십은 수동 카드 화면에만 있다(`AddActivityView.swift:169-326`). AI 카드의 `choose`는 값만 적고(`AIAssistant.swift:871-875`),
+  확인은 모든 줄이 골라져야 풀리며(`EditCard.swift:240`), 확인 주입은 `askFields`가 다시 구한 키에만 싣는다(`AIAssistant.swift:1049-1051`). AI 카드는 기준 없는 시각 확정을 잇지 않았고(`AIChatView.swift:125-133`), 시각 편집기는 날짜까지 고른다(`EditCardView.swift:223-228`).
+  경로 A(멤버십을 `AIAssistant`에 옮겨 적기)는 같은 규칙을 두 곳에 둬 계약 5를 깬다. 경로 B(공유 코드로 빼기)는 무거운 파일이 넷(`AIAssistant`·`GuardDriver`·`EditCard`·`AddActivityView`)이라 한 Day 한도 끝에 닿고, 추정 LOC가 Tier M 상한(1000)을 넘을 가능성이 크다. 선언 키는 어느 경로에도 늘지 않는다.
+- 그래서 이 카드는 0.1.4의 경계 동작을 **중간 동작**으로 유지한다 — 한 번짜리는 편도, 끝 시각은 문장으로 되묻기(운영자 결정, 후속 카드 t30으로 이관).
+
+### Out of Scope — 끝 시각 카드 줄 · 머무는 반복 전용 도구 · 오는 편 질문
+
+- 끝 시각은 사용자에게 되묻는 문장으로 받는다(REQ-010, 해석 I-4 운영자 문구). 카드 줄로 묻는 일은 `EditField` 종류·`EditCard`·`EditCardView`·실행부가 함께 바뀌어 파일 한도를 넘는다(경계 B-2 — t30으로 이관). 전용 도구는 선언을 늘려 요청당 고정 토큰비를 올린다. 둘 다 D-8의 채택하지 않은 안(b)(c)이다.
+- 머무는 요청에서 다른 출발지를 고른 뒤 오는 편을 따로 묻는 줄은 두지 않는다. 오는 편 도착지를 두 도구에서 묻는 줄은 카드 전용 키(선언하지 않는 키 — 드라이버 (e) `Tools/GuardDriver.swift:763-769`)와 실행부 경로가 새로 필요해 이 카드의 크기를 넘는다. 선언 키는 늘지 않는다(0.1.5 측정) — 경계 B-1, 중간 동작으로 채택·t30으로 이관.
+
+### Out of Scope — Theme 대비 · VoiceOver 중복 낭독 · AI 호출 실패 폴백
+
+- 줄 이름(`Theme.faint`)이 캡션(`Theme.muted`)보다 흐린 대비(ui B2 — 밝은 모드 1.79:1)는 기존 후보 A5(Theme 고대비)의 몫이다. 이 카드가 근거를 더할 뿐 토큰을 바꾸지 않는다.
+- 줄 컨테이너 라벨과 자식 Text가 긴 캡션을 두 번 읽을 가능성(ui §2.4)은 실기기 확인 항목이다.
+- 뒤이은 AI 호출이 실패하면 모델용 도구 결과 문구가 말풍선에 그대로 보이는 폴백(`:385`)은 기존 패턴 전반의 문제다.
+
+### Out of Scope — U-1 편집 카드 통일 · U-3 대화 메모리
+
+- 각각 카드 C8(대형)·C9(장기)로 배치됐다(`day-close-20260924.md` §7).
+
+## 4. 결정 — 해소 (착수 승인 게이트, 2026-09-26)
+
+운영자가 정했고 칸반 리드가 전했다(이 plan 세션은 운영자의 답을 직접 보지 않았다): **D-1 (a)** U-2를 이 카드에 캡션과 함께 · **D-2 (a)** 이름만 판정 · **D-3 (a)** 비운 키를 기록하고
+확인 때 주입 · **D-4 (a)** 첫 호출만 카드에 · **D-5 (a)** 후보 카드가 서면 턴 종료 · **D-6 (a)** 카드가 뜰 때 편집기 열기 · **D-7 (a)** 왕복이면 늘 묻기 · **D-8** 운영자 자신의 문구(출발지를 묻고
+"이동 없음"은 사용자의 선택으로만 확정) · **D-9 (a)** 등록 경로 셋만 · **D-10 (a)** 제안문 원문 · **Tier M** 유지. 그래서 결정 조건이 붙었던 REQ(002·004·005·006·009·010·012·013)를 채택안
+하나의 문장으로 확정했다. 원문·결정 기록·채택 문안은 `plan.md` §2에, D-8 번역의 해석 I-1~I-6과 그 확인 결과(2026-09-26, 리드 전달 — I-3 거부, I-4 운영자 문구)는 `progress.md` §E.1에 있다.
+
+## 5. 관련 문서
+
+- 칸반 카드 **t16** 본문(`moai todo`) · `.moai/reports/day-close-20260924.md` §6 #21·#23·#24, §7 C7
+- 연구 입력: `.moai/reports/t16/plan-lens-ai-tooling.md` · `.moai/reports/t16/plan-lens-ui-design.md` · 후보의 자기 기록 `.moai/reports/t16/progress.md`(무변경)
+- [SPEC-UIKIT-005](../SPEC-UIKIT-005/spec.md) — 확정 장소의 이름-키 충돌 수리(B안). `acceptance.md` AC-009가 이 카드 7·9번 관측의 출처다
+- [SPEC-UIKIT-007](../SPEC-UIKIT-007/spec.md) — 편집 시트가 저장된 출발지를 보여주게 된 수리. 출발지 판정을 편집 시트로 하는 근거다
+- [SPEC-UIKIT-003](../SPEC-UIKIT-003/spec.md) — AC-010 2단계가 U-2가 관측된 자리다
+- [SPEC-ASK-001](../SPEC-ASK-001/spec.md) — 앱 주도 되묻기 카드의 원 설계
+
+🗿 MoAI
