@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-008
 title: "AI 카드의 장소 해석 UX — 첫 검색 결과 무확인 채택(U-4)·되묻기 장소 줄(AC-009 7·9)·왕복 가는 편 줄·머무는 요청·검색 재오픈 강조(U-2)"
 version: "0.1.10"
-status: in-progress
+status: completed
 created: "2026-09-26"
 updated: "2026-09-29"
 author: "manager-spec"

@@ -691,6 +691,7 @@ N3의 drvCheck 신설 한 줄이 유일한 줄 수 변화다. L-1·N1·N2는 기
   AE 31단언(C-1 세 단언 자체 완결 · AD-E5=3). 원장 8fb23a0 재계산·**적용**(178토큰) + 수동 재작성(A3·G4·G9·G10·G17·O3·O4·P3·이월 7번·plan 후속 14 grep·Phase 1.7 t16 행) —
   검증 존재 180/180 · 내용 295/295 · 양성 대조 1 검출. 판정문 §R6, 증거 `t16-sync/r6/`·`t16/gate10-*`. 잔여: 시뮬레이터 AC-014·015(사람 전용, 이월)·005 앵커(manager-spec 진행)·N8(§E.3 기록).
 - **3-phase close(2026-09-29)**: 아래 FAIL 기록 1~5차를 거쳐 6차 PASS로 plan → run → sync 완주. 본 커밋이 `implemented → completed` 전이를 싣는다(단일 sync 커밋).
+- 커밋 주체 기록(AC-011 (1)): 005 `c5396b3` 앵커 표기는 **`manager-spec` 재위임** 커밋 `e8dbd85`(2026-09-29)로 들어왔다 — 6좌표 전부 `git show c5396b3` 본문 대조로 실측 확인(AC-013 (5)).
 
 - **sync 1차 판정 — FAIL(2026-09-28, sync 레인)**: 코드 차단 4(D1~D4) · 증거 결손 1(D5 — AC-008 (5) `우리집` 양성 대조 단언 부재).
   판정문 `.moai/reports/t16/sync-verdict.md`, 렌즈 원문 `.moai/reports/t16/sync-lens-{code-safety,ai-tooling}.md`, 증거 `.moai/state/verify/t16-sync/`.
