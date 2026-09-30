@@ -43,7 +43,6 @@ graph TD
 ```mermaid
 graph LR
     Fetch["fetch(request, env)"] --> AIChat["/ai/chat → proxyOpenAI / proxyWorkersAI"]
-    Fetch --> Legacy["/claude/messages → proxyClaude (미사용)"]
     Fetch --> KDir["/kakao/directions → proxyKakaoDirections"]
     Fetch --> KKey["/kakao/local/keyword → proxyKakaoKeyword"]
     Fetch --> Od["/odsay/* → proxyOdsay"]

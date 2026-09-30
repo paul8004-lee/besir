@@ -14,7 +14,6 @@ compatibility_date = "2024-11-01"
 #   wrangler secret put KAKAO_REST_KEY
 #   wrangler secret put ODSAY_KEY
 #   wrangler secret put OPENAI_KEY      # 대화형 일정 등록(/ai/chat) 기본 백엔드 — 2026-09-12 도입
-#   wrangler secret put ANTHROPIC_KEY   # Claude 대화형 일정 등록용(현재 미사용)
 #   wrangler secret put APP_TOKEN
 #
 # (GEMINI_KEY는 2026-09-09 제거됨 — 위 주석 참고)

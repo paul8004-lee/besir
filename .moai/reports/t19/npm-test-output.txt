@@ -1,0 +1,13 @@
+
+> besir-proxy@0.1.0 test
+> node test/convert.test.mjs
+
+  ✓ system은 instructions로 빠지고 input에는 안 들어간다
+  ✓ call_id가 대화 전체에서 유일하고 호출↔결과가 순서대로 짝지어진다
+  ✓ 텍스트+도구호출이 섞인 model 턴은 아이템 두 개로 쪼개지되 순서는 유지된다
+  ✓ 첨부 이미지는 input_image, 본문은 input_text
+  ✓ 도구 스키마는 평평하게 펴지고 type이 소문자가 된다
+  ✓ 응답 역변환: reasoning 아이템은 버리고 나머지 순서는 유지
+  ✓ 인자 JSON이 깨져도 던지지 않고 빈 인자로 넘긴다
+
+7/7 통과
