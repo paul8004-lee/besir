@@ -7,6 +7,10 @@
 
 위치와 일정을 묶어주는 iOS·macOS 앱. 사업계획서상 다섯 서비스를 순서대로 붙여나간다.
 
+> **⚠️ 2026-09-30부터 iOS 전용으로 개발·검증한다**(운영자 지시). macOS 코드는 지우지 않고
+> 보존하되, 새 맥 전용 코드를 만들지 않고 맥 빌드·검증도 하지 않는다. 맥 앱은 iOS 앱 완성 후
+> 한 번에 제작한다.
+
 | 서비스 | 내용 | 상태 |
 |---|---|---|
 | be on-time sir | 일정·이동시간·출발알람·캘린더 동기화 | 완성, 고도화 중 |
@@ -50,7 +54,8 @@ xcodegen generate
 
 # 빌드
 xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build
-xcodebuild -scheme besir-macOS -derivedDataPath build build
+# 2026-09-30 iOS 전용 전환으로 macOS 빌드는 돌리지 않는다(참고용 원문)
+# xcodebuild -scheme besir-macOS -derivedDataPath build build
 
 # 프록시
 cd proxy && npm test && npx wrangler deploy
@@ -118,7 +123,7 @@ besir 작업은 명령 이름(`/moai run`이든 자연어 요청이든)이 아�
    이전 회차의 ❌/⚠️가 해결됐는지 갱신한다.
 2. **코드 버그 검사** — `await` 앞뒤로 인덱스를 재사용하는 곳, 실패가 조용히 묻히는
    fire-and-forget `Task { try? ... }`, 무한 증가하는 상태와 외부 한도(iOS 알림 **64건**, API 일일 할당량),
-   강제 언래핑, 경계 조건, iOS·macOS 양쪽 **무경고** 빌드.
+   강제 언래핑, 경계 조건, iOS **무경고** 빌드(macOS는 2026-09-30부터 검증 중단 — 코드 보존).
 3. **간결성 검사** — 복제된 계산, 죽은 코드, 루프 안의 반복 저장/네트워크 호출, 일을 너무 많이 하는 함수.
    발견하면 **그 자리에서 정리**하고 무엇을 왜 합쳤는지 기록한다.
 4. 구멍을 **해결한 뒤** 실기기에 배포하고, 사용자에게 체크리스트와 함께
