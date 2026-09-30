@@ -8,7 +8,6 @@
  *   - KAKAO_REST_KEY : 카카오모빌리티 길찾기용 REST 키
  *   - ODSAY_KEY      : ODsay API 키
  *   - OPENAI_KEY     : OpenAI API 키 — 대화형 일정 등록(/ai/chat)의 기본 백엔드
- *   - ANTHROPIC_KEY  : Claude(Anthropic) API 키 — (구) LLM 대화형 일정 등록용, 현재 미사용
  *   - APP_TOKEN      : 앱이 보내야 하는 토큰(이게 없으면 거부). 남용 차단·식별용.
  *
  * (구) GEMINI_KEY 시크릿·Gemini 연동은 2026-09-09 제거됨: Cloudflare Worker가 전 세계
@@ -17,13 +16,14 @@
  * 그 뒤 쓰던 Workers AI 바인딩(env.AI, wrangler.toml [ai])도 2026-09-13 제거됨 — luna로
  * 확정돼 비교 기준선이 필요 없어졌다. OpenAI는 데이터센터 IP를 차단하지 않아 Gemini 때의
  * 문제가 재발하지 않는다. 되살릴 일이 생기면 이 시점의 커밋을 참고한다.
+ * Anthropic 시크릿과 Claude 중계 라우트는 2026-09-30 제거됨: 앱의 호출이
+ * 0건이었다(/ai/chat만 사용). 되살릴 일이 생기면 이 시점의 커밋을 참고한다.
  *
  * 라우트:
  *   GET  /kakao/directions?origin=lng,lat&destination=lng,lat[&priority=RECOMMEND]
  *   GET  /kakao/local/keyword?query=&size=&category_group_code=&x=&y=&radius=&sort=
  *   GET  /odsay/searchPubTransPathT?SX=&SY=&EX=&EY=
  *   GET  /odsay/loadLane?mapObject=
- *   POST /claude/messages   (본문을 Anthropic /v1/messages 로 중계, 키는 서버가 붙임)
  *   POST /ai/chat           (Gemini generateContent 형식의 본문을 받아 OpenAI로 실행하고
  *                            같은 Gemini 형식 응답으로 돌려준다 — 앱은 백엔드가 뭐든 몰라도 됨)
  *
@@ -33,7 +33,6 @@
 const KAKAO_DIRECTIONS = "https://apis-navi.kakaomobility.com/v1/directions";
 const KAKAO_LOCAL_KEYWORD = "https://dapi.kakao.com/v2/local/search/keyword.json";
 const ODSAY_BASE = "https://api.odsay.com/v1/api";
-const ANTHROPIC_MESSAGES = "https://api.anthropic.com/v1/messages";
 const OPENAI_RESPONSES = "https://api.openai.com/v1/responses";
 
 // 대화형 일정 등록의 기본 모델(2026-09-12 전환).
@@ -87,14 +86,6 @@ export default {
     }
 
     try {
-      // Claude 대화형 일정 등록 (POST) — 구버전, 현재 앱은 Gemini 사용.
-      if (path === "/claude/messages") {
-        if (request.method !== "POST") {
-          return json(405, { error: "method_not_allowed" });
-        }
-        return await proxyClaude(request, env);
-      }
-
       // AI 대화형 일정 등록 (POST) — OpenAI 실행, Gemini 형식으로 요청/응답.
       if (path === "/ai/chat") {
         if (request.method !== "POST") {
@@ -135,29 +126,11 @@ export default {
 // 전부 지운다.
 function redactSecrets(text, env) {
   let out = text;
-  for (const key of ["KAKAO_REST_KEY", "ODSAY_KEY", "OPENAI_KEY", "ANTHROPIC_KEY", "APP_TOKEN"]) {
+  for (const key of ["KAKAO_REST_KEY", "ODSAY_KEY", "OPENAI_KEY", "APP_TOKEN"]) {
     const value = env[key];
     if (value) out = out.split(value).join("[REDACTED]");
   }
   return out;
-}
-
-// Anthropic /v1/messages 로 본문을 그대로 중계한다. API 키는 서버(시크릿)가 붙인다.
-async function proxyClaude(request, env) {
-  if (!env.ANTHROPIC_KEY) {
-    return json(500, { error: "missing_anthropic_key" });
-  }
-  const body = await request.text();
-  const resp = await fetch(ANTHROPIC_MESSAGES, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": env.ANTHROPIC_KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body,
-  });
-  return passthrough(resp);
 }
 
 // Gemini generateContent 형식 → OpenAI Responses 형식(instructions/input/tools).

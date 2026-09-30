@@ -45,7 +45,7 @@ struct AppConfig: Codable {
         return req
     }
 
-    /// 프록시 POST 요청을 만든다(예: Claude 대화형 일정 등록 `/claude/messages`).
+    /// 프록시 POST 요청을 만든다(예: 대화형 일정 등록 `/ai/chat`).
     func proxyPOSTRequest(_ path: String, body: Data) -> URLRequest? {
         let base = proxyBaseURL.trimmingCharacters(in: .whitespaces)
         guard hasProxy, var comps = URLComponents(string: base) else { return nil }
