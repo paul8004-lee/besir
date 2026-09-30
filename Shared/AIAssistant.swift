@@ -643,7 +643,7 @@ final class AIAssistant: ObservableObject {
     /// 세 자리가 서로 다른 말을 하게 된다).
     private func originField(unknown: String? = nil) -> AskField {
         var options = store.favorites.map { AskField.Option(label: $0.label, value: $0.label) }
-        options.append(.init(label: "현재 위치", value: Self.currentLocationToken))
+        options.append(Self.tokenChip(Self.currentLocationToken))
         return .init(key: "origin_query", kind: .place, label: "출발지",
                      options: options, allowsCustom: true,
                      note: unknown.map(Self.unknownPlaceNote))
@@ -697,10 +697,10 @@ final class AIAssistant: ObservableObject {
     /// 흘러가는 것과 같은 방식이라 값이 비었는지 토큰인지는 실행부만 구분하면 된다.
     private func outboundOriginField(unknown: String? = nil) -> AskField {
         var options = store.favorites.map { AskField.Option(label: $0.label, value: $0.label) }
-        options.append(.init(label: "현재 위치", value: Self.currentLocationToken))
+        options.append(Self.tokenChip(Self.currentLocationToken))
         // 탈출 칩은 **모델이 비워 보냈을 때만** 붙인다 — 사용자가 출발지를 실제로 말한 호출(unknown)
         // 에서는 가는 편을 만들 의도가 이미 분명해서, 지우는 선택지를 먼저 내밀 자리가 아니다.
-        if unknown == nil { options.append(.init(label: "가는 편 없음", value: Self.noOutboundToken)) }
+        if unknown == nil { options.append(Self.tokenChip(Self.noOutboundToken)) }
         return .init(key: "travel_from_query", kind: .place, label: "가는 편 출발지",
                      options: options, allowsCustom: true,
                      note: unknown.map(Self.unknownPlaceNote))
@@ -757,7 +757,11 @@ final class AIAssistant: ObservableObject {
     /// 지점으로 무너질 일이 없고, 일반명사는 이미 "못 푸는 값" 줄로 따로 뜬다(그 줄의 캡션과
     /// 이 판정이 같은 목록을 보게 unresolvedGenericPlace를 그대로 쓴다 — 계약 5).
     private func searchBoundPlace(_ q: String) -> Bool {
-        !store.favorites.contains { $0.label.caseInsensitiveCompare(q) == .orderedSame }
+        // 잠복 경로 폐쇄: 내부 토큰이 두 장소 줄에 공존하면 repeatedSearchQuery가 그대로
+        // 돌려보내 sameNamePlaceNote가 토큰을 raw로 캡션에 삽입한다. 지금은 도달 불가지만
+        // 네 라운드의 누출 이력상 '도달 불가'가 영구적이라는 보장이 없어 여기서 끊는다.
+        !Self.isInternalPlaceToken(q)
+            && !store.favorites.contains { $0.label.caseInsensitiveCompare(q) == .orderedSame }
             && confirmedPlaces[q] == nil
             && !unresolvedGenericPlace(q)
     }
@@ -817,8 +821,8 @@ final class AIAssistant: ObservableObject {
     /// 선택으로만 확정된다(D-8): 미리 선택된 채 시작하지 않는다(chosen은 nil로 둔다).
     private func stayingOriginField(key: String, label: String, modelValue: String?) -> AskField {
         var options = store.favorites.map { AskField.Option(label: $0.label, value: $0.label) }
-        options.append(.init(label: "현재 위치", value: Self.currentLocationToken))
-        options.append(.init(label: "이동 없음", value: Self.noTravelToken))
+        options.append(Self.tokenChip(Self.currentLocationToken))
+        options.append(Self.tokenChip(Self.noTravelToken))
         return .init(key: key, kind: .place, label: label, options: options, allowsCustom: true,
                      note: modelValue.map(Self.stayingOriginNote))
     }
@@ -3000,6 +3004,12 @@ final class AIAssistant: ObservableObject {
         case noTravelToken: return "이동 없음"
         default: return value
         }
+    }
+
+    /// 토큰 칩의 라벨·값 한 쌍 — 문구는 displayText가 단일 출처다. 칩 라벨과 캡션이 각자
+    /// 문구를 쥐면 한쪽만 고쳐지는 날 chosenLine과 캡션이 어긋난다(계약 5).
+    private static func tokenChip(_ token: String) -> AskField.Option {
+        .init(label: displayText(token), value: token)
     }
 
     /// 모델 인자 **값**의 에코 판정 — 문자열이 아니면 토큰일 수 없다. 양끝 공백은 벗고 재는데,
