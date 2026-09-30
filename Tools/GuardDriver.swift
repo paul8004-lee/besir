@@ -3326,6 +3326,12 @@ struct Drv {
                           store.activities.filter { $0.title == "AE-C1로비점심" }.count == 1
                               && store.events.filter { $0.title == "AE-C1로비점심" }.count == 1,
                           "acts=\(store.activities.filter { $0.title == "AE-C1로비점심" }.count) legs=\(store.events.filter { $0.title == "AE-C1로비점심" }.count) reply=\(reply.prefix(70))")
+            // 아웃바운드 히스토리 에코 — 최종 확인이 토큰 인자를 실은 채 모델 턴으로 contents에
+            // 남긴다(설계 속성, 인바운드 정화 R1이 방어). 이 경로가 조용히 바뀌는지 감시한다.
+            ae11.drvCheck("AE-C-1 아웃바운드 히스토리 에코 — 고른 토큰이 다음 요청 인자에 실린다",
+                          (ae11.drvLastCallArgs()["travel_from_query"] as? String)
+                              == AIAssistant.drvCurrentLocationToken(),
+                          "out=\(ae11.drvLastCallArgs()["travel_from_query"] ?? "nil")")
         } else { ae11.drvCheck("AE-C-1 카드가 세워진다", false, "ask=nil") }
         store.activities = []
         store.events = []
