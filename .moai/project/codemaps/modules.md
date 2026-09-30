@@ -48,7 +48,6 @@
 | `toResponsesRequest` / `toOpenAIRequest` | Gemini→OpenAI 요청 변환(두 가지 OpenAI API 형태) |
 | `responsesToGeminiShape` / `toGeminiShape` | 역변환(OpenAI→Gemini) |
 | `proxyOpenAI` / `proxyWorkersAI` | 백엔드 호출자 |
-| `proxyClaude` | 레거시, 현재 미사용 |
 | `proxyKakaoDirections` / `proxyKakaoKeyword` / `proxyOdsay` | 카카오/ODsay 패스스루(서버 쪽에서 키 주입) |
 | `redactSecrets` | 에러 본문에서 비밀값 제거 |
 | `lowercaseSchemaTypes` | Gemini `"STRING"` → OpenAI `"string"` 스키마 타입 정규화 |

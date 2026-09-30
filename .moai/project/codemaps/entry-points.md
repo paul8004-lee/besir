@@ -25,7 +25,6 @@
 | 경로 | 처리 |
 |---|---|
 | `POST /ai/chat` | 메인 경로 — `proxyOpenAI` 또는 `proxyWorkersAI`로 분기 |
-| `POST /claude/messages` | 레거시, 현재 미사용 |
 | `GET /kakao/directions` | `proxyKakaoDirections` |
 | `GET /kakao/local/keyword` | `proxyKakaoKeyword` |
 | `GET /odsay/*` | `proxyOdsay` |
