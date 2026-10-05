@@ -267,7 +267,7 @@ _<pending run-phase>_
 | 카드 | card_base_sha | 무엇의 커밋인가 |
 |---|---|---|
 | MA (t17-a) | `42065af` | run 레인 착수 시 `git rev-parse --short HEAD`(2026-10-05) — plan 산출 커밋(0.1.4) 위. 워크트리 분기점은 `b2c3987`이고 그 위의 plan 커밋 둘(e7e34f6·42065af)은 문서 전용이라 MA의 코드 기준은 이 커밋이다 |
-| MB (t17-b) | _<pending run-phase>_ | _<pending run-phase>_ |
+| MB (t17-b) | `61d84b4` | run 레인 MB 착수 시 `git rev-parse --short HEAD`(2026-10-05) — MA 완료 커밋(§E.2 A5 게이트 표) 위 |
 | MC (t17-c) | _<pending run-phase>_ | _<pending run-phase>_ |
 
 ### MA(t17-a) A1 — 재현·특성화(드라이버만)
@@ -382,6 +382,29 @@ AF-010-04 도달 기록 줄 원문(이 실행, 온라인):
 | 누적 불변식(AC-019, 기준 `b2c3987`) | (1) 금지 경로 name-only · (3) 추가 줄 색 직접 사용 파이프 · (4) `ScheduleAnchor` 케이스 · (6) `#if os` 집합 diff(`os-base.txt`·`os-head.txt`) | (1) **0** · (3) **0** + 양성 대조(심은 `+ .foregroundStyle(.gray)` 한 줄 → **1**, 잡힘) · (4) **1**(기준과 같음) · (6) **0** |
 
 MA(t17-a) 완료 요약: 재현 5건(A1) → 수리·진입점·조회(A2–A4) → 전 단언 ✓(424/424) → 게이트 통과 → code-safety 결함 0(경고 2건은 MB 도달 가능성이 생기는 순간의 몫으로 이월 — `### MA(t17-a) code-safety 검사(하네스)` 소절 참조). 커밋: `021f9fd`(A1) → `f87428b`(Store) → `56bd095`(AF절 완성) → 이 문서 커밋(아래).
+
+### MB(t17-b) B1·B2 — 구간 줄 문법 추출 · 생성 카드 전환
+
+카드 기준 `61d84b4` · 커밋 **B1 `d1b8323`**(Shared/EditCard.swift + Tools/GuardDriver.swift) · **B2**(Shared/AddActivityView.swift + 이 문서). 고친 파일 셋: `Shared/EditCard.swift`·`Shared/AddActivityView.swift`·`Tools/GuardDriver.swift`·이 문서(`git diff --name-only 61d84b4 HEAD -- . ':!.moai/specs/SPEC-UIKIT-009' ':!.moai/reports'`로 최종 확인).
+
+**B1이 만든 것(EditCard.swift, SwiftUI-free — `import SwiftUI` 0)**:
+
+- `LegRowKeys` — 아홉 키의 정적 상수 표 + `allKeys` 집합. 키 리터럴은 이 표에만 산다(AC-006 (9)). t30 사상 어댑터는 만들지 않았다(REQ-007 — t30 몫).
+- `LegCardForm`(@MainActor struct) — `card: EditCard`·`confirmedPlaces: [UUID: Place]`·`favoriteOptions`/`favoritePlaces`(즐겨찾기 칩 옵션·씨앗)·기억값 아홉을 한 몸으로. 전이 `choose(field:value:place:)`(생성 카드의 choose 네 분기 + 공통 몸통을 글자 단위로 이식 — location_query·outbound_enabled·return_enabled·notify_enabled, 줄 삽입 위치·멤버십 가드·기억 규칙 그대로), 헬퍼(rememberTravelValues·rememberOutboundOrigin·rememberReturnTo·reseed·forgetPlaces·ensureNotifyRows·removeNotifyRows), 줄 공장 다섯(legToggleRow·outboundRows·returnRows·notifyToggleRow·notifyLeadRow)을 private로 함께 둠. 라벨·옵션 문구는 한 글자도 안 바꿨다(같은 문법이 목적 — AC-006 (2)).
+- B1 커밋 시점에는 AddActivityView를 한 줄도 고치지 않았다(빌더가 잠시 중복으로 공존 — B2에서 제거).
+
+**AG절(Tools/GuardDriver.swift)**: AF절 뒤·마지막 불변식 backstop 앞에 신설. 단언 5개(전부 기대 ✓, AC-006 (4)–(8) 대응): `AG-006-01`(실제 장소 → 토글 둘이 end_iso 바로 뒤 "false") · `AG-006-02`(가는/오는 편 켜기 → 줄 셋·둘 + 알림 둘 한 번, 재탭 중복 없음) · `AG-006-03`(껐다 켜면 수단·여유·이름·좌표 부활 — 좌표는 새 줄 신원에) · `AG-006-04`(구간 줄에 .datetime 없음) · `AG-006-05`(장소 지우기 → 아홉 키 전부 제거). Store을 건드리지 않아 결정적이다. 기존 AF 67 라벨은 하나도 빼지 않았다.
+
+**B2가 바꾼 것(AddActivityView.swift)**: `@State card`·`confirmedPlaces`·`favoritePlaces`·기억값 @State 9 → `@State private var form: LegCardForm?` 하나. `choose`는 `form?.choose(...)` 위임 한 줄, `chooseTimePlain`·`submitCustom`·`setLookup`은 `form.card`를 제자리에서 고치고, `save()`는 아홉 키를 전부 `LegRowKeys` 상수로 읽는다(뷰에 키 리터럴 0 — AC-006 (9)). 빌더 5·기억값 헬퍼 일곱·`chosenIn(_:_:)`의 카드 인자형을 제거. saving 패턴·PlaceField·placeDebounce·즐겨찾기 칩은 그대로다.
+
+**게이트(이 레인이 직접 실행)**:
+
+- 드라이버 컴파일(B1 트리 `d1b8323`): CLAUDE.md의 가드 컴파일 명령 → **exit 0**(`.moai/state/verify/t17/mb12-driver-compile.log`). 경고 정규화 집합(같은 sed 파이프라인)이 기준(`a2-driver-compile.log`) 24줄과 `diff` exit 0 — 새 경고 0.
+- 드라이버 실행(B1 트리): `/tmp/gd-b1 > .moai/state/verify/t17/mb12-driver-run.log 2>&1` → **exit 0 · ✓ 424+5 = 429 · ✗ 0** · P/T 줄 원문: `429/429 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 샌드박스 잔여 없음(`ls -d $TMPDIR/besir-gd-*` 무출력). AG 라벨 5줄 전부 ✓(로그 `:499-503`). **B2 시점 재실행은 생략** — 드라이버 컴파일 집합이 `AddActivityView.swift`를 컴파일하지 않으므로 B1 시점 실행이 최종 트리의 드라이버 관측 그대로다(EditCard·GuardDriver는 B1 이후 불변).
+- iOS 빌드(B2 뒤): `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t17/dd build` → **BUILD SUCCEEDED(exit 0)**(`.moai/state/verify/t17/mb12-ios-build.log:235`) · 경고 `grep 'warning:' | grep -v 'Metadata extraction skipped' | wc -l` = **0**(총 1은 툴체인 안내).
+- AC-006 grep 넷: (1) 빌더 `grep -c 'private func legToggleRow\|…' Shared/AddActivityView.swift` = **0**(기준 5) · (2) 여섯 문구 전부 저장소에서 1회·소재 `Shared/EditCard.swift` · (3) `grep -c 'import SwiftUI' Shared/EditCard.swift` = **0** · (9) 아홉 키 `grep -c … Shared/AddActivityView.swift Shared/ActivityDetailView.swift` = **0**·**0**(기준 58·0), `Shared/EditCard.swift`의 표 `:256-264`에 각 1회.
+
+AG 라벨 목록: AG-006-01 · AG-006-02 · AG-006-03 · AG-006-04 · AG-006-05(AC-006 (10)의 편집 카드 시드 비교는 B3가 시드를 만든 뒤 더한다 — 이 카드에서 만들지 않았다).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
