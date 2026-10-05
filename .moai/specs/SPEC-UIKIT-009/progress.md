@@ -248,6 +248,16 @@
 - t30과 `EditCard.swift`에서 접촉할 수 있다.
 - (0.1.3) 맥 타깃도 `Shared/`를 컴파일하는데 맥 빌드가 없다 — 세 카드의 `Shared/` 변경이 맥 타깃을 깨도 맥 앱을 만들 때까지 드러나지 않는다. 운영자가 받아들인 갭이다(방침 P-1).
 
+### plan-audit 4회차 (연장) — PASS
+
+- 근거: `.moai/reports/plan-audit/SPEC-UIKIT-009-review-4.md` — 판정 PASS · 0.91(통과선 0.85, 3회차 0.84에서 상승). review-3의 blocking D20~D24 전부 RESOLVED, 새 blocking 없음, must-pass 전부 통과(MP-4 해당 없음). 이 레인이 보고서 파일의 판정 줄을 직접 읽었다(`grep -n 'Verdict\|Overall Score'` → 5·6행 PASS · 0.91).
+- 연장 근거: 운영자 승인 2026-10-05(재시도 상한 3의 명시적 연장 — 칸반 리드 경유, 이 레인은 운영자의 말을 직접 보지 않았다).
+- 새 optional 결함 D30~D32(REQ-022 규범 문장의 경로 제외 절 없음 · REQ-023 근거 달력 점 문장의 마지막 경우 빠짐 · AC-019 (6)의 대리 지표 미설치 이유 · 경계표 (나)·단독 이동 행)와 이월 optional D25·D27~D29·D11은 열어 둔 채다. run 착수 전 정리는 필수가 아니다.
+- 이 PASS는 plan-phase 감사 판정이다. Implementation Kickoff Approval(plan→run 사람 게이트)은 이 레인이 대신하지 않는다.
+
+- plan_complete_at: 2026-10-05
+- plan_status: audit-ready
+
 ## §E.2 Run-phase Evidence
 
 _<pending run-phase>_
