@@ -1,0 +1,719 @@
+Command line invocation:
+    /Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild -scheme besir-iOS -destination "platform=iOS Simulator,name=iPhone 17 Pro" -derivedDataPath build clean build
+
+2026-10-06 00:05:19.214 xcodebuild[56389:20414965] [MT] IDERunDestination: Supported platforms for the buildables in the current scheme is empty.
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+** CLEAN SUCCEEDED **
+
+ComputePackagePrebuildTargetDependencyGraph
+
+Prepare packages
+
+CreateBuildRequest
+
+SendProjectDescription
+
+CreateBuildOperation
+
+ComputeTargetDependencyGraph
+note: Building targets in dependency order
+note: Target dependency graph (2 targets)
+    Target 'besir-iOS' in project 'besir'
+        ➜ Explicit dependency on target 'besirShare' in project 'besir'
+    Target 'besirShare' in project 'besir' (no dependencies)
+
+GatherProvisioningInputs
+
+CreateBuildDescription
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc --version
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -v -E -dM -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -x c -c /dev/null
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --print-asset-tag-combinations --output-format xml1 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/usr/bin/actool --version --output-format xml1
+
+ExecuteExternalTool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld -version_details
+
+Build description signature: 5ca5461db7b3908be5113bec80360c86
+Build description path: /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/XCBuildData/5ca5461db7b3908be5113bec80360c86.xcbuilddata
+ClangStatCache /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang-stat-cache /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/ExplicitPrecompiledModules
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/ExplicitPrecompiledModules
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator
+
+CreateBuildDirectory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    builtin-create-build-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-4f1f75bdf3c9355c576c46ba047d1dae-VFS-iphonesimulator/all-product-headers.yaml
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42/besir.xcodeproj
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-4f1f75bdf3c9355c576c46ba047d1dae-VFS-iphonesimulator/all-product-headers.yaml
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-target-headers.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-project-headers.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-project-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-non-framework-target-headers.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-non-framework-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyStaticMetadataFileList (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyMetadataFileList (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-generated-files.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-generated-files.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-own-target-headers.hmap (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-own-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/Entitlements-Simulated.plist (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/Entitlements-Simulated.plist
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibPath-normal-arm64.txt (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibPath-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugEntryPoint-normal-arm64.txt (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugEntryPoint-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibInstallName-normal-arm64.txt (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibInstallName-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_const_extract_protocols.json (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftConstValuesFileList (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.LinkFileList (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.LinkFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-OutputFileMap.json (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-OutputFileMap.json
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyStaticMetadataFileList (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyStaticMetadataFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyMetadataFileList (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyMetadataFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-project-headers.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-project-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-own-target-headers.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-own-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-generated-files.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-generated-files.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-target-headers.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-non-framework-target-headers.hmap (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-non-framework-target-headers.hmap
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibPath-normal-arm64.txt (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibPath-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibInstallName-normal-arm64.txt (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibInstallName-normal-arm64.txt
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftConstValuesFileList (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftConstValuesFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.LinkFileList (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.LinkFileList
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS_const_extract_protocols.json (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS_const_extract_protocols.json
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS-OutputFileMap.json (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS-OutputFileMap.json
+
+MkDir /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /bin/mkdir -p /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex
+
+WriteAuxiliaryFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/Entitlements-Simulated.plist (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    write-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/Entitlements-Simulated.plist
+
+MkDir /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /bin/mkdir -p /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+MkDir /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /bin/mkdir -p /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns
+
+ProcessProductPackaging /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besirShare.entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Entitlements:
+    
+    {
+}
+    
+    builtin-productPackagingUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besirShare.entitlements -entitlements -format xml -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent
+
+ProcessProductPackaging /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besirShare.entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Entitlements:
+    
+    {
+    "application-identifier" = "DFEME8ZQT9.com.iseongmin.besir.share";
+    "com.apple.security.application-groups" =     (
+        "group.com.iseongmin.besir"
+    );
+}
+    
+    builtin-productPackagingUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besirShare.entitlements -entitlements -format xml -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent
+
+ProcessProductPackagingDER /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent.der (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/derq query -f xml -i /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent.der --raw
+
+ProcessProductPackagingDER /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent.der (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/derq query -f xml -i /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent.der --raw
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/__preview.dylib normal (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -install_name @rpath/besirShare.debug.dylib -Xlinker -dead_strip -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_dependency_info.dat -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/__preview.dylib
+
+ProcessInfoPlistFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/Info.plist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/Info-ShareExtension.plist (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-infoPlistUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/Info-ShareExtension.plist -producttype com.apple.product-type.app-extension -expandbuildsettings -format binary -platform iphonesimulator -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/Info.plist
+
+SwiftDriver besirShare normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besirShare -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -application-extension -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+SwiftCompile normal arm64 Compiling\ SharedInbox.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SharedInbox.swift (in target 'besirShare' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SharedInbox.swift (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ besirShare (in target 'besirShare' from project 'besir')
+
+EmitSwiftModule normal arm64 (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ ShareViewController.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/ShareExtension/ShareViewController.swift (in target 'besirShare' from project 'besir')
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/ShareExtension/ShareViewController.swift (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for besirShare (in target 'besirShare' from project 'besir')
+
+SwiftDriver\ Compilation\ Requirements besirShare normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besirShare -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -application-extension -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+SwiftMergeGeneratedHeaders /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/besirShare-Swift.h /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-Swift.h (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-swiftHeaderTool -arch arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-Swift.h -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/besirShare-Swift.h
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.abi.json (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.abi.json /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftdoc (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftdoc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftsourceinfo (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftsourceinfo /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+ProcessProductPackaging /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besir-iOS.entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Entitlements:
+    
+    {
+}
+    
+    builtin-productPackagingUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besir-iOS.entitlements -entitlements -format xml -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent
+
+ProcessProductPackaging /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besir-iOS.entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Entitlements:
+    
+    {
+    "application-identifier" = "DFEME8ZQT9.com.iseongmin.besir";
+    "com.apple.security.application-groups" =     (
+        "group.com.iseongmin.besir"
+    );
+}
+    
+    builtin-productPackagingUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/besir-iOS.entitlements -entitlements -format xml -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent
+
+ProcessProductPackagingDER /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent.der (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/derq query -f xml -i /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent.der --raw
+
+ProcessProductPackagingDER /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent.der (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/derq query -f xml -i /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent.der --raw
+
+GenerateAssetSymbols /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets --compile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app --output-format human-readable-text --notices --warnings --export-dependency-info /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_dependencies --output-partial-info-plist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist --app-icon AppIcon --compress-pngs --enable-on-demand-resources YES --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 17.0 --platform iphonesimulator --bundle-identifier com.iseongmin.besir --generate-swift-asset-symbol-extensions NO --generate-swift-asset-symbols /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.swift --generate-objc-asset-symbols /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.h --generate-asset-symbol-index /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+/* com.apple.actool.compilation-results */
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols-Index.plist
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.h
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.swift
+
+
+MkDir /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /bin/mkdir -p /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned
+
+MkDir /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/unthinned (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /bin/mkdir -p /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/unthinned
+
+CompileAssetCatalogVariant thinned /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/usr/bin/actool /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets --compile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned --output-format human-readable-text --notices --warnings --export-dependency-info /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_dependencies_thinned --output-partial-info-plist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist_thinned --app-icon AppIcon --compress-pngs --enable-on-demand-resources YES --filter-for-thinning-device-configuration iPhone18,1 --filter-for-device-os-version 26.5 --development-region en --target-device iphone --target-device ipad --minimum-deployment-target 17.0 --platform iphonesimulator
+/* com.apple.actool.compilation-results */
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist_thinned
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned/AppIcon60x60@2x.png
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned/AppIcon76x76@2x~ipad.png
+/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned/Assets.car
+
+
+SwiftDriver besir-iOS normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-SwiftDriver -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besir -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+SwiftDriverJobDiscovery normal arm64 Compiling SharedInbox.swift (in target 'besirShare' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling ShareViewController.swift (in target 'besirShare' from project 'besir')
+
+SwiftDriver\ Compilation besirShare normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besirShare -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -application-extension -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib normal (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -filelist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.LinkFileList -install_name @rpath/besirShare.debug.dylib -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/../../Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_dependency_info.dat -fapplication-extension -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.swiftmodule @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare-linker-args.resp -Xlinker -alias -Xlinker _NSExtensionMain -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib
+
+SwiftCompile normal arm64 Compiling\ EditCard.swift,\ EditCardView.swift,\ EventDetailView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EditCard.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EditCardView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EventDetailView.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EditCard.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EditCardView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/EventDetailView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftEmitModule normal arm64 Emitting\ module\ for\ besir (in target 'besir-iOS' from project 'besir')
+
+EmitSwiftModule normal arm64 (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ FavoritesView.swift,\ FullSirView.swift,\ GoogleCalendarService.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/FavoritesView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/FullSirView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/GoogleCalendarService.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/FavoritesView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/FullSirView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/GoogleCalendarService.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ AddActivityView.swift,\ AddEventView.swift,\ App.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AddActivityView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AddEventView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/App.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AddActivityView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AddEventView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/App.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ Config.swift,\ ContentView.swift,\ DirectionsService.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Config.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/ContentView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/DirectionsService.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Config.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/ContentView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/DirectionsService.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ RootView.swift,\ RouteMapView.swift,\ SettingsView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/RootView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/RouteMapView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SettingsView.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/RootView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/RouteMapView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SettingsView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ KakaoMapView.swift,\ LocalMapServer.swift,\ LocationManager.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/KakaoMapView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/LocalMapServer.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/LocationManager.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/KakaoMapView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/LocalMapServer.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/LocationManager.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ Theme.swift,\ GeneratedAssetSymbols.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Theme.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Theme.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/GeneratedAssetSymbols.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 Compiling\ SharedInbox.swift,\ Store.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SharedInbox.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Store.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/SharedInbox.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Store.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+ConstructStubExecutorLinkFileList /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-ExecutorLinkFileList-normal-arm64.txt (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    construct-stub-executor-link-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library without Swift entry point. (in target 'besirShare' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Theme.swift, GeneratedAssetSymbols.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 Compiling\ Models.swift,\ NotificationManager.swift,\ PlaceSearch.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Models.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/NotificationManager.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/PlaceSearch.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/Models.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/NotificationManager.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/PlaceSearch.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare normal (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -rpath -Xlinker @executable_path/../../Frameworks -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_entry -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugEntryPoint-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare-ExecutorLinkFileList-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex-Simulated.xcent.der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare
+
+SwiftDriverJobDiscovery normal arm64 Emitting module for besir (in target 'besir-iOS' from project 'besir')
+
+SwiftDriver\ Compilation\ Requirements besir-iOS normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-Swift-Compilation-Requirements -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besir -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+SwiftMergeGeneratedHeaders /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/besir-Swift.h /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-Swift.h (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-swiftHeaderTool -arch arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-Swift.h -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/besir-Swift.h
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.swiftmodule /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.swiftmodule
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.swiftdoc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftdoc (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftdoc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.swiftdoc
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.abi.json /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.abi.json (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.abi.json /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/arm64-apple-ios-simulator.abi.json
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftsourceinfo (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks -rename /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftsourceinfo /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.swiftmodule/Project/arm64-apple-ios-simulator.swiftsourceinfo
+
+SwiftCompile normal arm64 Compiling\ AIAssistant.swift,\ AIChatView.swift,\ ActivityDetailView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AIAssistant.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AIChatView.swift /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/ActivityDetailView.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AIAssistant.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/AIChatView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftCompile normal arm64 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Shared/ActivityDetailView.swift (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+
+SwiftDriverJobDiscovery normal arm64 Compiling KakaoMapView.swift, LocalMapServer.swift, LocationManager.swift (in target 'besir-iOS' from project 'besir')
+
+ExtractAppIntentsMetadata (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name besirShare --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 17.0 --bundle-identifier com.iseongmin.besir.share --output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex --target-triple arm64-apple-ios17.0-simulator --binary-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare --dependency-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare_dependency_info.dat --stringsdata-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftFileList --metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyMetadataFileList --static-metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyStaticMetadataFileList --swift-const-vals-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/Objects-normal/arm64/besirShare.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-10-06 00:05:21.785 appintentsmetadataprocessor[56445:20415307] Starting appintentsmetadataprocessor export
+2026-10-06 00:05:21.791 appintentsmetadataprocessor[56445:20415307] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+SwiftDriverJobDiscovery normal arm64 Compiling RootView.swift, RouteMapView.swift, SettingsView.swift (in target 'besir-iOS' from project 'besir')
+
+AppIntentsSSUTraining (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/Info.plist --temp-dir-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/ssu --bundle-id com.iseongmin.besir.share --product-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex --extracted-metadata-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/Metadata.appintents --metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.DependencyMetadataFileList --source-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/Info.plist --archive-ssu-assets
+2026-10-06 00:05:21.821 appintentsnltrainingprocessor[56446:20415309] Parsing options for appintentsnltrainingprocessor
+2026-10-06 00:05:21.821 appintentsnltrainingprocessor[56446:20415309] Starting AppIntents SSU YAML Generation
+2026-10-06 00:05:21.823 appintentsnltrainingprocessor[56446:20415309] No AppShortcuts found - Skipping.
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/besirShare.debug.dylib
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/__preview.dylib (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex/__preview.dylib
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besirShare.build/besirShare.appex.xcent --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex
+
+RegisterExecutionPolicyException /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-RegisterExecutionPolicyException /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex
+
+Touch /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex (in target 'besirShare' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/touch -c /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex
+
+CpResource /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/map.html /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/map.html (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/map.html /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+CpResource /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/localhost.p12 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/localhost.p12 (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -resolve-src-symlinks /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/localhost.p12 /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/__preview.dylib normal (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -install_name @rpath/besir.debug.dylib -Xlinker -dead_strip -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir_dependency_info.dat -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent.der -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/__preview.dylib
+
+SwiftDriverJobDiscovery normal arm64 Compiling Models.swift, NotificationManager.swift, PlaceSearch.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling SharedInbox.swift, Store.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AddActivityView.swift, AddEventView.swift, App.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling FavoritesView.swift, FullSirView.swift, GoogleCalendarService.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling Config.swift, ContentView.swift, DirectionsService.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling EditCard.swift, EditCardView.swift, EventDetailView.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriverJobDiscovery normal arm64 Compiling AIAssistant.swift, AIChatView.swift, ActivityDetailView.swift (in target 'besir-iOS' from project 'besir')
+
+SwiftDriver\ Compilation besir-iOS normal arm64 com.apple.xcode.tools.swift.compiler (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-Swift-Compilation -- /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc -module-name besir -Onone @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList -DDEBUG -enable-bare-slash-regex -enable-experimental-feature DebugDescriptionMacro -sdk /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -target arm64-apple-ios17.0-simulator -g -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -Xfrontend -serialize-debugging-options -enable-testing -index-store-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Index.noindex/DataStore -Xcc -D_LIBCPP_HARDENING_MODE\=_LIBCPP_HARDENING_MODE_DEBUG -swift-version 5 -I /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -c -j10 -enable-batch-mode -incremental -Xcc -ivfsstatcache -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/SDKStatCaches.noindex/iphonesimulator26.5-23F81a-6cfe768891a92b912361537c460fe42b.sdkstatcache -output-file-map /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS-OutputFileMap.json -use-frontend-parseable-output -save-temps -no-color-diagnostics -explicit-module-build -module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/SwiftExplicitPrecompiledModules -clang-scanner-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -sdk-module-cache-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex -serialize-diagnostics -emit-dependencies -emit-module -emit-module-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule -validate-clang-modules-once -clang-build-session-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/ModuleCache.noindex/Session.modulevalidation -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/swift-overrides.hmap -emit-const-values -Xfrontend -const-gather-protocols-file -Xfrontend /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-iOS_const_extract_protocols.json -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-generated-files.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-own-target-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-all-target-headers.hmap -Xcc -iquote -Xcc /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-project-headers.hmap -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/include -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources-normal/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources/arm64 -Xcc -I/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/DerivedSources -Xcc -DDEBUG\=1 -emit-objc-header -emit-objc-header-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-Swift.h -working-directory /Users/iseongmin/Projects/besir/.claude/worktrees/t42 -experimental-emit-module-separately -disable-cmo
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib normal (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -dynamiclib -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/EagerLinkingTBDs/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -filelist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.LinkFileList -install_name @rpath/besir.debug.dylib -Xlinker -rpath -Xlinker /usr/lib/swift -Xlinker -rpath -Xlinker @executable_path/Frameworks -Xlinker -dead_strip -Xlinker -object_path_lto -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir_lto.o -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -Xlinker -dependency_info -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir_dependency_info.dat -fobjc-link-runtime -L/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/iphonesimulator -L/usr/lib/swift -Xlinker -add_ast_path -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.swiftmodule @/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir-linker-args.resp -Xlinker -alias -Xlinker _main -Xlinker ___debug_main_executable_dylib_entry_point -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib
+
+ConstructStubExecutorLinkFileList /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-ExecutorLinkFileList-normal-arm64.txt (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    construct-stub-executor-link-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor_no_swift_entry_point.a /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/usr/lib/libPreviewsJITStubExecutor.a --output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-ExecutorLinkFileList-normal-arm64.txt
+note: Using stub executor library with Swift entry point. (in target 'besir-iOS' from project 'besir')
+
+Ld /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir normal (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/clang -Xlinker -reproducible -target arm64-apple-ios17.0-simulator -isysroot /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk -O0 -L/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -F/Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator -Xlinker -rpath -Xlinker @executable_path -Xlinker -rpath -Xlinker @executable_path/Frameworks -rdynamic -Xlinker -no_deduplicate -Xlinker -objc_abi_version -Xlinker 2 -e ___debug_blank_executor_main -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_dylib -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibPath-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __debug_instlnm -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-DebugDylibInstallName-normal-arm64.txt -Xlinker -filelist -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir-ExecutorLinkFileList-normal-arm64.txt -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __entitlements -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent -Xlinker -sectcreate -Xlinker __TEXT -Xlinker __ents_der -Xlinker /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app-Simulated.xcent.der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib -Xlinker -no_adhoc_codesign -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir
+
+LinkAssetCatalog /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Resources/Assets.xcassets (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-linkAssetCatalog --thinned /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/thinned --thinned-dependencies /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_dependencies_thinned --thinned-info-plist-content /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist_thinned --unthinned /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_output/unthinned --unthinned-dependencies /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_dependencies_unthinned --unthinned-info-plist-content /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist_unthinned --output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app --plist-output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist
+note: Emplaced /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Assets.car (in target 'besir-iOS' from project 'besir')
+note: Emplaced /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/AppIcon76x76@2x~ipad.png (in target 'besir-iOS' from project 'besir')
+note: Emplaced /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/AppIcon60x60@2x.png (in target 'besir-iOS' from project 'besir')
+
+Copy /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns/besirShare.appex /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-copy -exclude .DS_Store -exclude CVS -exclude .svn -exclude .git -exclude .hg -exclude Headers -exclude PrivateHeaders -exclude Modules -exclude \*.tbd -resolve-src-symlinks -remove-static-executable /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besirShare.appex /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns
+
+ProcessInfoPlistFile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Info.plist /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/Info-iOS.plist (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-infoPlistUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/Generated/Info-iOS.plist -producttype com.apple.product-type.application -genpkginfo /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PkgInfo -expandbuildsettings -format binary -platform iphonesimulator -additionalcontentfile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/assetcatalog_generated_info.plist -scanforprivacyfile /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns/besirShare.appex -o /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Info.plist
+
+CopySwiftLibs /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-swiftStdLibTool --copy --verbose --sign - --scan-executable /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib --scan-folder /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Frameworks --scan-folder /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns --scan-folder /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/SystemExtensions --scan-folder /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Extensions --platform iphonesimulator --toolchain /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --destination /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Frameworks --strip-bitcode --strip-bitcode-tool /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/bitcode_strip --emit-dependency-info /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/SwiftStdLibToolInputDependencies.dep --filter-for-swift-os
+
+ExtractAppIntentsMetadata (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsmetadataprocessor --toolchain-dir /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain --module-name besir --sdk-root /Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator26.5.sdk --xcode-version 17F113 --platform-family iOS --deployment-target 17.0 --bundle-identifier com.iseongmin.besir --output /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app --target-triple arm64-apple-ios17.0-simulator --binary-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir --dependency-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir_dependency_info.dat --stringsdata-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/ExtractedAppShortcutsMetadata.stringsdata --source-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftFileList --metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyMetadataFileList --static-metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyStaticMetadataFileList --swift-const-vals-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/Objects-normal/arm64/besir.SwiftConstValuesFileList --compile-time-extraction --deployment-aware-processing --validate-assistant-intents --no-app-shortcuts-localization
+2026-10-06 00:05:25.665 appintentsmetadataprocessor[56478:20415495] Starting appintentsmetadataprocessor export
+2026-10-06 00:05:25.667 appintentsmetadataprocessor[56478:20415495] warning: Metadata extraction skipped. No AppIntents.framework dependency found.
+
+AppIntentsSSUTraining (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/appintentsnltrainingprocessor --infoplist-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Info.plist --temp-dir-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/ssu --bundle-id com.iseongmin.besir --product-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app --extracted-metadata-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Metadata.appintents --metadata-file-list /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.DependencyMetadataFileList --source-file /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Info.plist --archive-ssu-assets
+2026-10-06 00:05:25.684 appintentsnltrainingprocessor[56479:20415496] Parsing options for appintentsnltrainingprocessor
+2026-10-06 00:05:25.685 appintentsnltrainingprocessor[56479:20415496] Starting AppIntents SSU YAML Generation
+2026-10-06 00:05:25.685 appintentsnltrainingprocessor[56479:20415496] No AppShortcuts found - Skipping.
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/besir.debug.dylib
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/__preview.dylib (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/__preview.dylib
+
+CodeSign /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    
+    Signing Identity:     "Sign to Run Locally"
+    
+    /usr/bin/codesign --force --sign - --entitlements /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Intermediates.noindex/besir.build/Debug-iphonesimulator/besir-iOS.build/besir.app.xcent --timestamp\=none --generate-entitlement-der /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+ValidateEmbeddedBinary /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns/besirShare.appex (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /Applications/Xcode.app/Contents/Developer/usr/bin/embeddedBinaryValidationUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/PlugIns/besirShare.appex -signing-cert - -info-plist-path /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app/Info.plist
+
+RegisterExecutionPolicyException /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-RegisterExecutionPolicyException /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+Validate /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    builtin-validationUtility /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app -shallow-bundle -infoplist-subpath Info.plist
+
+Touch /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app (in target 'besir-iOS' from project 'besir')
+    cd /Users/iseongmin/Projects/besir/.claude/worktrees/t42
+    /usr/bin/touch -c /Users/iseongmin/Projects/besir/.claude/worktrees/t42/build/Build/Products/Debug-iphonesimulator/besir.app
+
+** BUILD SUCCEEDED **
+
+EXIT=0

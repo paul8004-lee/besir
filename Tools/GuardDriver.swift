@@ -22,6 +22,10 @@
 //
 // 모델 호출은 하지 않는다 — API 할당량을 쓰지 않고 결정적으로 돌아간다.
 // 모델이 실제로 어떤 인자를 보내는지는 여기서 알 수 없다. 그건 실기기 대화 기록만이 증거다.
+//
+// t42절(2026-10-05) — 장소 채택 판정·접미 재시도: '스타벅스 강남점' 첫 결과가 다른 강남
+// 지점들과 갈리는데 조용히 확정된 관측(①)과 풀네임 검색이 빗나가 '점'을 뗀 재검색이 필요한
+// 관측(②). 판정·재시도·병합은 전부 결정적 함수라 주입된 결과 목록으로 검증한다.
 
 
 var drvPass = 0, drvFail = 0
@@ -144,6 +148,21 @@ extension AIAssistant {
     func drvPark(_ tool: String, _ input: [String: Any],
                  _ unclear: UnclearPlaceList) -> String {
         parkForUnclearPlaces(tool: tool, input: input, unclear: unclear)
+    }
+    /// t42절 — 재시도 쿼리 그대로(벗겨지지 않으면 nil).
+    static func drvRetryQuery(_ query: String) -> String? { suffixStrippedRetryQuery(query) }
+    /// t42절 — 채택 판정을 글자 상태로. PlaceAdoption이 private이라 Drv 구조체(다른 타입)에서는
+    /// 못 읽는다 — 이 extension 안에서 문자열로 바꿔 내보낸다.
+    static func drvAdoption(_ query: String, _ results: [Place]) -> String {
+        switch placeAdoptionDecision(query: query, results: results) {
+        case .notFound: return "notFound"
+        case .resolved(let p): return "resolved:\(p.name)"
+        case .unclear(let c): return "unclear:" + c.map(\.name).joined(separator: ",")
+        }
+    }
+    /// t42절 — 재시도·원본 병합 도우미 노출(판정은 drvAdoption에 병합 결과를 넘겨 본다).
+    static func drvMerged(_ retry: [Place], _ original: [Place]) -> [Place] {
+        mergedPlaceResults(retry: retry, original: original)
     }
     static func drvStated(_ utterance: String) -> [String: Any] { statedArguments(from: utterance) }
     func drvToolsJSON() -> [[String: Any]] { toolsJSON() }
@@ -4924,6 +4943,116 @@ struct Drv {
 
         store.events = []
         store.activities = []
+
+        // ── AI. t42 — 장소 채택 판정·접미 재시도(2026-10-05 관측 ①②). 판정·재시도·병합은 전부
+        //        정적 순수 함수라 주입된 목록으로 결정적이다 — 실제 카카오·MapKit 목록 모양은
+        //        실기기 몫. ① '스타벅스 강남점' 첫 결과(케이스퀘어강남점)가 강남역점 등과 갈리는
+        //        지점인데 조용히 확정됐다. ② '스타벅스 홍대점' 풀네임 검색은 대학로점 한 건만
+        //        주고, '점'을 뗀 재검색이 홍대 목록을 낸다(운영자 관찰 확정).
+        print("\nAI. t42 — 다지점 채택 판정·접미 재시도 (2026-10-05 관측 ①②)")
+        let aiT42 = fresh()
+        func aiPl(_ name: String, _ lat: Double, _ lng: Double) -> Place {
+            Place(name: name, address: "", latitude: lat, longitude: lng)
+        }
+        // AI-1 (① 관측 사례): 낱말은 다 맞아도 지점이 갈리면 물어본다. 후보는 만족 결과 우선.
+        let ai1 = AIAssistant.drvAdoption("스타벅스 강남점",
+            [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+             aiPl("스타벅스 강남역점", 37.4980, 127.0286),
+             aiPl("스타벅스 강남대로점", 37.5036, 127.0275)])
+        aiT42.drvCheck("AI-1: '스타벅스 강남점'에 강남 지점 셋이면 첫 결과를 확정하지 않고 물어본다",
+                     ai1 == "unclear:스타벅스 케이스퀘어강남점,스타벅스 강남역점,스타벅스 강남대로점",
+                     ai1)
+        // AI-2: 만족 결과가 하나뿐이면 확정 — 후보가 여럿인 경우와 같은 질의로 갈린다.
+        aiT42.drvCheck("AI-2: 만족 결과가 하나뿐이면 그대로 확정한다",
+                     AIAssistant.drvAdoption("스타벅스 강남점",
+                                             [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285)])
+                     == "resolved:스타벅스 케이스퀘어강남점",
+                     AIAssistant.drvAdoption("스타벅스 강남점",
+                                             [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285)]))
+        // AI-3: 카카오가 같은 지점을 중복 주는 모양 — 후보에는 한 번만 나온다.
+        let ai3 = AIAssistant.drvAdoption("스타벅스 강남점",
+            [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+             aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+             aiPl("스타벅스 강남역점", 37.4980, 127.0286)])
+        aiT42.drvCheck("AI-3: 중복 항목이 섞여도 여전히 물어본다(다른 지점이 남아 있다)",
+                     ai3.hasPrefix("unclear:"), ai3)
+        aiT42.drvCheck("AI-3: 후보에서 같은 지점 중복은 하나만 보인다",
+                     ai3 == "unclear:스타벅스 케이스퀘어강남점,스타벅스 강남역점", ai3)
+        // AI-4: 첫 결과 이름을 다른 만족 결과가 품으면 같은 지점 한 덩어리다(역 안 상점).
+        aiT42.drvCheck("AI-4: '홍대역'→'홍대입구역'은 역 안 상점('스타벅스 홍대입구역점')이 만족해도 확정한다",
+                     AIAssistant.drvAdoption("홍대역",
+                                             [aiPl("홍대입구역", 37.5573, 126.9238),
+                                              aiPl("스타벅스 홍대입구역점", 37.5573, 126.9238)])
+                     == "resolved:홍대입구역",
+                     AIAssistant.drvAdoption("홍대역",
+                                             [aiPl("홍대입구역", 37.5573, 126.9238),
+                                              aiPl("스타벅스 홍대입구역점", 37.5573, 126.9238)]))
+        // AI-5: 이름을 통째로 말한 질의 — 상가 동이 같은 낱말을 품어도 확정한다.
+        aiT42.drvCheck("AI-5: '휴먼시아7단지아파트' 전체 이름은 상가 동이 있어도 확정한다",
+                     AIAssistant.drvAdoption("휴먼시아7단지아파트",
+                                             [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346),
+                                              aiPl("휴먼시아7단지아파트상가", 37.6536, 126.8346)])
+                     == "resolved:휴먼시아7단지아파트",
+                     AIAssistant.drvAdoption("휴먼시아7단지아파트",
+                                             [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346),
+                                              aiPl("휴먼시아7단지아파트상가", 37.6536, 126.8346)]))
+        // AI-6 (② 병합 모양): 재시도(홍대 목록)를 앞에 두고 원본(대학로점)을 뒤에 붙인다.
+        let aiHd1 = aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244)
+        let ai6Merged = AIAssistant.drvMerged([aiHd1, aiPl("스타벅스 홍대가좌점", 37.5569, 126.9226)],
+                                               [aiPl("스타벅스 대학로점", 37.5735, 127.0057)])
+        let ai6 = AIAssistant.drvAdoption("스타벅스 홍대점", ai6Merged)
+        aiT42.drvCheck("AI-6: 재시도 목록에 홍대 지점이 여럿이면 여전히 물어본다", ai6.hasPrefix("unclear:"), ai6)
+        aiT42.drvCheck("AI-6: 후보 맨 앞은 재시도가 가져온 홍대 지점이다(원본 대학로점이 아니라)",
+                     ai6 == "unclear:스타벅스 홍대입구역점,스타벅스 홍대가좌점,스타벅스 대학로점", ai6)
+        aiT42.drvCheck("AI-6: 병합은 이름+좌표가 같은 중복을 하나로 줄인다",
+                     AIAssistant.drvMerged([aiHd1], [aiPl("스타벅스 대학로점", 37.5735, 127.0057), aiHd1]).count == 2)
+        // AI-7: 빈 결과는 실패다 — 기본 출발지로 조용히 떨어지지 않는다.
+        aiT42.drvCheck("AI-7: 결과가 비면 notFound다",
+                     AIAssistant.drvAdoption("스타벅스 홍대점", []) == "notFound")
+        // AI-8: U-4 행동 보존 — 낱말조차 맞지 않는 단독 결과는 물어본다.
+        aiT42.drvCheck("AI-8: '스타벅스 홍대점'→대학로점 단독은 여전히 물어본다(U-4 보존)",
+                     AIAssistant.drvAdoption("스타벅스 홍대점",
+                                             [aiPl("스타벅스 대학로점", 37.5735, 127.0057)])
+                     == "unclear:스타벅스 대학로점",
+                     AIAssistant.drvAdoption("스타벅스 홍대점",
+                                             [aiPl("스타벅스 대학로점", 37.5735, 127.0057)]))
+        // AI-9~12: 재시도 쿼리 — 마지막 낱말의 '점'·'역'만 한 번 벗긴다.
+        aiT42.drvCheck("AI-9: '스타벅스 홍대점'의 재시도 쿼리는 '스타벅스 홍대'다",
+                     AIAssistant.drvRetryQuery("스타벅스 홍대점") == "스타벅스 홍대",
+                     AIAssistant.drvRetryQuery("스타벅스 홍대점") ?? "nil")
+        aiT42.drvCheck("AI-10: '홍대역'의 재시도 쿼리는 '홍대'다",
+                     AIAssistant.drvRetryQuery("홍대역") == "홍대",
+                     AIAssistant.drvRetryQuery("홍대역") ?? "nil")
+        aiT42.drvCheck("AI-11: 벗길 접미어가 없으면 재시도하지 않는다('스타벅스 홍대')",
+                     AIAssistant.drvRetryQuery("스타벅스 홍대") == nil)
+        aiT42.drvCheck("AI-12: 한 낱말 질의에도 같은 규칙이다('스타벅스' → 재시도 없음)",
+                     AIAssistant.drvRetryQuery("스타벅스") == nil)
+        // AI-13 (① 기대 모양): 출발지·목적지가 다 커서 두 줄 모두 후보 카드가 열린다.
+        let aiCard = fresh()
+        let ai13Msg = aiCard.drvPark("create_schedule",
+            ["title": "AI-홍대", "origin_query": "스타벅스 강남점", "destination_query": "스타벅스 홍대점",
+             "arrival_iso": "2027-03-15T17:00:00", "mode_this_time": "transit",
+             "buffer_minutes": 10, "notify_lead_minutes": 10],
+            [(key: "origin_query", query: "스타벅스 강남점",
+              candidates: [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+                           aiPl("스타벅스 강남역점", 37.4980, 127.0286)]),
+             (key: "destination_query", query: "스타벅스 홍대점",
+              candidates: [aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244),
+                           aiPl("스타벅스 홍대가좌점", 37.5569, 126.9226)])])
+        let ai13Ask = aiCard.drvLiveAsk()
+        aiCard.drvCheck("AI-13: 출발지·목적지 줄이 한 카드에 함께 뜬다(① 기대 모양)",
+                        Set(ai13Ask?.fields.map(\.key) ?? []).isSuperset(of: ["origin_query", "destination_query"]),
+                        "keys=\(ai13Ask?.fields.map(\.key) ?? [])")
+        aiCard.drvCheck("AI-13: 두 줄 모두 후보가 얹혀 있고 편집기가 열려 있다",
+                        ["origin_query", "destination_query"].allSatisfy { k in
+                            guard let f = ai13Ask?.fields.first(where: { $0.key == k }) else { return false }
+                            if case .results(let p) = f.lookup, p.count == 2, f.startsOpen { return true }
+                            return false
+                        },
+                        "fields=\(ai13Ask?.fields.map { "\($0.key):\(AIAssistant.drvLookup($0.lookup)) startsOpen=\($0.startsOpen)" } ?? [])")
+        aiCard.drvCheck("AI-13: 답장 문구가 두 질의를 모두 언급한다",
+                        ai13Msg.contains("스타벅스 강남점") && ai13Msg.contains("스타벅스 홍대점"), ai13Msg)
+        drvAssertGlobalInvariants(aiCard, "AI절")
 
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
