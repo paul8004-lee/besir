@@ -337,6 +337,52 @@ AF-010-04 도달 기록 줄 원문(이 실행, 온라인):
 
 경쟁이 `await`(추정) 안에 닿았다 — 회귀선으로 약하지 않다. AF-010-04 도달 줄은 A1과 같은 `도달: 예`(같은 실행의 `✓ S 전제` 통과 — 이 기기 MapKit ETA 한도, A1 기록 참조)로, 함의 단언은 ✓.
 
+### MA(t17-a) code-safety 검사(하네스)
+
+기준: 카드 기준 `42065af` → HEAD `56bd095` (`git diff --name-only` = `Shared/Store.swift`·`Tools/GuardDriver.swift`·이 문서 — 코드 변경은 앞 둘만). 렌즈는 plan §4의 점검 목록 1~5 + 프로젝트 4대 위험 클래스(H1~H4)·H5·H7 + AC-019 (6) 갭 + 간결성. **결함 0 · 경고 2 · 메모 4** — 코드는 고치지 않았다(판정 레인으로 이관).
+
+**각 렌즈가 본 것(판정 근거 줄 — 현재 트리 기준)**:
+
+1. **addLeg의 보상 검사와 await 사이 활동성**(Store.swift `:440-493`): addEvent가 레코드를 반환값으로 돌려주고(`:837`), await 뒤 `activities.contains(activityId)` 재확인 뒤 `deleteEvent(leg)`로 되돌린다(`:479-481`) — 매달린 링크는 구조적으로 막혀 있다. 드라이버 AF-009-03이 이 경쟁을 실제 yield로 도달시켜 ✓(아래 게이트). **같은 역할 두 addLeg의 동시 끼어들기**: 중복 검사(`:460`)는 await **앞에만** 있다 — addEvent가 추정 await 뒤에야 append하므로(`:828-831`), 두 Task가 같은 활동·같은 역할로 겹치면 둘 다 검사를 통과한다. 도달 경로: 현재 호출자는 `addActivityWithTravel` 셋뿐(전부 await, FullSirView `:463`·AIAssistant `:2005`·AddActivityView `:523`)이고 각자 **새 활동**을 만들어 addLeg를 부르므로 같은 활동에 대한 역할 충돌은 현재 코드로는 불가능 — MB의 편집 카드가 기존 활동에 addLeg를 걸 때부터 창이 열린다(버튼 더블탭이면 MainActor 직렬화로도 막히지 않는다: 탭1이 검사 후 추정 await에 매달리고, 탭2가 그 사이 검사를 지난다).
+2. **두 레코드 저장 순서**: realignLegs는 구간 하나씩 `await updateEvent` 직렬(`:543-564`, 루프 안 await) — 자기 자신의 갱신은 서로 끼어들지 않는다. updateEvent 자체는 await 뒤 id로 다시 찾아 쓴다(`:1207`) — H1 재발 아님. updateLeg·realignLegs가 updateEvent에 넘기는 유도값(앵커 시각·끝점·제목)은 **각자의 await 전에 활동에서 유도한 스냅샷**이다(`:498-516`, `:545-556`) — 추정 await 사이 다른 경로(moveActivity·동기화)가 활동을 고치면 전필드 덮어쓰기(updateEvent 성질)로 옛 값이 들어간다. 아래 경고 2.
+3. **추정의 단일 출처**: `packingGroups`는 `estimatedLegs(for:)`를 읽고(`:427`), `linkedLegs`는 `explicitLegs` → `estimatedLegs` 순(`:1349-1357`) — 같은 코드다(AC-015 (12)). 편집·삭제 경로 `legs(of:)`(`:395-398`)·`removeExplicitLegs`(`:1562-1574`)·`sameTitleSweep`(`:413`)는 명시적 연결(`linkedActivityId`)만 보고 추정을 쓰지 않는다 — @MX:WARN(`:421`)이 가리킨 위험이 삭제 경로에 닿지 않음을 코드로 확인.
+4. **AC-008 갭(자체 경로 우회 없음)**: addLeg→`addEvent`(캘린더는 `enqueueCalendarUpload` 큐, `:834-836`), updateLeg·realignLegs→`updateEvent`(gid 재등록 경로 포함, `:1213-1219`), removeLeg→`deleteEvent`, removeExplicitLegs는 옛 deleteActivity와 같은 정리(알림 취소·`Task { await removeFromCalendar }` 묘비 경로) — 알림 취소·캘린더 업로드 큐를 우회하는 자체 경로는 없다.
+5. **AC-012 갭(정리 몸통 단일)**: `deleteActivity`(`:612`)·`deleteActivities`(`:1539`) 둘 다 `deleteActivitiesCore`(`:1546`)를 부르고, 구간 연쇄는 `removeExplicitLegs`가 양쪽에 공통으로 붙는다. 일괄 최적화(알림·저장·캘린더 Task가 목록 전체에 1회)는 유지 — 루프 안 반복 저장 없음(H5 확인). 식사 기록: 구간 몫(`eventIDs`)은 removeExplicitLegs, 활동 몫(`activityIDs`)은 core — 옛 낱개 경로의 `removeUpcomingMeals(eventIDs:activityIDs:)` 1회 호출과 동등하다.
+6. **H1(await 인덱스)**: 새 코드 전수 — addLeg는 반환 레코드, updateLeg·realignLegs는 await 뒤 `events.first(where: { $0.id == legId })` 재조회(`:528`, `:560`). 인덱스 재사용 없음.
+7. **H2(조용한 실패)**: 새 코드의 `Task { await removeFromCalendar }`(`:1572`)는 기존 deleteEvent/deleteEvents/deleteRecurringSeries와 같은 모양이고 묘비는 removeFromCalendar 안에서 쓴다(`:97`). 새로 생긴 삼킴 없음.
+8. **H3(외부 한도)**: addLeg가 타는 addEvent는 `rescheduleNearestNotifications`를 부르지 않는다(`:800-838`에 호출 없음) — plan §3 "알림 64건 창" 문단이 **기존 패턴으로 명시한 것**과 일치(이 카드가 만든 창이 아니며 변경도 없다). removeExplicitLegs는 알림을 취소해 창을 되돌린다.
+9. **H4(복제 계산)**: `legAnchor`(`:373`)·`legTitle`(`:381`)·`explicitLegs`(`:386`)·`estimatedLegs`·`deleteActivitiesCore`가 실제 단일 출처인지 호출처에서 확인 — addLeg·updateLeg·realignLegs가 같은 `legAnchor`/`legTitle`을 읽는다. 남는 유사 코드는 아래 메모 1.
+10. **AC-019 (6) 갭**: `git grep "#if os" 42065af/HEAD -- Shared/ Tools/` 집합 대조 — 37줄 양쪽 동일(줄번호 드리프트는 `Store.swift:1341→1602`뿐, 신규 코드가 위에 삽입된 탓). diff에 `#if os` 헝크 0건, 분기 안 맥 코드를 고친 헝크 없음. ContentView는 이 카드가 안 건드렸다(name-only 확인) — 지시문 밖 맥 전용 탭 셋(`:618`·`:641`·`:674`) 불변.
+11. **간결성**: deleteActivitiesCore·removeExplicitLegs의 정리가 옛 deleteActivity 몸통을 그대로 흡수해 한 벌로 줄었고, addActivityWithTravel의 addEvent 직접 호출 두 곳이 addLeg로 합쳐졌다 — 복제 제거 방향. 루프 안 반복 저장·네트워크 없음(위 5·8). 죽은 코드 신규 없음(새 API의 뷰 호출자는 MB 몫 — run 기록 `:311`과 일치).
+
+**발견(심각도순)**:
+
+- **경고 1 — addLeg 중복 역할 검사가 await 앞에만 있다** (`Store.swift:460` vs `:828-831`). 위 렌즈 1의 창: 두 Task가 같은 활동·같은 역할로 겹치면 같은 역할 구간이 둘 생긴다. 현재 호출자로는 도달 불가(각자 새 활동), MB 편집 카드(기존 활동에 addLeg)부터 유효해진다 — 버튼 더블탭으로 재현 가능. 수리 모양: 보상 검사 옆에 await 뒤 재검사(다른 id의 같은 역할이 생겼으면 `deleteEvent(leg)` 후 `.refused(.duplicateRole)`) — 이미 있는 보상 패턴의 연장. 코드는 고치지 않고 MB 카드에 조건으로 넘긴다.
+- **경고 2 — updateLeg·realignLegs의 유도값이 await 전 활동 스냅샷** (`Store.swift:498-516`, `:545-564`). 렌즈 2: 추정 await 사이 활동이 다른 경로로 바뀌면 전필드 updateEvent가 옛 앵커·끝점을 되쓴다. 구간 상호 간에는 직렬이라 자기 간섭은 없고, 간섭 원(동시 moveActivity·동기화)이 UI에서 겹치는 경우는 좁다 — 비결정적이라 드라이버로 재현하지 않았다(잔여 위험). MB에서 realignLegs를 저장 뒤 화면 전환과 함께 쓰는 카드라면 스냅샷 재독기를 그 카드에서 판단한다.
+- **메모 1 — 끝점 유도가 세 곳에 유사하다**: `updateLeg`(`:506-513`)·`realignLegs`(`:548-556`)·`modifyEvent`(기존)가 "활동 쪽=activity.location, 바깥 쪽=저장값, 매달리면 폴백"을 각자 쓴다. 지금은 셋 다 짧고 규칙 주석이 붙어 있어 계약 5 위반으로 보지 않는다(세 줄 유사 선호) — 넷째 호출처가 생기면 helper로 합친다.
+- **메모 2 — `modifyActivity`에 clearPlace와 newPlace를 함께 주면 clearPlace가 이긴다**(`:330`에서 구간 삭제 → `:335`에서 newPlace 적용 → `:336`에서 nil). 이런 호출 모양은 없고(AI 호출 모양이 회귀선, run 기록), 의미도 "지우기"가 자연스럽다 — 문서화만 남긴다.
+- **메모 3 — 정리 절차가 사실상 세 벌(deleteEvent 1건·deleteEvents 다건·removeExplicitLegs 다건+식사)**: 서로 다른 최적화 단위이고 deleteEvents의 자체 몸통은 이 카드 이전 것 — 이 카드가 오히려 활동 쪽 넷(deleteActivity·deleteActivities·clearPlace·deleteEverythingForTesting 경유)을 한 벌로 모았다. 현상 유지로 둔다.
+- **메모 4 — 호스트 swiftc 컴파일 경고 3건은 모두 이 카드 밖 파일**(`LocationManager.swift:20`·`PlaceSearch.swift:124`·`DirectionsService.swift:292`의 macOS SDK deprecation — diff 밖). 경고 집합 대조는 run 레인이 기준 24줄과 exit 0으로 마쳤고(위 게이트), 이 검사는 새 경고가 새 코드에서 나오지 않음을 확인했다.
+
+**이 검사가 직접 실행한 증거**: 드라이버 재컴파일+실행(위 게이트와 같은 명령, `/tmp/gd`) → exit 0, `424/424 통과`, `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다`, 샌드박스 잔여 0(`ls -d $TMPDIR/besir-gd-*` 무출력). AF-009-03 경쟁 도달 줄 원문은 run 레인 기록(`:335`)과 동일 관측.
+
+**검사했고 발견 없음**: addLeg·updateLeg·removeLeg·realignLegs·legs(of:)·activity(forLeg:)·explicitLegCount·sameTitleSweep·packingGroups·estimatedLegs·deleteActivitiesCore·removeExplicitLegs·modifyActivity(clearPlace)·addActivityWithTravel·linkedLegs — 위 렌즈 1~11의 근거 줄 범위.
+**검사하지 못한 것(Gaps)**: iOS 빌드 무경고 게이트(판정 레인 A5 몫 — 이 검사는 swiftc 호스트 컴파일만), 뷰 레이어 도달성(MB 카드 전 UI 호출자 부재 — 경고 1·2의 실도달 판정은 MB로 이월), 프록시 테스트(프록시 무변경이라 대상 아님), macOS 빌드(P-1 제외).
+**잔여 위험(Residual-risk)**: 경고 2의 외부 간섭 시나리오는 비결정적이라 실행 재현 없음 — MB에서 realignLegs 호출 카드를 짤 때 스냅샷 재독기 필요 여부를 그 카드가 판단한다. `estimatedLegs`의 같은 이름 장소 오묶음은 plan §3이 갭으로 받은 것(이 카드 밖).
+
+### MA(t17-a) A5 — 게이트(판정 레인 = run 세션이 직접 실행, 커밋 `56bd095` 트리)
+
+| 게이트 | 명령(요약) | 관측 |
+|---|---|---|
+| 드라이버(온라인) | 컴파일+`/tmp/gd-v2` 재실행 → `.moai/state/verify/t17/v2-driver-run.log` | **exit 0 · ✓ 424 · ✗ 0 · AF ✓ 67 · `424/424 통과` · `[실제 데이터] 대조 통과`** — 하한 423 초과 |
+| 뺀 수 | `diff <(기준 t17-plan/driver-run.log ✓ 정렬) <(v2 ✓ 정렬) \| grep -c '^<'` | **0** (기존 357 라벨 유지) |
+| 드라이버 컴파일 경고 집합 | 줄·열 제거·정렬 후 기준 24줄과 `diff` | **exit 0 — 동일**(v2-driver-compile.log) |
+| iOS 빌드 | `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath .moai/state/verify/t17/dd build` → `ios-build.log` | **BUILD SUCCEEDED(exit 0) · `^SwiftCompile` 42 · 경고 0**(툴체인 안내 제외) |
+| 카드 범위(AC-022, 기준 `42065af`) | `git diff --name-only … -- . ':!.moai/specs/SPEC-UIKIT-009' ':!.moai/reports'` · `--numstat -- Shared Tools` · `--diff-filter=A -- Shared/` | **`Shared/Store.swift`·`Tools/GuardDriver.swift` 뿐**(선언 목록 일치) · 100줄 이상 2파일(한도 4 이내: Store 293+32 · GuardDriver 850+0) · 새 파일 **0** |
+| 누적 불변식(AC-019, 기준 `b2c3987`) | (1) 금지 경로 name-only · (3) 추가 줄 색 직접 사용 파이프 · (4) `ScheduleAnchor` 케이스 · (6) `#if os` 집합 diff(`os-base.txt`·`os-head.txt`) | (1) **0** · (3) **0** + 양성 대조(심은 `+ .foregroundStyle(.gray)` 한 줄 → **1**, 잡힘) · (4) **1**(기준과 같음) · (6) **0** |
+
+MA(t17-a) 완료 요약: 재현 5건(A1) → 수리·진입점·조회(A2–A4) → 전 단언 ✓(424/424) → 게이트 통과 → code-safety 결함 0(경고 2건은 MB 도달 가능성이 생기는 순간의 몫으로 이월 — `### MA(t17-a) code-safety 검사(하네스)` 소절 참조). 커밋: `021f9fd`(A1) → `f87428b`(Store) → `56bd095`(AF절 완성) → 이 문서 커밋(아래).
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
