@@ -951,7 +951,10 @@ final class AIAssistant: ObservableObject {
                              fields: fields)
         bubbles.append(.init(role: .assistant, text: "", ask: ask))
         let names = unclear.map { "'\($0.query)'" }.joined(separator: ", ")
-        return "아직 등록하지 않았어요 — \(names)의 검색 첫 결과가 사용자가 말한 지점과 확실히 맞지 않아요(이름이 다른 곳으로 보여요). 앱이 후보를 고르는 카드를 열었으니 사용자가 고르면 그 값으로 자동 진행돼요. 인자를 바꿔 다시 호출하지 말고 기다려."
+        // unclear 사유는 둘이다 — 이름이 아예 다른 곳(U-4)과 낱말은 맞지만 같은 이름의 지점이
+        // 여럿이라 갈리는 것(t42 ①). 뒤쪽에서 "이름이 다른 곳"만 말하면 새 사유에는 거짓
+        // 설명이 되므로 문구는 둘을 다 덮는다.
+        return "아직 등록하지 않았어요 — \(names)의 검색 결과가 사용자가 말한 지점으로 좁혀지지 않아요(이름이 다른 곳이나 같은 이름의 여러 지점으로 보여요). 앱이 후보를 고르는 카드를 열었으니 사용자가 고르면 그 값으로 자동 진행돼요. 인자를 바꿔 다시 호출하지 말고 기다려."
     }
 
     /// 모델 턴의 도구 호출 인자에서 **선언에 없는 키**를 뺀다. SPEC-ASK-001의 전제는 "선언에서
@@ -3059,10 +3062,11 @@ final class AIAssistant: ObservableObject {
         "besir가 '\(query)' 위치를 몰라요. 고르면 이번 일정에 쓰고, ⭐에 추가해 두면 다음부터 이름만으로 돼요."
     }
 
-    /// 등록 경로의 장소 해석 삼태. `unclear`는 검색이 결과를 내긴 했지만 첫 결과가 사용자가
-    /// 말한 이름과 맞는지 확신할 수 없다는 뜻이다 — 조용히 첫 결과를 채택하면 '스타벅스 홍대점'이
-    /// 대학로점으로, '강남'이 서울선릉과정릉으로 등록된다(U-4, 2026-09-23·24 관측 두 건).
-    /// 후보를 들고 카드로 되묻는다(parkForUnclearPlaces).
+    /// 등록 경로의 장소 해석 삼태. `unclear`는 검색이 결과를 내긴 했지만 확정할 지점이 하나로
+    /// 좁혀지지 않았다는 뜻이다 — 조용히 첫 결과를 채택하면 '스타벅스 홍대점'이 대학로점으로,
+    /// '강남'이 서울선릉과정릉으로 등록되고(U-4, 2026-09-23·24 관측 두 건), 낱말은 맞아도
+    /// '스타벅스 강남점'의 첫 결과 '케이스퀘어강남점'이 강남역점과 갈리는 지점에서 조용히
+    /// 확정된다(t42 ①, 2026-10-05). 후보를 들고 카드로 되묻는다(parkForUnclearPlaces).
     private enum PlaceAdoption {
         case resolved(Place)
         case notFound
@@ -3086,33 +3090,113 @@ final class AIAssistant: ObservableObject {
         // 등록된 뒤에야 사용자가 알았다(2026-09-16 실측). 부분 문자열 판정은 이 사례를 못 잡는다
         // ('화조원' 이름이 '회사'를 포함한다) — 낱말이 통째로 일반명사인지만 본다.
         if creation, unresolvedGenericPlace(query) { return .notFound }
-        let results = await store.placeSearch.search(query, near: location.currentLocation)
-        // 검색이 빈손이면 실패다. 여기서 기본 출발지로 떨어지면 사용자가 말한 곳과 다른
-        // 데서 출발하는 일정이 "성공"으로 등록된다 — 못 찾았다고 말하는 쪽이 낫다.
-        guard let first = results.first else { return .notFound }
-        return Self.searchTopClearlyMatches(query: query, result: first)
-            ? .resolved(first)
-            : .unclear(Array(results.prefix(Self.maxPlaceSuggestions)))
+        let firstResults = await store.placeSearch.search(query, near: location.currentLocation)
+        // 풀네임 질의가 카카오에서 빗나갔으면(결과가 비었거나 첫 결과가 낱말조차 맞지 않으면)
+        // '점'·'역'을 뗀 재시도 쿼리로 한 번 더 검색해 병합한다(t42 ②). 재시도 결과를 앞에
+        // 두는 이유는 mergedPlaceResults 참고. 첫 결과가 이미 낱말을 만족하면 재시도하지
+        // 않는다 — 목록이 잘 나온 질의를 다시 흔들 이유가 없다.
+        var results = firstResults
+        if firstResults.isEmpty
+            || !Self.searchTopClearlyMatches(query: query, result: firstResults[0]),
+           let retryQuery = Self.suffixStrippedRetryQuery(query) {
+            let retryResults = await store.placeSearch.search(retryQuery, near: location.currentLocation)
+            results = Self.mergedPlaceResults(retry: retryResults, original: firstResults)
+        }
+        // 채택 판정은 별도의 순수 함수에 맡긴다 — 이 자리에서 인라인으로 판단하던 시절 낱말
+        // 포함만으로 참을 내보내 '강남'을 품은 다른 지점이 여럿인데도 첫 결과가 조용히
+        // 확정됐다(t42 ①, 2026-10-05). 결과가 비었을 때의 notFound 처리도 판정 함수 안으로
+        // 흡수됐다.
+        return Self.placeAdoptionDecision(query: query, results: results)
     }
 
-    /// 검색 첫 결과가 사용자가 말한 이름과 "확실히" 맞는지 — 질의의 낱말이 전부 결과 이름에
-    /// 들어 있으면 맞다고 본다. '스타벅스 홍대점'→'스타벅스 대학로점'(홍대 없음), '강남'→
-    /// '서울선릉과정릉'(강남 없음)이 물어볼 자리다. 낱말 끝의 '점'·'역'은 뗀다 — '홍대역'으로
-    /// 말해도 결과는 '홍대입구역'이고 '홍대점'으로 말해도 결과는 '홍대입구역점'이라 접미어를
-    /// 못 박으면 맞는 것까지 물어보게 된다. 띄어쓰기는 양쪽 다 지운다(결과 이름이 붙여 쓰는
-    /// 경우가 많다). 판정이 주소를 안 보는 건 주소 낱말이 가짜 답을 만들었기 때문이다 —
-    /// '강남'으로 말한 자리에서 주소의 '강남구'가 낱말을 만족시켜 '서울선릉과정릉'이 조용히
-    /// 채택됐다(2026-09-24 관측). 주소로 말한 질의는 후보 카드에서 한 번 더 고른다.
+    /// 장소 낱말 정규화의 단일 출처(계약 5): 띄어쓰기를 지우고, 끝이 '점'·'역'이며 뗀 뒤
+    /// 2글자 이상 남으면 한 글자 뗀다. 뗀 자리가 빈 토큰이면 모든 이름에 맞아버리므로
+    /// 2글자 하한을 둔다. 채택 판정(searchTopClearlyMatches·placeAdoptionDecision)과
+    /// 재시도 쿼리 조립(suffixStrippedRetryQuery)이 같은 규칙을 봐야 한다 — 두 벌로 적으면
+    /// 판정은 접미어를 떼는데 재시도 쿼리는 붙인 채로 나가는 어긋남이 생긴다.
+    private static func normalizedPlaceWord(_ word: String) -> String {
+        var t = word.replacingOccurrences(of: " ", with: "")
+        if t.count > 2, t.hasSuffix("점") || t.hasSuffix("역") { t.removeLast() }
+        return t
+    }
+
+    /// 검색 첫 결과가 사용자가 말한 이름과 **모순되지 않는지** — 질의의 낱말이 전부 결과 이름에
+    /// 들어 있으면 참이다. '스타벅스 홍대점'→'스타벅스 대학로점'(홍대 없음), '강남'→
+    /// '서울선릉과정릉'(강남 없음)이 물어볼 자리다. 띄어쓰기는 양쪽 다 지운다(결과 이름이
+    /// 붙여 쓰는 경우가 많다). 판정이 주소를 안 보는 건 주소 낱말이 가짜 답을 만들었기
+    /// 때문이다 — '강남'으로 말한 자리에서 주소의 '강남구'가 낱말을 만족시켜
+    /// '서울선릉과정릉'이 조용히 채택됐다(2026-09-24 관측). 주소로 말한 질의는 후보 카드에서
+    /// 한 번 더 고른다.
+    /// **이 술어는 지점을 좁혔는지 모른다** — '스타벅스 강남점'의 낱말이 '케이스퀘어강남점'에도
+    /// '강남역점'에도 들어 가서 둘 다 참이 되지만 그 둘은 다른 지점이다. 지점을 좁혔는지(결과가
+    /// 여러 지점으로 갈리는가)를 보는 층위는 placeAdoptionDecision이다(t42 ①, 2026-10-05 —
+    /// '강남'을 품은 지점이 여럿인데 첫 결과가 조용히 확정됐다). AA-1의 라벨 '같은 지점으로
+    /// 본다'는 이 술어의 낱말 단위 판정(홍대역→홍대입구역)을 가리키는 것이지, 여러 지점이
+    /// 섞였을 때의 채택 판정과는 다른 층위다.
     private static func searchTopClearlyMatches(query: String, result: Place) -> Bool {
         let haystack = result.name.replacingOccurrences(of: " ", with: "")
-        let tokens = query.split(separator: " ").map { raw -> String in
-            var t = raw.replacingOccurrences(of: " ", with: "")
-            // 접미어를 뗐을 낱말이 2글자는 남아야 뗀다 — 뗀 자리가 빈 토큰이면 모든 이름에 맞는다.
-            if t.count > 2, t.hasSuffix("점") || t.hasSuffix("역") { t.removeLast() }
-            return t
-        }.filter { !$0.isEmpty }
+        let tokens = query.split(separator: " ").map { normalizedPlaceWord(String($0)) }.filter { !$0.isEmpty }
         guard !tokens.isEmpty else { return true }
         return tokens.allSatisfy { haystack.contains($0) }
+    }
+
+    /// 풀네임 검색이 카카오에서 빗나갔을 때의 재시도 쿼리 — 마지막 낱말에만 정규화를 걸어
+    /// '점'·'역'이 벗겨지면 재조립해 돌려준다. '스타벅스 홍대점' 풀네임은 카카오가 엉뚱한
+    /// 목록(첫 결과 대학로점, 후보 1개)을 주지만 '점'을 뗀 '스타벅스 홍대'는 홍대 지점 목록을
+    /// 낸다(t42 ②, 2026-10-05 운영자 관찰). 연쇄 재시도는 하지 않는다 — 한 번 벗겨도 안
+    /// 나오는 질의는 접미어 문제가 아니다.
+    private static func suffixStrippedRetryQuery(_ query: String) -> String? {
+        var words = query.split(separator: " ").map(String.init)
+        guard let last = words.last else { return nil }
+        let stripped = normalizedPlaceWord(last)
+        guard stripped != last, !stripped.isEmpty else { return nil }
+        words[words.count - 1] = stripped
+        return words.joined(separator: " ")
+    }
+
+    /// 채택 삼태를 재료만으로 정하는 순수 판정(네트워크 없음 — 재시도 검색까지 끝낸 결과 목록을
+    /// 받는다). 세 갈래다:
+    /// - **정확 일치**: 정규화한 질의와 정규화한 첫 결과 이름이 같으면 확정한다. 이름을 통째로
+    ///   말한 질의('휴먼시아7단지아파트')는 다른 결과가 같은 낱말을 품어도 첫 결과가 그 이름
+    ///   자체다.
+    /// - **유일 일치**: 첫 결과가 searchTopClearlyMatches를 만족하고, 만족하는 나머지 결과의
+    ///   이름이 전부 첫 결과 이름을 품고 있으면 확정한다. '홍대역'의 결과가 '홍대입구역'과
+    ///   '스타벅스 홍대입구역점'(역 안의 상점)이면 첫 결과를 품는 한 덩어리 — 같은 지점이다.
+    ///   반대로 '스타벅스 홍대점'의 만족 결과가 '홍대입구역점'과 '홍대가좌점'이면 서로를 품지
+    ///   않는다 — 다른 지점 둘이다.
+    /// - 그 외엔 unclear — 결과가 질의의 낱말을 품고 있어도 지점이 여럿이면 첫 결과를 조용히
+    ///   확정하지 않고 후보 카드로 넘긴다(t42 ①, 2026-10-05). 후보는 만족하는 결과 → 나머지
+    ///   순서로 maxPlaceSuggestions개까지, 같은 이름 중복은 하나만 보인다.
+    /// 결과가 비면 notFound — 검색이 빈손이면 실패다. 여기서 기본 출발지로 떨어지면 사용자가
+    /// 말한 곳과 다른 데서 출발하는 일정이 "성공"으로 등록된다.
+    private static func placeAdoptionDecision(query: String, results: [Place]) -> PlaceAdoption {
+        guard let first = results.first else { return .notFound }
+        let q = normalizedPlaceWord(query)
+        let firstNorm = normalizedPlaceWord(first.name)
+        if !q.isEmpty, firstNorm == q { return .resolved(first) }
+        let satisfying = results.filter { searchTopClearlyMatches(query: query, result: $0) }
+        // 유일 판정은 **첫 결과가 만족할 때만** 건다 — 첫 결과가 어긋나는데 만족하는 둘째 결과가
+        // 단독이어도 그걸 확정하면 검색 순위를 무시하는 셈이 된다(재시도 병합이 앞에 둔 목록의
+        // 순서를 되살린다).
+        if searchTopClearlyMatches(query: query, result: first),
+           satisfying.dropFirst().allSatisfy({ normalizedPlaceWord($0.name).contains(firstNorm) }) {
+            return .resolved(first)
+        }
+        var seen = Set<String>()
+        let rest = results.filter { !satisfying.contains($0) }
+        let candidates = (satisfying + rest).filter { seen.insert(normalizedPlaceWord($0.name)).inserted }
+        return .unclear(Array(candidates.prefix(maxPlaceSuggestions)))
+    }
+
+    /// 재시도 결과와 원본 결과의 병합 — 재시도(정규화한 질의에 가까운 목록)를 앞에 두고,
+    /// 이름+위도+경도가 같은 항목의 중복을 뺀다. 판정(placeAdoptionDecision)은 첫 결과를
+    /// 기준으로 갈리므로 순서가 곧 채택이다 — 원본을 앞에 두면 재시도가 있어도 빗나간 원본
+    /// 첫 결과를 그대로 지킨다.
+    private static func mergedPlaceResults(retry: [Place], original: [Place]) -> [Place] {
+        var seen = Set<String>()
+        return (retry + original).filter {
+            seen.insert("\($0.name)|\($0.latitude)|\($0.longitude)").inserted
+        }
     }
 
     /// 목적지 해석: 즐겨찾기 이름과 일치하면 그 좌표를 우선 사용, 아니면 검색(카카오 → MapKit 폴백).
