@@ -406,6 +406,42 @@ MA(t17-a) 완료 요약: 재현 5건(A1) → 수리·진입점·조회(A2–A4) 
 
 AG 라벨 목록: AG-006-01 · AG-006-02 · AG-006-03 · AG-006-04 · AG-006-05(AC-006 (10)의 편집 카드 시드 비교는 B3가 시드를 만든 뒤 더한다 — 이 카드에서 만들지 않았다).
 
+### MB(t17-b) B3·B4 + 게이트
+
+카드 기준 `61d84b4`(B1·B2와 같은 기준 — 카드 t17-b의 직렬 배달) · 커밋 **B3 `aa696a7`**(Shared/EditCard.swift 시드·diff + Shared/ActivityDetailView.swift) · **B4 `241395a`**(Shared/EventDetailView.swift) · 드라이버·이 문서 마지막 커밋. `git diff --name-only 61d84b4 HEAD -- . ':!.moai/specs/SPEC-UIKIT-009' ':!.moai/reports'` = `Shared/EditCard.swift`·`Shared/AddActivityView.swift`(B2)·`Shared/ActivityDetailView.swift`·`Shared/EventDetailView.swift`·`Tools/GuardDriver.swift` — 선언 목록과 같다. `--numstat -- Shared Tools`에서 100줄 이상 파일 4개(ActivityDetailView 172+104 · AddActivityView 51+286 · EditCard 430+0 · GuardDriver 105+0)로 한도 4 이하 · `--diff-filter=A -- Shared/` 무출력(새 소스 파일 없음).
+
+**B3이 만든 것**:
+
+- **EditCard.swift(SwiftUI-free — 드라이버가 AG절을 컴파일해 돌린다)**: ① `LegCardForm.seeded(activity:outbound:returnLeg:noPlaceValue:placeOptions:favoriteOptions:)` — 편집 카드의 시드(design §2 시드 문단). 기본 줄 넷을 만든 뒤 **전이 자체를 돌려** 구간 줄을 세운다 — 시드가 줄을 손으로 배열하면 생성 카드의 전이와 순서가 어긋나므로, AG-006-06을 단언이 아니라 타입이 지키게 한다. 알림 시드값은 ensureNotifyRows가 기억값에서 읽으므로 토글을 켜기 전에 심는다(가는 편 없으면 오는 편 구간의 알림 — 두 구간이 다른 옛 데이터는 가는 편이 이긴다). 반복 회차(명시적 연결 없음)는 구간 줄이 아예 없고(REQ-011), 연결이 있는 반복 회차는 그 구간으로 시드한다(linkedLegs와 같은 우선순위). 출발지 nil인 옛 레코드는 출발지 줄을 비워 저장이 잠기게 한다(빈 이름을 chosen으로 적으면 좌표 없는 구간이 조용히 저장된다). ② `LegSaveOp`(remove·update·add)와 `LegSavePlanner.ops(seed:current:outboundLeg:returnLeg:)` — 저장 diff(design §3 표)의 순수 함수. (그 역할 기존 구간) × (토글) × (줄이 시드와 다른가)를 판정하고 **무변경 저장은 빈 목록**을 낸다(REQ-008 바이트 동일의 출발점). 공유 알림 줄은 **줄을 바꿨을 때만** update에 실린다(AC-011 (3) — 바꾸지 않은 저장은 어느 구간의 알림도 손대지 않는다). 토글 줄이 아예 없으면 부재(장소 지움)다 — 연결 구간 제거는 `modifyActivity(clearPlace:)`가 이미 하므로 diff는 아무것도 내지 않는다. 좌표 없는 출발지·도착지로는 add를 내지 않는다(addLeg의 outerPlace가 비-Optional). 반환 순서는 제거 → 수정 → 추가.
+- **ActivityDetailView.swift**: `@State card`·`confirmedPlaces`·`favoritePlaces` → `@State private var form: LegCardForm?` + 시드 스냅샷 셋(`seed: LegCardForm?`·`seedLegs` — diff가 (시드, 현재, 시드 때 구간)의 순수 함수라 await 사이에도 늙지 않는다). `choose`는 `form?.choose` 위임 + 장소 변경 시 주변 맛집 무효화(문법이 모르는 화면 몫). 저장 흐름(design §3 순서): ① `modifyActivity`(제목·시간·장소 — "장소 없음"은 좌표 nil과 `clearPlace: true`로 구분) → ② 장소를 지우지 않은 저장만 `realignLegs` → ③ diff 연산 제거 → 수정 → 추가 순서로 하나씩 직렬(`removeLeg`·`updateLeg`·`addLeg`) → ④ 결과 집계 → ⑤ 닫기. 저장 중 저장·닫기 잠금(`saving` — 생성 카드 패턴 그대로). 결과 보고(REQ-010·009): 이동시간 미계산이면 시트 안 안내 `이동시간을 계산하지 못했어요`(Theme.warn + 삼각형 아이콘, 새 컨트롤 아님 — accessibilityLabel 불필요), 거절 사유도 문구로(중복 역할·장소 없음·활동 없음 셋 각각) — 안내가 있으면 시트를 열어 두고, 없으면 닫는다. 삭제 확인(REQ-014): `store.explicitLegCount(of:)` ≥ 1이면 `이 활동과 딸린 이동 N건을 삭제할까요?`, 0이면 기존 문구 — 반복 회차 안내 문구는 그대로(AC-011 (4)). 키 리터럴은 `LegRowKeys`로만(AC-006 (9) — 이 화면 0줄 유지).
+
+**B4가 바꾼 것(EventDetailView.swift)**: ① 편집 라우팅(REQ-001·006) — 시트가 `store.activity(forLeg: event)`를 부른다: 활동이 있으면 `ActivityDetailView(activityId:)`(연결된 구간의 편집은 활동 카드로), 없으면(단독 구간·매달린 링크) 지금처럼 `AddEventView(editing:)`. ActivityDetailView는 이미 `activityId` 초기화를 가진다(별도 추가 없음). ② 같은 제목 집합(REQ-013) — 뷰의 `store.events.filter { $0.title == event.title }`을 `store.sameTitleSweep(for:)`로 교체. 메뉴 노출 조건은 기존 `sameTitleEvents.count > 1` 그대로라 스윕 집합이 1건 이하(연결된 구간·단독 1건)면 묶음 삭제가 숨는다(스크립트 13의 기대). `deleteEvent` 단독 삭제는 불변.
+
+**AG절 추가(Tools/GuardDriver.swift, AG-006-05 뒤)** — 단언 4개(전부 기대 ✓):
+
+```
+  ✓ AG-006-06 같은 입력 순서의 생성 카드와 편집 카드(구간 둘로 시드)의 줄 키 배열이 같다
+  ✓ AG-011-01 반복 회차 활동(recurrenceId, 명시적 연결 없음)의 시드에는 구간 줄(토글 포함)이 하나도 없다 — 같은 반복·같은 날·같은 장소 이름의 미끼 이벤트가 있어도 그렇다
+  ✓ AG-011-02 구간 둘(가는 편 도보·여유 20, 오는 편 자동차)의 시드: 두 토글 "true", 출발지·수단·여유·도착지·수단이 그 구간 값
+  ✓ AG-011-03 알림이 서로 다른 두 구간: 시드는 가는 편 값(켬·10분)이고, 바꾸지 않은 저장의 diff 목록이 비어 있다
+```
+
+레코드는 메모리에서 만들었다(acceptance 머리말 ③ — 네트워크 무관). 기존 라벨(AF 67·AG 5)은 하나도 빼지 않았다.
+
+**이월 경고 판단(MA code-safety 경고 1·2 — Store은 이 카드에서 고치지 않았다, MB 선언 목록 밖)**:
+
+1. **경고 1(addLeg 중복 역할 검사가 await 앞에만)**: 활동 카드의 저장 버튼이 `saving` 잠금으로 이중 탭을 막고, diff의 add는 한 저장당 역할별 최대 하나이며 연산은 직렬로 실행된다 — 이 뷰 경로에서는 같은 역할 addLeg가 경쟁할 틈이 없다. 잔여 경로(다른 화면에서의 동시 addLeg)는 **MC(Store 작게 고침 몫)로 이월** — 수리 모양은 MA code-safety 소절의 제안(await 뒤 재검사 + 보상 삭제) 그대로.
+2. **경고 2(updateLeg·realignLegs 유도값이 await 전 활동 스냅샷)**: 이 카드의 저장 흐름은 활동 저장(①)을 **동기**로 마친 뒤 realignLegs(②)를 부르므로, 스냅샷은 방금 저장한 활동 값이다 — 뷰 경로에서 옛 앵커가 되쓰이는 틈은 활동 저장과 realign 사이에 다른 경로가 끼어드는 경우뿐이고 그 원(동시 moveActivity·동기화)은 UI에서 겹치지 않는다(MA 판정과 같은 잔여 위험). 스냅샷 재독기 필요 여부 판단도 **MC로 이월**.
+
+**게이트(이 레인이 직접 실행, 최종 트리에서)**:
+
+1. 드라이버 컴파일: CLAUDE.md 명령 → **exit 0**(`.moai/state/verify/t17/mb34-driver-compile.log`) · 경고 24줄, 정규화 집합(줄·열 제거 sed)이 기준 `mb12-driver-compile.log`와 `diff` exit 0 — 새 경고 0(첫 컴파일에서 이 카드가 넣은 Optional 보간 경고 2줄을 `String(describing:)`으로 닫았다).
+2. 드라이버 실행: `/tmp/gd-mb > .moai/state/verify/t17/mb34-driver-run.log 2>&1` → **exit 0 · ✓ 429 + 4 = 433 · ✗ 0**(MB 하한 432 초과) · P/T 원문 `433/433 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 샌드박스 잔여 없음.
+3. iOS 빌드: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` → **exit 0 · BUILD SUCCEEDED**(`.moai/state/verify/t17/mb34-ios-build.log`) · 툴체인 안내를 뺀 `warning:` = **0**(무경고). 첫 빌드는 구조체 뷰에 `[weak self]`를 붙여 exit 65로 실패 — 캡처 없는 `Task { @MainActor in }`(EventDetailView 패턴)으로 고쳐 통과.
+4. grep 항목(전부 이 레인이 실행): AC-001 (2) `ActivityDetailView(activityId` EventDetailView = **1** · (3) `AddEventView(editing` = **1** 그리고 `activity(forLeg:` = **1**(≥1) · AC-006 (9) 아홉 키 리터럴 AddActivityView = **0** / ActivityDetailView = **0**(EditCard 표에만) · AC-011 (4) `반복 일정의 한 회차입니다` ActivityDetailView = **1** · AC-013 (4) `grep -cF 'store.events.filter { $0.title == event.title }'` = **0** · AC-014 (2) `딸린 이동` ActivityDetailView = **2**(≥1).
+
+MB(t17-b) 완료 요약: B1(문법 추출) → B2(생성 카드 전환) → B3(시드·diff + 활동 카드) → B4(이동 상세 라우팅·삭제 집합) → 게이트 전 항목 관측 통과. 사람 몫(스크립트 1~13·13a — AC-023)은 운영자 대기.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

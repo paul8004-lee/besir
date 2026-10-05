@@ -4415,6 +4415,104 @@ struct Drv {
                           && ag5.card.fields.count == 4,
                       "남은 구간 줄=\(ag5.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.map(\.key))")
 
+        // ── AG. t17-b B3 — 편집 카드의 시드와 저장 diff(AC-006 (10) · AC-011 (1)–(3)).
+        //        레코드는 메모리에서 만든다(acceptance 머리말 ③) — 네트워크와 무관하게 결정적이다.
+        print("\nAG. t17-b B3 — 편집 카드 시드·저장 diff(SPEC-UIKIT-009 MB, REQ-007·011)")
+        let agSole = BesirTime.isoFormatter.date(from: "2027-03-10T14:00:00")!
+        let agOffice = Place(name: "회사", address: "서울 B", latitude: 37.550, longitude: 127.050)
+        func agSeedActivity(_ recurrence: UUID? = nil) -> ActivityBlock {
+            ActivityBlock(title: "회의", location: agOffice,
+                          startDate: agSole, endDate: agSole.addingTimeInterval(3600),
+                          recurrenceId: recurrence)
+        }
+        func agSeedLeg(role: ScheduleAnchor, activityId: UUID, origin: Place?, dest: Place,
+                       mode: TransportMode, buffer: Int, notifyLead: Int, notifyOn: Bool?) -> ScheduledEvent {
+            ScheduledEvent(title: role == .departure ? "회의 (복귀)" : "회의",
+                           origin: origin, destination: dest,
+                           arrivalDate: role == .departure ? agSole.addingTimeInterval(5400) : agSole,
+                           mode: mode, bufferMinutes: buffer, notifyLeadMinutes: notifyLead,
+                           notifyEnabled: notifyOn, linkedActivityId: activityId, anchor: role)
+        }
+
+        // (10) 두 화면이 같은 문법 — 같은 입력 순서로 만든 생성 카드와 편집 카드의 줄 키 배열.
+        var ag6Creation = agCard()
+        ag6Creation.choose(field: ag6Creation.card.fields[1].id, value: agOffice.name, place: agOffice)
+        ag6Creation.choose(field: agField(ag6Creation, LegRowKeys.outboundEnabled)!.id, value: "true")
+        ag6Creation.choose(field: agField(ag6Creation, LegRowKeys.returnEnabled)!.id, value: "true")
+        let ag6Act = agSeedActivity()
+        let ag6Out = agSeedLeg(role: .arrival, activityId: ag6Act.id, origin: agHome, dest: agOffice,
+                               mode: .walk, buffer: 20, notifyLead: 30, notifyOn: true)
+        let ag6Ret = agSeedLeg(role: .departure, activityId: ag6Act.id, origin: agOffice, dest: agHome,
+                               mode: .car, buffer: 0, notifyLead: 30, notifyOn: true)
+        let ag6Edit = LegCardForm.seeded(activity: ag6Act, outbound: ag6Out, returnLeg: ag6Ret,
+                                         noPlaceValue: "__no_place__", placeOptions: [],
+                                         favoriteOptions: [])
+        agAi.drvCheck("AG-006-06 같은 입력 순서의 생성 카드와 편집 카드(구간 둘로 시드)의 줄 키 배열이 같다",
+                      ag6Creation.card.fields.map(\.key) == ag6Edit.card.fields.map(\.key),
+                      "생성=\(ag6Creation.card.fields.map(\.key))\n      편집=\(ag6Edit.card.fields.map(\.key))")
+
+        // AC-011 (1) — 반복 회차(명시적 연결 없음)의 시드에는 구간 줄이 하나도 없다. 배치 묶음
+        // 추정에 걸릴 것처럼 보이는 미끼(같은 반복·같은 날·같은 장소 이름, 연결 없음)를 함께 둔다.
+        let ag11Rec = UUID()
+        let ag11RecAct = agSeedActivity(ag11Rec)
+        var ag11Decoy = agSeedLeg(role: .arrival, activityId: ag11RecAct.id, origin: agHome,
+                                  dest: agOffice, mode: .transit, buffer: 0, notifyLead: 30, notifyOn: true)
+        ag11Decoy.linkedActivityId = nil
+        ag11Decoy.recurrenceId = ag11Rec
+        agAi.drvCheck("AG-011-01 반복 회차 활동(recurrenceId, 명시적 연결 없음)의 시드에는 구간 줄(토글 포함)이 "
+                      + "하나도 없다 — 같은 반복·같은 날·같은 장소 이름의 미끼 이벤트가 있어도 그렇다",
+                      LegCardForm.seeded(activity: ag11RecAct, outbound: nil, returnLeg: nil,
+                                         noPlaceValue: "__no_place__", placeOptions: [],
+                                         favoriteOptions: [])
+                          .card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.isEmpty
+                          && ag11Decoy.destination.name == agOffice.name,
+                      "미끼=\(ag11Decoy.title) → \(ag11Decoy.destination.name)")
+
+        // AC-011 (2) — 구간 둘의 시드는 두 토글 true + 출발지·수단·여유·도착지·수단이 그 구간 값.
+        let ag112Form = LegCardForm.seeded(activity: ag6Act, outbound: ag6Out, returnLeg: ag6Ret,
+                                           noPlaceValue: "__no_place__", placeOptions: [],
+                                           favoriteOptions: [])
+        let ag112Origin = agField(ag112Form, LegRowKeys.originQuery)
+        let ag112Return = agField(ag112Form, LegRowKeys.returnQuery)
+        agAi.drvCheck("AG-011-02 구간 둘(가는 편 도보·여유 20, 오는 편 자동차)의 시드: 두 토글 \"true\", "
+                      + "출발지·수단·여유·도착지·수단이 그 구간 값",
+                      agField(ag112Form, LegRowKeys.outboundEnabled)?.chosen == "true"
+                          && agField(ag112Form, LegRowKeys.returnEnabled)?.chosen == "true"
+                          && ag112Origin?.chosen == agHome.name
+                          && ag112Form.confirmedPlaces[ag112Origin!.id] == agHome
+                          && agField(ag112Form, LegRowKeys.outboundMode)?.chosen == TransportMode.walk.rawValue
+                          && agField(ag112Form, LegRowKeys.bufferMinutes)?.chosen == "20"
+                          && ag112Return?.chosen == agHome.name
+                          && ag112Form.confirmedPlaces[ag112Return!.id] == agHome
+                          && agField(ag112Form, LegRowKeys.returnMode)?.chosen == TransportMode.car.rawValue,
+                      "toggles=\(String(describing: agField(ag112Form, LegRowKeys.outboundEnabled)?.chosen))/\(String(describing: agField(ag112Form, LegRowKeys.returnEnabled)?.chosen)), "
+                          + "origin=\(String(describing: ag112Origin?.chosen)), "
+                          + "origin좌표=\(String(describing: ag112Origin.flatMap { ag112Form.confirmedPlaces[$0.id] })), "
+                          + "mode=\(String(describing: agField(ag112Form, LegRowKeys.outboundMode)?.chosen)), "
+                          + "buffer=\(String(describing: agField(ag112Form, LegRowKeys.bufferMinutes)?.chosen)), "
+                          + "return=\(String(describing: ag112Return?.chosen)), "
+                          + "returnMode=\(String(describing: agField(ag112Form, LegRowKeys.returnMode)?.chosen))")
+
+        // AC-011 (3) — 알림 설정이 다른 옛 데이터: 시드는 가는 편 값을 쓰고, 알림 줄을 바꾸지 않은
+        // 저장의 diff 연산 목록이 비어 있다(어느 구간도 바꾸지 않는다).
+        let ag113OldOut = agSeedLeg(role: .arrival, activityId: ag6Act.id, origin: agHome, dest: agOffice,
+                                    mode: .transit, buffer: 10, notifyLead: 10, notifyOn: true)
+        let ag113OldRet = agSeedLeg(role: .departure, activityId: ag6Act.id, origin: agOffice, dest: agHome,
+                                    mode: .transit, buffer: 0, notifyLead: 60, notifyOn: false)
+        let ag113Seed = LegCardForm.seeded(activity: ag6Act, outbound: ag113OldOut, returnLeg: ag113OldRet,
+                                           noPlaceValue: "__no_place__", placeOptions: [],
+                                           favoriteOptions: [])
+        let ag113Ops = LegSavePlanner.ops(seed: ag113Seed, current: ag113Seed,
+                                          outboundLeg: ag113OldOut, returnLeg: ag113OldRet)
+        agAi.drvCheck("AG-011-03 알림이 서로 다른 두 구간: 시드는 가는 편 값(켬·10분)이고, 바꾸지 않은 저장의 "
+                      + "diff 목록이 비어 있다",
+                      agField(ag113Seed, LegRowKeys.notifyEnabled)?.chosen == "true"
+                          && agField(ag113Seed, LegRowKeys.notifyLeadMinutes)?.chosen == "10"
+                          && ag113OldRet.wantsNotification == false
+                          && ag113Ops.isEmpty,
+                      "notify=\(String(describing: agField(ag113Seed, LegRowKeys.notifyEnabled)?.chosen))/"
+                          + "\(String(describing: agField(ag113Seed, LegRowKeys.notifyLeadMinutes)?.chosen)), ops=\(ag113Ops.count)건")
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
