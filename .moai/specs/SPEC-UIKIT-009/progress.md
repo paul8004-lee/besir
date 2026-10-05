@@ -290,6 +290,8 @@ _<pending run-phase>_
 
 특성화·고정점 ✓ 라벨(전부 기준 트리 ✓ — REQ-020): AF-004-03 · AF-004-04 · AF-004-06 · AF-005-01(재현 ✓ 관측) · AF-012-01 · AF-012-03 · AF-012-04 · AF-018-01 · AF-018-02 · AF-018-03 · AF-019-01 · AF-019-02 · AF-010-04(함의) · AF-010-10-a · AF-010-10-b — 라벨 20개 중 ✓ 15·✗ 5.
 
+**판정 레인(run 세션) 재실행 대조(2026-10-05, 커밋 `021f9fd`)**: 같은 명령으로 재컴파일·재실행(`.moai/state/verify/t17/v1-driver-compile.log`·`v1-driver-run.log`) — exit 1 · ✓ 372 · ✗ 5(같은 다섯 라벨) · `372/377 통과` · `[실제 데이터] 대조 통과` · 경고 정규화 집합 `diff` exit 0 · 샌드박스 잔여 없음. A1 관측은 두 번의 독립 실행으로 같다.
+
 AF-010-04 도달 기록 줄 원문(이 실행, 온라인):
 
 ```text
@@ -297,6 +299,43 @@ AF-010-04 도달 기록 줄 원문(이 실행, 온라인):
 ```
 
 **"예"의 원인은 코드가 아니라 이 기기의 MapKit ETA 한도다.** 같은 실행의 이른 시점 `✓ S 전제 — 이 환경에서 이동시간 조회가 된다`는 통과했고, 격리 프로브(같은 좌표·도보)로 실측한 결과 이 환경의 MapKit `calculateETA`는 짧은 창에 약 8~9건만 응답하고 그 뒤 `Directions are not available.`로 거절한다(프로브 150연발: 9번째부터 전량 거절, 회복은 분 단위). AF절은 드라이버 맨 끝이라 drvCreate 22곳이 쓴 한도 뒤라 추정이 항상 실패한다. 좌표·수단은 S절과 같은 모양(37.500→37.510 도보)으로 맞췄음에도 같다. 단언 자체는 함의라 ✓이며(AC-010 (4)), "예" 관측 자체는 오프라인 실행 없이도 failure 모양 (가)·(나)를 실물로 본 기록으로 남긴다. "도달: 아니오"를 얻으려면 한도 창이 비었을 때 드라이버를 단독 실행해야 한다(잔여 위험).
+
+### MA(t17-a) A2–A4 — Store 진입점·조회·저장 수리·삭제 연계 + AF절 완성
+
+실행 트리: `021f9fd` + `Shared/Store.swift` + `Tools/GuardDriver.swift`(AF절) + 이 문서. **고친 파일 셋**: `Shared/Store.swift`·`Tools/GuardDriver.swift`·`.moai/specs/SPEC-UIKIT-009/progress.md` (`git diff --name-only 42065af HEAD`로 최종 확인 — AC-019 (1)).
+
+**A2–A4 바꾼·새로 만든 함수(이름은 run이 확정 — design.md §5의 제안을 그대로 채택)**:
+
+- 새 MARK 블록 `// MARK: - 구간 진입점·조회(SPEC-UIKIT-009 MA)`: `LegRefusalReason`·`LegOutcome`(created/updated/removed/refused/failed — travelKnown 플래그 포함) · `legAnchor(role:activity:)`(시간 유도의 한 자리 — addLeg·updateLeg·realignLegs가 읽음; realignReturnLeg는 shift 기반이라 못 쓴다는 사실을 주석에 기록, design §9) · `legTitle(role:activity:)`(제목의 한 자리) · `explicitLegs(of:)`(private) · `legs(of:)`(명시적만, `.first` 규칙) · `activity(forLeg:)` · `explicitLegCount(of:)` · `sameTitleSweep(for:)` · `packingGroups(events:activities:)`(추정 분기는 `estimatedLegs` 한 벌 — linkedLegs·packingGroups가 같은 함수를 읽음, AC-015 (12); @MX:NOTE·@MX:WARN·@MX:REASON 부착) · `addLeg`(async, @MX:ANCHOR — 보호 3종·보상 검사) · `updateLeg`(async — 앵커를 활동 현재값에서 재유도) · `removeLeg` · **따라오기 진입점 `realignLegs(of:outboundTravelSecondsHint:returnTravelSecondsHint:)`**(무변경 구간은 updateEvent를 부르지 않음 — 바이트 동일; 구간 하나씩 직렬; 결과의 updated는 "활동을 따르고 있음"의 뜻).
+- 기존 함수 안의 수정(그 자리에서): `addActivityWithTravel` — `travelSecondsHint: TimeInterval? = nil` 인자 추가, 구간 생성을 addLeg 두 호출로(계약 5 — 생성 경로 하나; 두 await 사이 활동 재확인 부재도 함께 닫힘; made=시도 수 의미 유지, 기존 호출자 셋은 소스 불변). `modifyActivity` — `clearPlace: Bool = false` 추가(지우면 location=nil + `removeExplicitLegs`; 기본 인자는 기존 동작·AI 호출 모양 보존), 끝 ≤ 시작 newEnd는 거절됐을 때 `realignReturnLeg`를 부르지 않게 함(AC-004 (5)). `deleteActivity`·`deleteActivities` — 공통 몸통 `deleteActivitiesCore` + 구간 정리 helper `removeExplicitLegs(of:)`(계약 5 — 정리 절차 한 벌; 일괄의 알림 취소·저장·캘린더 삭제 1회 최적화 유지; 반복 추정 구간은 연쇄에서 제외). `linkedLegs` — 추정 분기를 `estimatedLegs`로 추출(linkedLegs·packingGroups가 같은 코드를 읽게).
+- `deleteEvent`는 그것만 지우는 현재 동작 유지(REQ-013 몫). 뷰의 같은 제목 모으기 교체·`legs(of:)`의 뷰 사용은 MB 몫 — 건드리지 않았다.
+
+**AF절 완성**: 기존 20라벨에서 AF-004-01·02를 새 지우기 호출 모양(`modifyActivity(id:newPlace:nil,clearPlace:true)`)으로 바꾸고(라벨 유지), AF-004의 (a)·(b) 순서를 (b)→(a)로 바꿨다(수리 뒤 (a)가 구간을 지우므로 5의 바이트 대조가 지워진 레코드를 잡지 않게), AF-005-01 문장을 "남지 않는다"로 바꿨다(AC-005 (1) 지시). 새 단언 47라벨: AF-001-01~03 · AF-002-01~07 · AF-003-01~05 · AF-005-02 · AF-007-01~08 · AF-008-01~05 · AF-009-01~05 · AF-010-01~03 · AF-013-01~03 · AF-014-01~03 · AF-015-09~12. 기존 357 라벨은 하나도 빼거나 고치지 않았다(뺀 수 0 — AC-020 (2)).
+
+**게이트(이 레인이 직접 실행, 온라인)**:
+
+- 컴파일: `cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd-a2.swift && swiftc -o /tmp/gd-a2 … -parse-as-library` → **exit 0** (`.moai/state/verify/t17/a2-driver-compile.log`). 경고 정규화 집합(`grep 'warning:' 로그 | sed -E 's#^[^:]+:[0-9]+:[0-9]+: ##; s/^[[:space:]]+/    /' | sort`)이 기준 24줄과 `diff` exit 0(새 경고 0 — `.moai/state/verify/t17/a2-warn-normalized.txt`).
+- 실행: `/tmp/gd-a2 > .moai/state/verify/t17/a2-driver-run.log 2>&1` → **exit 0 · ✓ 424 · ✗ 0** · `grep -c '^  ✓ AF-'` = **67**(357 + 67 = 424, 하한 423 초과) · P/T 줄 원문: `424/424 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다`. 샌드박스 잔여 없음(`ls -d $TMPDIR/besir-gd-*` 무출력).
+- iOS 빌드는 이 위임에 없다(판정 레인 A5 몫).
+
+**수리 뒤 재현 5건의 ✓ 줄 원문**(`a2-driver-run.log`):
+
+```text
+  ✓ AF-004-01 장소 지우기(clearPlace) 저장 뒤 location == nil이다
+  ✓ AF-004-02 그 저장 뒤 이 활동에 연결된 구간이 0건이다
+  ✓ AF-004-05 그 시도 뒤 두 구간 레코드가 저장 전과 바이트 동일하다(재정렬 없음)
+  ✓ AF-005-01 일괄 삭제 뒤 구간이 남지 않고 활동만 사라진다
+  ✓ AF-012-02 일괄 deleteActivities([A2]) → A2와 그 구간이 모두 사라진다
+  ✓ AF-012-05 삭제 뒤 events에 존재하지 않는 활동을 가리키는 linkedActivityId가 없다
+```
+
+**경쟁 도달 줄 원문**(AF-009-03, 온라인 실행):
+
+```text
+  · AF-009-03 경쟁 도달: 예 (yield 직후 구간 존재=false)
+```
+
+경쟁이 `await`(추정) 안에 닿았다 — 회귀선으로 약하지 않다. AF-010-04 도달 줄은 A1과 같은 `도달: 예`(같은 실행의 `✓ S 전제` 통과 — 이 기기 MapKit ETA 한도, A1 기록 참조)로, 함의 단언은 ✓.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
