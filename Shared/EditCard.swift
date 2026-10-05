@@ -246,6 +246,447 @@ import Foundation
     var isReady: Bool { fields.allSatisfy { $0.chosen != nil } }
 }
 
+// MARK: - 구간 줄 문법(SPEC-UIKIT-009 MB)
+
+/// 구간 줄 아홉의 키 표 — 리터럴은 이 표에만 산다(AC-006 (9)). 생성 카드·활동 카드·이 파일의
+/// 전이와 줄 공장이 전부 이 상수를 읽는다. AI 카드의 어휘(travel_from_query·return_to_query)와
+/// 이름이 다른 채로 둔 이유: 사상은 어댑터의 일이고 그 어댑터는 t30의 몫이기 때문이다(REQ-007) —
+/// 여기서는 두 화면이 같은 키로 말하게 하는 것만이 목적이다.
+@MainActor enum LegRowKeys {
+    static let outboundEnabled = "outbound_enabled"
+    static let originQuery = "origin_query"
+    static let outboundMode = "outbound_mode"
+    static let bufferMinutes = "buffer_minutes"
+    static let returnEnabled = "return_enabled"
+    static let returnQuery = "return_query"
+    static let returnMode = "return_mode"
+    static let notifyEnabled = "notify_enabled"
+    static let notifyLeadMinutes = "notify_lead_minutes"
+    /// 장소가 사라질 때 한꺼번에 빠지는 아홉 줄의 집합 — 키 나열이 호출부마다 배열 리터럴로
+    /// 흩어져 있으면 열째 줄이 생기는 날 한 자리만 늙는다.
+    static let allKeys: Set<String> = [outboundEnabled, originQuery, outboundMode, bufferMinutes,
+                                       returnEnabled, returnQuery, returnMode,
+                                       notifyEnabled, notifyLeadMinutes]
+}
+
+/// 활동의 구간(가는/오는 이동) 줄을 굴리는 값 상태와 전이. 생성 카드(AddActivityView)가 뷰의
+/// @State 아홉과 빌더 다섯으로 홀로 들고 있던 것을, 활동 카드(ActivityDetailView)도 같은 문법으로
+/// 쓰게 하려고 뷰 밖으로 뽑았다(SPEC-UIKIT-009 REQ-007) — 문법이 두 화면에 벌로 있으면 줄
+/// 문구·멤버십 규칙이 어느 한쪽만 늙는다(계약 5). EditField가 @MainActor struct이므로 이 타입도
+/// 같은 격리를 따른다(이 파일 머리 주석의 이유와 같다).
+///
+/// 뷰는 이 값 하나를 @State로 들고 choose만 부른다. 좌표 사전(줄 신원 → Place)과 기억값 아홉이
+/// card와 한 몸인 이유: choose의 전이가 셋을 함께 고치는데 뷰 쪽에 흩어 두면 어느 하나만 값을
+/// 옮기는 순간 전이가 반쪽으로 도는 문법이 된다.
+@MainActor struct LegCardForm {
+    var card: EditCard
+    /// 후보를 탭한 순간 좌표까지 확정된 장소. 열쇠는 이름이 아니라 **줄 신원**(EditField.id)이다.
+    /// 이름으로 걸면 같은 상호의 다른 지점을 두 줄에서 고를 때 나중 쓰기가 앞 줄의 좌표까지
+    /// 덮어, 활동 장소와 출발지가 한 좌표가 된다 — 이동 0분짜리 구간에 출발 알람이 활동 시작
+    /// 시각으로 잡히고, 화면엔 이름만 보여 어긋난 걸 알 길이 없다. 줄 신원은 생성 때 한 번
+    /// 찍히므로 두 줄이 겹칠 수가 없다. 지연 해석 함수는 만들지 않는다(계약 5: 만들면
+    /// resolvePlace의 세 번째 구현이 된다).
+    var confirmedPlaces: [UUID: Place] = [:]
+    /// 즐겨찾기 칩의 옵션과 라벨 → 좌표 씨앗. 칩 탭은 Place를 들고 오지 않고 라벨만 주므로 그
+    /// 라벨을 좌표로 푸는 씨앗이 전이에 필요하다 — 카드를 띄우는 화면이 시트가 뜰 때 채워 넣는다.
+    var favoriteOptions: [EditField.Option] = []
+    var favoritePlaces: [String: Place] = [:]
+
+    // ── 줄이 배열에서 빠져 있는 동안의 기억값(REQ-011). 되살리지 않으면 토글을 껐다 켠 사용자가
+    // 방금 고른 출발지·여유를 잃는다 — AddEventView의 lastNotifyLead와 같은 형태다.
+    /// 가는 편이 꺼져 있는(또는 장소가 없어 줄 자체가 없는) 동안의 출발지 이름.
+    var rememberedOutboundOrigin: String? = nil
+    /// 그 출발지의 좌표. 이름만 기억하면 다리를 껐다 켠 사용자가 좌표를 잃는다 — 좌표가 줄 신원에
+    /// 걸린 뒤로, 되살린 줄은 신원이 달라 이름으로는 되찾을 길이 없다.
+    var rememberedOutboundOriginPlace: Place? = nil
+    var rememberedOutboundMode = TransportMode.transit.rawValue
+    /// 가는 편이 꺼져 있는 동안의 도착 여유(분).
+    var rememberedBuffer = "10"
+    /// 오는 편이 꺼져 있는 동안의 도착지 이름.
+    var rememberedReturnTo: String? = nil
+    /// 그 도착지의 좌표 — 출발지와 같은 이유로 이름과 함께 기억한다.
+    var rememberedReturnToPlace: Place? = nil
+    var rememberedReturnMode = TransportMode.transit.rawValue
+    /// 알림 줄이 꺼져 있는 동안의 마지막 켬/끔 — 다리를 껐다 켜도 알림을 끊은 사실이 되살아나야
+    /// 옛 폼과 같다(옛 폼의 알림 스위치는 다리를 꺼도 값을 유지했다).
+    var lastNotifyOn = true
+    /// 알림 줄이 꺼져 있는 동안의 마지막 리드 값.
+    var lastNotifyLead = "30"
+    /// 반복 회차(명시적 연결 없음) — 이 폼에서는 구간을 만들 수 없다(REQ-011). 시드의 가드는
+    /// 시드 때만 돌고 장소를 고르는 전이는 반복 여부를 모르므로, 시드가 이 깃발을 심어 전이가
+    /// 이걸 본다(sync 1차 B1 — 깃발이 없으면 장소 선택만으로 토글 줄이 살아나 저장 시 매달린
+    /// 링크가 되는 구간이 만들어진다).
+    var recurrenceEpisodeWithoutLegs = false
+
+    /// 칩을 탭했을 때의 전이 — 생성 카드의 choose(field:value:place:)에서 구간 네 분기와 공통
+    /// 몸통(값 적기·좌표 걸기)을 그대로 옮겼다. 문구·멤버십·줄 위치가 한 글자도 다르지 않아야
+    /// 같은 문법이다(AC-006 (2)가 전 저장소에서 문구가 정확히 한 번 나온다고 잰다).
+    /// `place`는 검색 후보를 탭해 지점까지 특정된 경우에만 실려 온다(choosePlace) — 칩 탭은
+    /// nil로 들어와 라벨을 즐겨찾기 씨앗에서 푼다.
+    mutating func choose(field: UUID, value: String, place: Place? = nil) {
+        guard let i = card.fields.firstIndex(where: { $0.id == field }) else { return }
+        let key = card.fields[i].key
+        card.fields[i].chosen = value
+        // 좌표는 값을 적은 그 줄 자리에 건다. 실려 온 place가 즐겨찾기 씨앗을 이기는 순서인 이유:
+        // 검색 후보는 지점까지 특정된 값이고 즐겨찾기 라벨은 우연히 같을 수 있는 이름일 뿐이라,
+        // 반대로 두면 검색해서 고른 "스타벅스" 홍대점이 즐겨찾기 "스타벅스"의 좌표로 조용히
+        // 바뀐다. 씨앗에도 없으면("장소 없음" 칩) nil이 들어가 옛 좌표가 지워진다 — 이름이
+        // 열쇠이던 시절엔 열쇠가 바뀌며 저절로 풀리던 자리라, 이제 명시로 갚는다.
+        if card.fields[i].kind == .place { confirmedPlaces[field] = place ?? favoritePlaces[value] }
+        switch key {
+        case "location_query":
+            // note는 없는 줄(이동)을 설명하는 말 — 고르는 순간 낡는다. 남아 있으면 잡음이다.
+            card.fields[i].note = nil
+            if confirmedPlaces[field] != nil {
+                // 실제 장소를 고른 순간 다리 토글 줄이 태어난다 — 옛 화면의 else 가지가 줄 멤버십으로
+                // 옮겨온 자리다. "장소 없음"은 즐겨찾기 씨앗에도 검색 결과에도 없어 바로 위에서
+                // 이 줄의 좌표가 nil로 지워지므로 이 가지를 타지 않는다. 반복 회차 폼은 예외다 —
+                // 깃발이 참이면 삽입을 건너뛴다(위 recurrenceEpisodeWithoutLegs 주석).
+                if !recurrenceEpisodeWithoutLegs,
+                   !card.fields.contains(where: { $0.key == LegRowKeys.outboundEnabled }) {
+                    let at = card.fields.firstIndex(where: { $0.key == "end_iso" }).map { $0 + 1 }
+                        ?? card.fields.count
+                    card.fields.insert(contentsOf: [
+                        legToggleRow(key: LegRowKeys.outboundEnabled, label: "가는 이동 (활동 시작에 맞춰 도착)"),
+                        legToggleRow(key: LegRowKeys.returnEnabled, label: "오는 이동 (활동 끝나면 출발)"),
+                    ], at: at)
+                }
+            } else {
+                rememberTravelValues()
+                forgetPlaces([LegRowKeys.originQuery, LegRowKeys.returnQuery])
+                card.fields.removeAll { LegRowKeys.allKeys.contains($0.key) }
+            }
+        case LegRowKeys.outboundEnabled:
+            if value == "true" {
+                // 칩은 선택 상태를 스스로 가리지 않고 매 탭마다 불린다 — 이미 켠 다리를 다시
+                // 탭해도 줄이 겹치면 field()가 첫 줄을 읽어 저장값이 씨앗값으로 굳는다.
+                if !card.fields.contains(where: { $0.key == LegRowKeys.originQuery }) {
+                    let at = card.fields.firstIndex(where: { $0.key == LegRowKeys.outboundEnabled }).map { $0 + 1 }
+                        ?? card.fields.count
+                    let rows = outboundRows(origin: rememberedOutboundOrigin,
+                                            mode: rememberedOutboundMode,
+                                            buffer: rememberedBuffer)
+                    // 되살린 줄은 신원이 새로 찍힌다 — 기억해 둔 좌표를 그 새 신원에 다시 건다.
+                    // 안 걸면 이름만 살아나고 저장 때 출발지가 nil로 풀려, 다리는 켜졌는데
+                    // 출발지 없는 구간이 만들어진다.
+                    reseed(rows, LegRowKeys.originQuery, rememberedOutboundOriginPlace)
+                    card.fields.insert(contentsOf: rows, at: at)
+                }
+                ensureNotifyRows()
+            } else {
+                rememberOutboundOrigin()
+                if let m = chosenIn(LegRowKeys.outboundMode) { rememberedOutboundMode = m }
+                if let b = chosenIn(LegRowKeys.bufferMinutes) { rememberedBuffer = b }
+                forgetPlaces([LegRowKeys.originQuery])
+                card.fields.removeAll {
+                    [LegRowKeys.originQuery, LegRowKeys.outboundMode, LegRowKeys.bufferMinutes].contains($0.key)
+                }
+                // 다리가 전부 꺼지면 알림 줄도 근거를 잃는다 — 옛 폼 조건의 멤버십 판이다.
+                if chosenIn(LegRowKeys.returnEnabled) != "true" { removeNotifyRows() }
+            }
+        case LegRowKeys.returnEnabled:
+            if value == "true" {
+                // 위와 같은 이유 — 켜진 오는 편을 다시 탭해도 줄이 겹쳐 들어가지 않게 멤버십이 가드한다.
+                if !card.fields.contains(where: { $0.key == LegRowKeys.returnQuery }) {
+                    let at = card.fields.firstIndex(where: { $0.key == LegRowKeys.returnEnabled }).map { $0 + 1 }
+                        ?? card.fields.count
+                    let rows = returnRows(to: rememberedReturnTo, mode: rememberedReturnMode)
+                    // 가는 편과 같은 이유 — 되살린 줄의 새 신원에 기억해 둔 좌표를 다시 건다.
+                    reseed(rows, LegRowKeys.returnQuery, rememberedReturnToPlace)
+                    card.fields.insert(contentsOf: rows, at: at)
+                }
+                ensureNotifyRows()
+            } else {
+                rememberReturnTo()
+                if let m = chosenIn(LegRowKeys.returnMode) { rememberedReturnMode = m }
+                forgetPlaces([LegRowKeys.returnQuery])
+                card.fields.removeAll {
+                    [LegRowKeys.returnQuery, LegRowKeys.returnMode].contains($0.key)
+                }
+                if chosenIn(LegRowKeys.outboundEnabled) != "true" { removeNotifyRows() }
+            }
+        case LegRowKeys.notifyEnabled:
+            lastNotifyOn = value == "true"
+            if value == "false" {
+                // 끌 때 마지막 값을 기억한 뒤 줄을 뺀다 — 값까지 지우면 다시 켤 때 처음부터
+                if let l = chosenIn(LegRowKeys.notifyLeadMinutes) { lastNotifyLead = l }
+                card.fields.removeAll { $0.key == LegRowKeys.notifyLeadMinutes }
+            } else if !card.fields.contains(where: { $0.key == LegRowKeys.notifyLeadMinutes }) {
+                let at = card.fields.firstIndex(where: { $0.key == LegRowKeys.notifyEnabled }).map { $0 + 1 }
+                    ?? card.fields.count
+                card.fields.insert(notifyLeadRow(chosen: lastNotifyLead), at: at)
+            }
+        default:
+            break
+        }
+    }
+
+    /// 장소가 사라질 때(장소 없음 칩) 다리 줄 전부의 값을 기억해 둔다 — 다시 실제 장소를 고르면
+    /// 토글은 문서화된 기본값(끔)으로 돌아오지만, 토글을 켜면 고르던 값들이 되살아난다.
+    /// 장소 줄은 다리를 끈 뒤엔 이미 없다 — 칩이 nil을 돌려도 무조건 넣으면 끌 때 기억한 값까지 지운다.
+    private mutating func rememberTravelValues() {
+        rememberOutboundOrigin()
+        if let m = chosenIn(LegRowKeys.outboundMode) { rememberedOutboundMode = m }
+        if let b = chosenIn(LegRowKeys.bufferMinutes) { rememberedBuffer = b }
+        rememberReturnTo()
+        if let m = chosenIn(LegRowKeys.returnMode) { rememberedReturnMode = m }
+        if let l = chosenIn(LegRowKeys.notifyLeadMinutes) { lastNotifyLead = l }
+        if let n = chosenIn(LegRowKeys.notifyEnabled) { lastNotifyOn = n == "true" }
+    }
+
+    /// 출발지 줄의 이름과 좌표를 함께 기억한다. 둘을 갈라 두지 않는 이유: 좌표가 줄 신원에 걸린
+    /// 뒤로, 이름만 기억하면 되살린 줄에서 그 좌표를 되찾을 길이 없다.
+    private mutating func rememberOutboundOrigin() {
+        guard let f = card.fields.first(where: { $0.key == LegRowKeys.originQuery }), let o = f.chosen else { return }
+        rememberedOutboundOrigin = o
+        rememberedOutboundOriginPlace = confirmedPlaces[f.id]
+    }
+
+    /// 도착지 줄도 같은 이유로 이름과 좌표를 함께 기억한다.
+    private mutating func rememberReturnTo() {
+        guard let f = card.fields.first(where: { $0.key == LegRowKeys.returnQuery }), let r = f.chosen else { return }
+        rememberedReturnTo = r
+        rememberedReturnToPlace = confirmedPlaces[f.id]
+    }
+
+    /// 아직 배열에 넣기 전인 줄에 기억해 둔 좌표를 건다 — 되살린 줄은 신원이 다르기 때문이다.
+    private mutating func reseed(_ rows: [EditField], _ key: String, _ place: Place?) {
+        guard let place, let row = rows.first(where: { $0.key == key }) else { return }
+        confirmedPlaces[row.id] = place
+    }
+
+    /// 줄이 배열에서 빠질 때 그 줄에 걸린 좌표도 놓는다 — 신원이 사라진 좌표는 아무도 되찾지
+    /// 못하는데, 놓지 않으면 카드가 사는 동안 사전만 자란다.
+    private mutating func forgetPlaces(_ keys: [String]) {
+        for f in card.fields where keys.contains(f.key) { confirmedPlaces[f.id] = nil }
+    }
+
+    /// 다리가 하나라도 켜지면 알림 줄이 필요해진다 — 캘린더 줄이 있다면 그 앞에, 없으면 맨 끝에.
+    private mutating func ensureNotifyRows() {
+        let legOn = card.fields.first(where: { $0.key == LegRowKeys.outboundEnabled })?.chosen == "true"
+            || card.fields.first(where: { $0.key == LegRowKeys.returnEnabled })?.chosen == "true"
+        guard legOn, !card.fields.contains(where: { $0.key == LegRowKeys.notifyEnabled }) else { return }
+        let at = card.fields.firstIndex(where: { $0.key == "calendar_sync" }) ?? card.fields.count
+        card.fields.insert(notifyToggleRow(chosen: lastNotifyOn ? "true" : "false"), at: at)
+        // 꺼져 있던 채로 돌아오는 것이 아니라면 리드 줄이 곧바로 따라온다 — 토글만 홀로 나오는
+        // 순간이 없게 한다(켬이 문서화된 기본값이다).
+        if lastNotifyOn { card.fields.insert(notifyLeadRow(chosen: lastNotifyLead), at: at + 1) }
+    }
+
+    /// 알림 줄을 지우기 전에 마지막 값을 기억한다 — 다리를 다시 켤 때 되살린다.
+    private mutating func removeNotifyRows() {
+        if let l = chosenIn(LegRowKeys.notifyLeadMinutes) { lastNotifyLead = l }
+        if let n = chosenIn(LegRowKeys.notifyEnabled) { lastNotifyOn = n == "true" }
+        card.fields.removeAll {
+            $0.key == LegRowKeys.notifyEnabled || $0.key == LegRowKeys.notifyLeadMinutes
+        }
+    }
+
+    // MARK: 줄 만들기
+
+    private func legToggleRow(key: String, label: String) -> EditField {
+        .init(key: key, kind: .toggle, label: label,
+              options: [.init(label: "만들기", value: "true"), .init(label: "안 만들기", value: "false")],
+              allowsCustom: false, chosen: "false")
+    }
+
+    private func outboundRows(origin: String?, mode: String, buffer: String) -> [EditField] {
+        [
+            .init(key: LegRowKeys.originQuery, kind: .place, label: "출발지", options: favoriteOptions,
+                  allowsCustom: true, chosen: origin),
+            .init(key: LegRowKeys.outboundMode, kind: .mode, label: "가는 편 이동수단",
+                  options: TransportMode.allCases.map { .init(label: $0.title, value: $0.rawValue) },
+                  allowsCustom: false, chosen: mode),
+            // 이름에 "가는 편"이 붙는 이유: 복귀 구간의 여유는 Store가 0으로 박아 둔다
+            // (addActivityWithTravel). "도착 여유"라고만 쓰면 이 줄이 오는 편에도 적용된다고
+            // 말하는 셈이 된다(REQ-014).
+            .init(key: LegRowKeys.bufferMinutes, kind: .buffer, label: "가는 편 도착 여유",
+                  options: [.init(label: "0분", value: "0"), .init(label: "10분", value: "10"),
+                            .init(label: "20분", value: "20"), .init(label: "30분", value: "30")],
+                  allowsCustom: true, chosen: buffer),
+        ]
+    }
+
+    private func returnRows(to: String?, mode: String) -> [EditField] {
+        [
+            .init(key: LegRowKeys.returnQuery, kind: .place, label: "도착지", options: favoriteOptions,
+                  allowsCustom: true, chosen: to),
+            .init(key: LegRowKeys.returnMode, kind: .mode, label: "오는 편 이동수단",
+                  options: TransportMode.allCases.map { .init(label: $0.title, value: $0.rawValue) },
+                  allowsCustom: false, chosen: mode),
+        ]
+    }
+
+    private func notifyToggleRow(chosen: String) -> EditField {
+        .init(key: LegRowKeys.notifyEnabled, kind: .toggle, label: "이동 알림 받기",
+              options: [.init(label: "받기", value: "true"), .init(label: "안 받기", value: "false")],
+              allowsCustom: false, chosen: chosen)
+    }
+
+    /// 알림 옵션은 AddEventView.notifyLeadRow와 같은 넷이다 — 두 폼이 다른 보기를 내면 같은
+    /// 값을 두 문법으로 배우게 된다(REQ-012).
+    private func notifyLeadRow(chosen: String) -> EditField {
+        .init(key: LegRowKeys.notifyLeadMinutes, kind: .notify, label: "알림",
+              options: [.init(label: "출발 시각", value: "0"), .init(label: "10분 전", value: "10"),
+                        .init(label: "30분 전", value: "30"), .init(label: "1시간 전", value: "60")],
+              allowsCustom: true, chosen: chosen)
+    }
+
+    private func chosenIn(_ key: String) -> String? {
+        card.fields.first(where: { $0.key == key })?.chosen
+    }
+}
+
+// MARK: - 편집 카드의 시드 · 저장 diff(SPEC-UIKIT-009 MB, design §2·§3)
+
+/// 편집 카드의 저장 diff가 내는 연산 한 개. 뷰는 이 목록을 **제거 → 수정 → 추가** 순서로
+/// 하나씩 직렬 실행한다(design §3 저장 순서 — 제거를 먼저 해야 추가의 중복 검사가 빈자리를
+/// 보고, 구간 수정은 updateEvent의 await 전 스냅샷 되쓰기 위험 때문에 갱신 사이에 다른 갱신을
+/// 끼우지 않는다). 시드와 diff가 이 파일에 사는 이유는 문법(B1)과 같다 — 드라이버가 뷰 없이
+/// 컴파일해야 AG-011 단언이 가능하다.
+enum LegSaveOp {
+    case remove(legId: UUID)
+    /// nil 인자는 "그 값은 그대로 둔다"다(updateLeg의 옵션 인자와 같은 규칙).
+    case update(legId: UUID, role: ScheduleAnchor, outerPlace: Place?, mode: TransportMode?,
+                bufferMinutes: Int?, notifyLeadMinutes: Int?, notifyEnabled: Bool?)
+    case add(role: ScheduleAnchor, outerPlace: Place, mode: TransportMode, bufferMinutes: Int,
+             notifyLeadMinutes: Int, notifyEnabled: Bool)
+}
+
+extension LegCardForm {
+
+    /// 편집 카드의 시드(design §2 시드 문단). 기본 줄 넷을 만든 뒤 **전이 자체를 돌려** 구간 줄을
+    /// 세운다 — 시드가 줄을 손으로 배열하면 생성 카드의 전이와 순서가 어긋나는 날 AG-006-06이
+    /// 늙는다(전이를 재사용하면 그 단언을 코드가 지킨다). 토글의 초기값은 전이의 "false"를
+    /// 덮어 쓰지 않고, 구간이 있는 역할만 다시 "true"로 고른다.
+    ///
+    /// 반복 회차(명시적 연결 없음)는 구간 줄이 아예 없다(REQ-011) — 같은 반복·같은 날·같은 장소
+    /// 이름의 이벤트가 배치 묶음 추정에 걸려 보여도 시드는 명시적 연결만 본다. 장소가 없는(또는
+    /// 지워진) 활동은 전이의 "좌표 없는 값" 가지가 아홉 줄을 전부 빼므로 부재 상태가 된다.
+    static func seeded(activity: ActivityBlock,
+                       outbound: ScheduledEvent?,
+                       returnLeg: ScheduledEvent?,
+                       noPlaceValue: String,
+                       placeOptions: [EditField.Option],
+                       favoriteOptions: [EditField.Option]) -> LegCardForm {
+        let locationRow = EditField(key: "location_query", kind: .place, label: "장소",
+                                    options: placeOptions, allowsCustom: true,
+                                    chosen: activity.location?.name ?? noPlaceValue)
+        var f = LegCardForm(card: EditCard(fields: [
+            .init(key: "title", kind: .title, label: "제목", options: [], allowsCustom: true,
+                  chosen: activity.title),
+            locationRow,
+            .init(key: "start_iso", kind: .datetime, label: "시작", options: [], allowsCustom: false,
+                  chosen: BesirTime.isoFormatter.string(from: activity.startDate), anchored: false),
+            .init(key: "end_iso", kind: .datetime, label: "종료", options: [], allowsCustom: false,
+                  chosen: BesirTime.isoFormatter.string(from: activity.endDate), anchored: false),
+        ]), favoriteOptions: favoriteOptions)
+        // 명시적 연결이 있는 반복 회차는 그 구간으로 시드한다 — 연결이 추정에 우선한다는
+        // 규칙(linkedLegs와 같다)을 시드도 따른다. 연결 없는 반복 회차는 폼이 구간을 못 만들게
+        // 깃발을 심는다(sync 1차 B1).
+        guard activity.recurrenceId == nil || outbound != nil || returnLeg != nil else {
+            f.recurrenceEpisodeWithoutLegs = true
+            return f
+        }
+        // 장소 칩을 고른 것으로 전이를 돈다 — 좌표가 실리는 순간 토글 둘이 end_iso 뒤에 선다.
+        f.choose(field: locationRow.id, value: activity.location?.name ?? noPlaceValue,
+                 place: activity.location)
+        // 알림 줄의 시드값은 ensureNotifyRows가 기억값에서 읽으므로 토글을 켜기 전에 심는다 —
+        // 가는 편(없으면 오는 편) 구간의 알림 설정이 시드다(두 구간이 다른 옛 데이터는 가는 편이
+        // 이긴다 — 바꾸지 않은 저장이 어느 구간도 손대지 않는 전제, AC-011 (3)).
+        let notifyLeg = outbound ?? returnLeg
+        f.lastNotifyOn = notifyLeg?.wantsNotification ?? true
+        if let lead = notifyLeg?.notifyLeadMinutes { f.lastNotifyLead = String(lead) }
+        if let leg = outbound {
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.outboundEnabled }!.id, value: "true")
+            // 출발지가 nil인 옛 레코드는 줄을 비워 둔다 — 빈 이름을 chosen으로 적으면 isReady가
+            // 풀려 좌표 없는 구간이 조용히 저장된다(고르지 않으면 저장이 잠긴 채 사용자에게 맡긴다).
+            if let origin = leg.origin {
+                f.choose(field: f.card.fields.first { $0.key == LegRowKeys.originQuery }!.id,
+                         value: origin.name, place: origin)
+            }
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.outboundMode }!.id,
+                     value: leg.mode.rawValue)
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.bufferMinutes }!.id,
+                     value: String(leg.bufferMinutes))
+        }
+        if let leg = returnLeg {
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.returnEnabled }!.id, value: "true")
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.returnQuery }!.id,
+                     value: leg.destination.name, place: leg.destination)
+            f.choose(field: f.card.fields.first { $0.key == LegRowKeys.returnMode }!.id,
+                     value: leg.mode.rawValue)
+        }
+        return f
+    }
+}
+
+/// 저장 diff(design §3 표) — (시드, 현재 폼, 시드 때의 구간 둘) → 연산 목록의 순수 함수.
+/// (그 역할 기존 구간) × (토글) × (줄이 시드와 다른가)로 동작이 정해지고, 무변경 저장은
+/// 빈 목록을 내야 한다(REQ-008의 레코드 바이트 동일이 이 빈 목록에서 나온다).
+@MainActor enum LegSavePlanner {
+    static func ops(seed: LegCardForm, current: LegCardForm,
+                    outboundLeg: ScheduledEvent?, returnLeg: ScheduledEvent?) -> [LegSaveOp] {
+        // 공유 알림 줄은 **줄을 바꿨을 때만** 두 구간에 적용한다 — 바꾸지 않은 저장은 어느
+        // 구간의 알림도 손대지 않는다(서로 다른 알림 설정의 옛 데이터가 그대로 산다, AC-011 (3)).
+        let notifyChanged = chosen(seed, LegRowKeys.notifyEnabled) != chosen(current, LegRowKeys.notifyEnabled)
+            || chosen(seed, LegRowKeys.notifyLeadMinutes) != chosen(current, LegRowKeys.notifyLeadMinutes)
+        var removes: [LegSaveOp] = []
+        var updates: [LegSaveOp] = []
+        var adds: [LegSaveOp] = []
+        for (role, leg) in [(ScheduleAnchor.arrival, outboundLeg), (.departure, returnLeg)] {
+            let toggleKey = role == .departure ? LegRowKeys.returnEnabled : LegRowKeys.outboundEnabled
+            // 토글 줄이 아예 없으면 부재(장소 지움)다 — 연결 구간 제거는 modifyActivity의
+            // clearPlace 경로가 이미 했으므로 diff는 여기서 아무것도 내지 않는다.
+            guard let toggle = current.card.fields.first(where: { $0.key == toggleKey }) else { continue }
+            let placeKey = role == .departure ? LegRowKeys.returnQuery : LegRowKeys.originQuery
+            let modeKey = role == .departure ? LegRowKeys.returnMode : LegRowKeys.outboundMode
+            if toggle.chosen != "true" {
+                if let leg { removes.append(.remove(legId: leg.id)) }
+                continue
+            }
+            let outerPlace = current.card.fields.first { $0.key == placeKey }
+                .flatMap { $0.chosen == nil ? nil : current.confirmedPlaces[$0.id] }
+            let mode = chosen(current, modeKey).flatMap(TransportMode.init(rawValue:))
+            let buffer = role == .departure ? nil : Int(chosen(current, LegRowKeys.bufferMinutes) ?? "")
+            let notifyLead = Int(chosen(current, LegRowKeys.notifyLeadMinutes) ?? current.lastNotifyLead)
+            let notifyOn = chosen(current, LegRowKeys.notifyEnabled) != "false"
+            guard let leg else {
+                // 좌표 없는 출발지·도착지로는 구간을 만들 수 없다 — addLeg의 outerPlace가
+                // 비-Optional이라 여기서 걸러낸다(칩은 chosen이 찍혀도 씨앗이 없으면 좌표가 nil).
+                if let outerPlace, let mode {
+                    adds.append(.add(role: role, outerPlace: outerPlace, mode: mode,
+                                     bufferMinutes: buffer ?? 0,
+                                     notifyLeadMinutes: notifyLead ?? 0, notifyEnabled: notifyOn))
+                }
+                continue
+            }
+            // "줄이 시드와 다른가" — 그 역할에 속한 줄과 공유 알림 줄을 시드값과 비교한다.
+            let placeChanged = chosen(seed, placeKey) != chosen(current, placeKey)
+                || placeOf(seed, placeKey) != placeOf(current, placeKey)
+            let modeChanged = chosen(seed, modeKey) != chosen(current, modeKey)
+            let bufferChanged = role == .departure ? false
+                : chosen(seed, LegRowKeys.bufferMinutes) != chosen(current, LegRowKeys.bufferMinutes)
+            guard placeChanged || modeChanged || bufferChanged || notifyChanged else { continue }
+            updates.append(.update(legId: leg.id, role: role, outerPlace: outerPlace, mode: mode,
+                                   bufferMinutes: buffer,
+                                   notifyLeadMinutes: notifyChanged ? notifyLead : nil,
+                                   notifyEnabled: notifyChanged ? notifyOn : nil))
+        }
+        return removes + updates + adds
+    }
+
+    /// 값 읽기 보조. 구조체를 값으로 받는 것 자체가 순수 함수의 계약이다(원본을 고칠 수 없다).
+    private static func chosen(_ f: LegCardForm, _ key: String) -> String? {
+        f.card.fields.first { $0.key == key }?.chosen
+    }
+
+    private static func placeOf(_ f: LegCardForm, _ key: String) -> Place? {
+        f.card.fields.first { $0.key == key }
+            .flatMap { $0.chosen == nil ? nil : f.confirmedPlaces[$0.id] }
+    }
+}
+
 /// 카드가 스스로 그리는 크롬(머리글·확인 문구)을 끄는 스위치. 소유 화면이 자기 제목과 제출
 /// 버튼을 이미 갖고 있으면 카드 쪽을 꺼야 한다 — 둘을 다 그리면 제목이 둘, 제출 버튼이 둘로
 /// 보인다. nil이면 숨긴다. AI 카드의 기본 문구는 뷰 쪽 기본값에 두고 이 타입엔 없다 — 모델이

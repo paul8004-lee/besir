@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CoreLocation
 
 /// 이동수단.
@@ -197,6 +198,41 @@ struct ScheduledEvent: Identifiable, Codable {
     /// 이 일정의 시각 기준. nil(옛 데이터)은 .arrival과 동일하게 취급.
     /// 실시간 재계산(refreshUpcomingEstimates) 시 어느 방향으로 계산해야 하는지 판단하는 데 쓰인다.
     var anchor: ScheduleAnchor?
+
+    // MARK: 이동시간 미계산 표시(REQ-023, SPEC-UIKIT-009 MC)
+
+    /// 이동시간이 계산되지 않은 구간의 경고 블록이 설 자리 — 앵커 시각 A. 계산된 구간은 nil.
+    /// A는 추정과 무관한 쪽이다: 출발 기준(`.departure`)이면 `departureDate ?? arrivalDate`
+    /// (출발은 추정 앞에 대입되고, 반복 뒤 회차처럼 nil이면 그 회차의 출발이 곧 arrivalDate),
+    /// 그 밖(`.arrival`·nil 옛 데이터)이면 `arrivalDate`. "이동시간 미계산" 판정은 이 값이
+    /// nil이 아닌 것과 같은 말이다(AC-010의 "미계산 판정"). 저장 필드가 아니라 계산이라
+    /// JSON에 나타나지 않는다(REQ-019).
+    var failedBlockAnchor: Date? {
+        guard travelSeconds == nil else { return nil }
+        return (anchor ?? .arrival) == .departure ? (departureDate ?? arrivalDate) : arrivalDate
+    }
+
+    /// 계산된 구간이 시간표에 나열되는 구간 [출발, 도착]. 앵커가 있는(미계산) 구간과
+    /// 출발이 없거나 도착 ≤ 출발인 깨진 레코드는 nil — 그때는 앵커/도착일 하루만 나열한다.
+    /// 기준 트리에서 `guard let dep = departureDate, arrivalDate > dep`가 살던 자리가
+    /// 이 계산 하나로 모인다(계약 5 — Store의 달력 점도 이 값을 읽는다).
+    var listedSpan: (start: Date, end: Date)? {
+        guard failedBlockAnchor == nil, let dep = departureDate, arrivalDate > dep else { return nil }
+        return (dep, arrivalDate)
+    }
+
+    /// 이 구간이 그 날의 시간표에 나열되는가. 앵커가 있으면 앵커의 날 하루(미계산 구간은
+    /// 경고 블록 하나 — 날짜로 자르지 않는다), 아니면 나열 구간이 걸치는 모든 날
+    /// (`Store.overlapsDay`), 그도 없으면 도착일(옛 폴백). 점(recomputeDaysWithSchedule)과
+    /// 나열(events(on:))이 같은 날을 내는 것도 이 함수가 보증한다(AC-010 (13)).
+    /// `Store.overlapsDay`를 읽으므로 MainActor다 — 호출자(뷰·Store·드라이버 main) 전부 그렇다.
+    @MainActor func isListed(on day: Date, calendar: Calendar) -> Bool {
+        if let anchor = failedBlockAnchor { return calendar.isDate(anchor, inSameDayAs: day) }
+        if let span = listedSpan {
+            return Store.overlapsDay(start: span.start, end: span.end, day: day, calendar: calendar)
+        }
+        return calendar.isDate(arrivalDate, inSameDayAs: day)
+    }
 }
 
 /// 일정의 시각 기준. `.arrival`은 도착 시각이 고정값(출발 시각을 역산), `.departure`는 출발 시각이
@@ -242,6 +278,164 @@ enum ScheduleLogic {
             after = (home, "집")
         }
         return (before, after)
+    }
+
+    // MARK: 시간표 겹침 배치(t17-c C1 — ContentView.positionedBlocks에서 옮김)
+
+    /// 겹침 배치의 입력 항목 — 뷰 레코드가 아니라 (id, 자정 기준 분)쌍만 안다.
+    /// 레코드(ScheduledEvent·ActivityBlock)를 받으면 묶음 키를 스스로 만들고 싶어지므로
+    /// (AC-015 (8)) id는 String으로만 흐른다. `groupKey`도 호출자가 주입한다(같은 묶음원에
+    /// 같은 문자열) — 키를 아는 것은 조회(packingGroups)지 이 함수가 아니다.
+    struct LayoutItem {
+        let id: String
+        let start: CGFloat        // 자정 기준 분 — span(for:on:)이 이미 잘라·부풀린 값
+        let end: CGFloat
+        let groupKey: String?
+
+        init(id: String, start: CGFloat, end: CGFloat, groupKey: String? = nil) {
+            self.id = id; self.start = start; self.end = end; self.groupKey = groupKey
+        }
+    }
+
+    /// 칸 함수의 결과 — 항목의 가로 범위 [lo, hi](0~1). 렌더 프레임과 히트테스트가 **같은 값**을
+    /// 읽는 계약의 단일 출처이다(AC-016): 점 환산(points)도 여기 있으므로 뷰는 이 범위를 점으로
+    /// 받아 쓰기만 한다. `columns`는 바깥 칸 수로, 칸 경계마다 들어가는 간격을 계산하는 데 쓰인다.
+    struct SlotRange {
+        let id: String
+        let lo: CGFloat
+        let hi: CGFloat
+        let columns: Int
+
+        /// [lo, hi]를 실제 점 위치·폭으로 바꾼다. 칸 경계(1/columns 간격)마다 `gap`pt를 빼고,
+        /// 묶음 안쪽의 나눔에는 간격을 넣지 않는다 — 간격은 서로 다른 묶음·블록 사이에만 필요하다.
+        /// 렌더(columnFrame)와 히트테스트(block(atX:))가 같은 호출로 같은 사각형을 얻는다:
+        /// 예전엔 렌더만 간격을 빼 히트가 최대 3pt 어긋났다(F9).
+        /// 간격 자체는 어느 블록에도 속하지 않는다(죽은 띠) — 그래서 히트는 이 사각형 그대로 본다.
+        func points(in total: CGFloat, gap: CGFloat) -> (x: CGFloat, width: CGFloat) {
+            guard columns > 1, hi > lo else { return (lo * total, (hi - lo) * total) }
+            let usable = total - gap * CGFloat(columns - 1)
+            let boundariesBefore = Int((lo * CGFloat(columns)).rounded(.down))
+            let x = lo * usable + CGFloat(boundariesBefore) * gap
+            return (x, (hi - lo) * usable)
+        }
+    }
+
+    /// 겹침 배치의 결과 — 항목별 (열 번호, 무리의 열 수).
+    struct LayoutSlot {
+        let id: String
+        let column: Int           // 0부터
+        let columns: Int
+    }
+
+    /// 하루치 블록을 훑어 겹치는 것끼리 열을 나눈다.
+    ///
+    /// 시간이 겹치는 블록들을 하나의 "무리"로 묶고, 무리 안에서는 먼저 시작한 것부터
+    /// **비어 있는 첫 열**에 넣는다. 무리의 열 수만큼 가로를 나눠 쓰므로, 두 개가 겹치면
+    /// 반씩, 세 개면 1/3씩 차지한다. 겹치지 않는 블록은 전처럼 가로 전체를 쓴다.
+    /// 뷰가 이 계산을 따로 들고 있으면 렌더와 히트테스트가 어긋나므로(AC-016) 순수 함수로
+    /// 뺐다 — 본문은 `ContentView.positionedBlocks`에서 글자 그대로 옮겼다(동작 불변).
+    /// 정렬의 마지막 동률(시작·끝이 모두 같은 두 항목)만 id로 갈랐다 — 안정 정렬을 문서가
+    /// 보장하지 않아 입력 순서가 새면 출력이 흔들리는 것을 끊는다(AC-017 (7)). 같은 시각의
+    /// 둘이 열 0·1을 맞바꿈할 뿐 겉보기 배치는 같다.
+    static func overlapColumns(_ input: [LayoutItem]) -> [LayoutSlot] {
+        var items = input
+        items.sort {
+            $0.start == $1.start
+                ? ($0.end == $1.end ? $0.id < $1.id : $0.end < $1.end)
+                : $0.start < $1.start
+        }
+
+        var out: [LayoutSlot] = []
+        var cluster: [(item: LayoutItem, column: Int)] = []
+        var columnEnds: [CGFloat] = []          // 열별로 현재까지 차 있는 끝 시각
+
+        func flush() {
+            let columns = max(1, columnEnds.count)
+            for entry in cluster {
+                out.append(LayoutSlot(id: entry.item.id, column: entry.column, columns: columns))
+            }
+            cluster.removeAll(); columnEnds.removeAll()
+        }
+
+        for item in items {
+            // 지금까지의 무리와 전혀 겹치지 않으면(모든 열이 이미 끝났으면) 새 무리를 시작한다.
+            if !columnEnds.isEmpty, columnEnds.allSatisfy({ $0 <= item.start }) { flush() }
+            // 비어 있는 첫 열을 찾고, 없으면 열을 하나 늘린다.
+            if let free = columnEnds.firstIndex(where: { $0 <= item.start }) {
+                columnEnds[free] = item.end
+                cluster.append((item, free))
+            } else {
+                columnEnds.append(item.end)
+                cluster.append((item, columnEnds.count - 1))
+            }
+        }
+        flush()
+        return out
+    }
+
+    /// 묶음을 아는 배치(design §6.2 안 A) — 같은 groupKey의 구성원을 한 칸으로 묶되, 묶음 안
+    /// 겹침은 안쪽 배치로 나눈다. 세 단계: ① 안쪽 배치(구성원끼리 overlapColumns) ② 바깥 배치
+    /// (낱개 + 묶음 항목[구성원 start 최솟값, end 최댯값]을 함께 overlapColumns) ③ 칸 합성
+    /// `lo = 바깥칸/바깥칸수 + (1/바깥칸수) × 안쪽칸/안쪽칸수`, `hi = lo + (1/바깥칸수)/안쪽칸수`.
+    /// 이 [lo, hi]를 내는 곳은 이 함수 하나뿐이다(칸 산술의 단일 출처, AC-016) — 뷰는
+    /// `SlotRange.points`로 점을 얻기만 한다.
+    ///
+    /// 묶음에 그날 목록에서 구성원이 하나뿐이면(다른 구성원이 다른 날 — 자정 넘김 — 이거나
+    /// 활동 없는 매달린 링크) 낱개로 본다. 묶음 키가 없는 입력에서는 바깥 배치가 곧 전부라
+    /// 결과가 `overlapColumns`의 (칸/칸수)와 정확히 같다 — C1 특성화(AH-015-01/02·AH-017-01~07)가
+    /// 회귀선이 되는 근거다.
+    ///
+    /// @MX:NOTE 안쪽 배치가 필요한 이유(plan §7 F10): 묶음 구성원이 서로 겹치는 경우가 셋이다 —
+    /// 활동이 최소 높이(20분)로 부풀고 그 실제 끝에서 출발하는 오는 편이 부푼 블록과 겹침 ·
+    /// 이동시간 계산 실패 블록이 앵커 시각에서 아래로 자라 가는 편이 활동 시작 위로 겹침 ·
+    /// 오는 편을 활동 안쪽으로 끌어 들인 구간. 묶음을 한 칸에 그냥 채우면 이 셋이 한 칸 안에서
+    /// 서로를 덮는다.
+    /// @MX:ANCHOR 렌더 프레임·히트테스트·드라이버가 같은 [lo, hi]를 읽는다는 계약 — 이 함수의
+    /// 출력을 다른 산술로 다시 가공하는 호출자를 만들지 않는다.
+    static func overlapSlots(_ input: [LayoutItem]) -> [SlotRange] {
+        var members: [String: [LayoutItem]] = [:]
+        for item in input {
+            guard let key = item.groupKey else { continue }
+            members[key, default: []].append(item)
+        }
+
+        // ① 안쪽 배치 + 묶음 항목 조립(구성원이 둘 이상인 묶음만).
+        var inner: [String: (column: Int, columns: Int)] = [:]
+        var grouped: [LayoutItem] = []
+        for (key, list) in members where list.count > 1 {
+            for slot in overlapColumns(list) { inner[slot.id] = (slot.column, slot.columns) }
+            grouped.append(LayoutItem(id: "group:\(key)",
+                                      start: list.map { $0.start }.min() ?? 0,
+                                      end: list.map { $0.end }.max() ?? 0))
+        }
+        let groupedKeys = Set(members.filter { $0.value.count > 1 }.keys)
+
+        // ② 바깥 배치 — 낱개(키 없음·구성원 하나뿐인 묶음 포함)와 묶음 항목을 함께.
+        let outerInput = input.filter { $0.groupKey.map { !groupedKeys.contains($0) } ?? true } + grouped
+        var outer: [String: (column: Int, columns: Int)] = [:]
+        for slot in overlapColumns(outerInput) { outer[slot.id] = (slot.column, slot.columns) }
+
+        // ③ 칸 합성. 바깥 배치에서 묶음원은 묶음 항목("group:키") 칸을, 낱개(구성원 하나뿐인
+        // 묶음 포함)는 제 칸을 읽는다.
+        var out: [SlotRange] = []
+        for item in input {
+            let isGrouped = item.groupKey.map { groupedKeys.contains($0) } ?? false
+            let outerKey = isGrouped ? "group:\(item.groupKey!)" : item.id
+            guard let slot = outer[outerKey], !isGrouped || inner[item.id] != nil else { continue }
+            let outerCount = max(1, slot.columns)
+            let lo: CGFloat, hi: CGFloat
+            if isGrouped, let innerSlot = inner[item.id] {
+                let innerCount = max(1, innerSlot.columns)
+                lo = CGFloat(slot.column) / CGFloat(outerCount)
+                    + (1 / CGFloat(outerCount)) * CGFloat(innerSlot.column) / CGFloat(innerCount)
+                hi = lo + (1 / CGFloat(outerCount)) / CGFloat(innerCount)
+            } else {
+                lo = CGFloat(slot.column) / CGFloat(outerCount)
+                hi = lo + 1 / CGFloat(outerCount)
+            }
+            out.append(SlotRange(id: item.id, lo: lo, hi: hi, columns: outerCount))
+        }
+        return out
     }
 
     /// 일정을 지울 때 **같이 지워야 할 식사 기록**의 id.

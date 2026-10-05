@@ -126,15 +126,19 @@ final class Store: ObservableObject {
     }
 
     /// 점(달력 날짜 키)은 일간 나열과 같은 겹침 판정으로 채운다 — 자정을 넘는 블록은 구간이
-    /// 걸치는 모든 날에 점이 켜진다. 출발시각이 없는(계산 실패) 일정과 끝≤시작으로 깨진 레코드는
-    /// 구간이 없으므로 도착일/시작일 하나만(일간 나열의 폴백과 같은 규칙). 저장·네트워크 호출은
-    /// 없고 집합만 다시 만든다 — 반복 그룹이 118건이어도 이 함수 자체는 레코드당 한 번 돈다.
+    /// 걸치는 모든 날에 점이 켜진다. 이벤트 쪽 판정은 레코드의 계산 속성(REQ-023)에서만 나온다:
+    /// 미계산 구간은 앵커 시각의 날 키 하나, 계산된 구간은 나열 구간(listedSpan)이 걸치는 날,
+    /// 그도 없으면 도착일 하나 — 일간 나열(isListed)과 점이 같은 날을 내는 것도 같은 계산이
+    /// 보증한다(AC-010 (13)). 저장·네트워크 호출은 없고 집합만 다시 만든다 — 반복 그룹이
+    /// 118건이어도 이 함수 자체는 레코드당 한 번 돈다.
     private func recomputeDaysWithSchedule() {
         let cal = Calendar.current
         var set = Set<Int>(minimumCapacity: events.count + activities.count)
         for e in events {
-            if let dep = e.departureDate, e.arrivalDate > dep {
-                set.formUnion(Self.dayKeys(start: dep, end: e.arrivalDate, calendar: cal))
+            if let anchor = e.failedBlockAnchor {
+                set.insert(Self.dayKey(anchor, calendar: cal))
+            } else if let span = e.listedSpan {
+                set.formUnion(Self.dayKeys(start: span.start, end: span.end, calendar: cal))
             } else {
                 set.insert(Self.dayKey(e.arrivalDate, calendar: cal))
             }
@@ -197,7 +201,8 @@ final class Store: ObservableObject {
                                bufferMinutes: Int,
                                notifyLeadMinutes: Int,
                                notifyEnabled: Bool = true,
-                               syncToCalendar: Bool = true) async -> (activityId: UUID, travelLegs: Int) {
+                               syncToCalendar: Bool = true,
+                               travelSecondsHint: TimeInterval? = nil) async -> (activityId: UUID, travelLegs: Int) {
         var activity = ActivityBlock(title: title, location: location, startDate: startDate, endDate: endDate)
         activity.syncToCalendar = syncToCalendar
         activities.append(activity)
@@ -208,22 +213,23 @@ final class Store: ObservableObject {
         }
 
         // 이동 구간은 활동 장소를 알아야 만들 수 있다(목적지/출발지가 곧 활동 장소).
-        guard let place = location else { return (activity.id, 0) }
+        // 구간 생성은 addLeg 하나로만 지난다(계약 5) — 여기서 addEvent를 직접 부르면 생성 경로가
+        // 둘이 되어 보호 조건(중복 역할 거절·보상 검사)이 한쪽에만 붙는다. 이 리팩터가 옛 코드의
+        // 두 await 사이 활동 재확인 부재도 함께 닫는다(addLeg의 보상 검사가 그 몫이다).
+        guard location != nil else { return (activity.id, 0) }
         var made = 0
         if let from = travelFrom {
-            await addEvent(title: title, origin: from, destination: place,
-                           arrivalDate: startDate, mode: outboundMode,
-                           bufferMinutes: bufferMinutes, notifyLeadMinutes: notifyLeadMinutes,
-                           anchor: .arrival, linkedActivityId: activity.id,
-                           notifyEnabled: notifyEnabled, syncToCalendar: syncToCalendar)
+            _ = await addLeg(activityId: activity.id, role: .arrival, outerPlace: from,
+                             mode: outboundMode, bufferMinutes: bufferMinutes,
+                             notifyLeadMinutes: notifyLeadMinutes, notifyEnabled: notifyEnabled,
+                             travelSecondsHint: travelSecondsHint, syncToCalendar: syncToCalendar)
             made += 1
         }
         if let to = returnTo {
-            await addEvent(title: "\(title) (복귀)", origin: place, destination: to,
-                           arrivalDate: endDate, mode: returnMode,
-                           bufferMinutes: 0, notifyLeadMinutes: notifyLeadMinutes,
-                           anchor: .departure, linkedActivityId: activity.id,
-                           notifyEnabled: notifyEnabled, syncToCalendar: syncToCalendar)
+            _ = await addLeg(activityId: activity.id, role: .departure, outerPlace: to,
+                             mode: returnMode, bufferMinutes: 0,
+                             notifyLeadMinutes: notifyLeadMinutes, notifyEnabled: notifyEnabled,
+                             travelSecondsHint: travelSecondsHint, syncToCalendar: syncToCalendar)
             made += 1
         }
         return (activity.id, made)
@@ -297,14 +303,23 @@ final class Store: ObservableObject {
     /// **묶인 이동 구간도 같이 맞춘다** — 시작을 옮기면 `moveActivity`가 양쪽 구간을 평행이동하고,
     /// 종료만 바뀌면(식사 시간이 길어지는 등) 복귀 구간의 출발 시각을 새 종료 시각에 다시 붙인다.
     /// 상세 화면에서 시각을 고쳤을 때 이동 블록이 제자리에 남던 문제를 막기 위함.
+    ///
+    /// `clearPlace`가 "장소 지우기"를 `newPlace == nil`("그대로 둠")과 구분한다(REQ-004). 기존
+    /// 호출 모양(지우기 인자 없음)은 기본값 false로 옛 동작 그대로다 — AI 경로의 호출 모양이
+    /// 바뀌지 않는다는 게 회귀선이다.
     @discardableResult
     func modifyActivity(id: UUID,
                         newTitle: String? = nil,
                         newStart: Date? = nil,
                         newEnd: Date? = nil,
-                        newPlace: Place? = nil) -> Bool {
+                        newPlace: Place? = nil,
+                        clearPlace: Bool = false) -> Bool {
         guard let current = activities.first(where: { $0.id == id }) else { return false }
         var changed = false
+
+        // 장소를 지우면 명시적으로 연결된 구간도 함께 지운다 — 구간은 활동 장소가 있어야
+        // 존재할 수 있어서(REQ-004). 알림 취소·캘린더 삭제까지 기존 정리 경로를 탄다.
+        if clearPlace, current.location != nil { removeExplicitLegs(of: [id]) }
 
         // 시작을 옮기는 건 "이동"이므로 moveActivity로 처리해야 딸린 이동 구간이 따라온다.
         if let newStart {
@@ -319,17 +334,21 @@ final class Store: ObservableObject {
         let endBefore = updated.endDate
         if let newTitle, !newTitle.isEmpty, newTitle != updated.title { updated.title = newTitle; changed = true }
         if let newPlace, newPlace != updated.location { updated.location = newPlace; changed = true }
+        if clearPlace, updated.location != nil { updated.location = nil; changed = true }
         if let newEnd, newEnd != updated.endDate, newEnd > updated.startDate { updated.endDate = newEnd; changed = true }
         if changed { updateActivity(updated) }
 
-        // 종료 시각이 (시작 이동분과 별개로) 달라졌으면 복귀 구간을 새 종료 시각에 다시 맞춘다.
-        if let newEnd, newEnd != endBefore {
-            realignReturnLeg(activityId: id, departingAt: newEnd)
+        // 복귀 구간 재정렬은 endDate가 **실제로** 바뀐 경우에만 한다 — 끝 ≤ 시작으로 거절된
+        // newEnd는 endDate도 안 바꿨으니 재정렬도 하지 않는다(잘못된 끝에 구간을 붙이지 않는다).
+        if updated.endDate != endBefore {
+            realignReturnLeg(activityId: id, departingAt: updated.endDate)
         }
         return changed
     }
 
     /// 활동에 묶인 복귀(출발 기준) 이동 구간의 출발 시각을 주어진 시각으로 옮긴다.
+    /// 이동량(shift) 기반의 기존 함수라 legAnchor(유도 규칙의 한 자리)를 바로 쓰지 않는다 —
+    /// 시각을 호출자가 이미 알고 있을 때 쓰는 경로다(design §9).
     private func realignReturnLeg(activityId: UUID, departingAt: Date) {
         guard let leg = events.first(where: { $0.linkedActivityId == activityId && $0.anchor == .departure }),
               let dep = leg.departureDate else { return }
@@ -337,6 +356,292 @@ final class Store: ObservableObject {
         guard delta != 0 else { return }
         shiftEvent(leg.id, byMinutes: delta)
         save()
+    }
+
+    // MARK: - 구간 진입점·조회(SPEC-UIKIT-009 MA)
+
+    /// 구간 추가·수정·제거·따라오기의 결과 값(REQ-009·010). travelKnown은 결과 플래그이고
+    /// 레코드의 travelSeconds와 일치해야 한다 — 성공 판정의 단일 출처는 레코드다(계약 5).
+    enum LegRefusalReason { case duplicateRole, noPlace, activityMissing, recurrenceEpisode }
+    enum LegOutcome {
+        case created(travelKnown: Bool)
+        case updated(travelKnown: Bool)
+        case removed
+        case refused(reason: LegRefusalReason)
+        case failed
+    }
+
+    /// 구간 시간 유도의 한 자리(design §4) — 가는 편은 활동 **시작에 도착**, 오는 편은 활동
+    /// **끝에 출발**. addLeg·updateLeg·realignLegs가 같이 읽는다(셋이 각자 계산하면 세 번째
+    /// 복제가 된다). realignReturnLeg는 이동량(shift)으로 옮기는 기존 함수라 이 함수를 바로
+    /// 쓰지 않는다(design §9).
+    private func legAnchor(role: ScheduleAnchor, activity: ActivityBlock) -> Date {
+        role == .departure ? activity.endDate : activity.startDate
+    }
+
+    /// 구간 제목의 한 자리 — 오는 편에만 " (복귀)"가 붙는다는 규칙이 추가·따라오기에서 같은
+    /// 문장을 내게 한다(addActivityWithTravel이 내던 문구와 글자 하나까지 같다).
+    private func legTitle(role: ScheduleAnchor, activity: ActivityBlock) -> String {
+        role == .departure ? "\(activity.title) (복귀)" : activity.title
+    }
+
+    /// await(updateEvent의 추정) 사이 활동이 다른 경로로 바뀌었는지 — 바뀌었으면 현재값,
+    /// 아니면 nil. 유도값(앵커·끝점·제목)을 await 전 스냅샷으로 쓰는 updateLeg·realignLegs가
+    /// await 뒤 이것을 불러 옛 스냅샷이 들어갔으면 현재값으로 다시 쓴다(MA code-safety 경고 2).
+    private func activityIfChanged(_ before: ActivityBlock?) -> ActivityBlock? {
+        guard let before, let now = activities.first(where: { $0.id == before.id }) else { return nil }
+        if now.title == before.title, now.startDate == before.startDate,
+           now.endDate == before.endDate, now.location == before.location { return nil }
+        return now
+    }
+
+    /// 활동의 명시적 연결 구간 전부(같은 역할 둘 포함) — legs(of:)·linkedLegs·packingGroups가
+    /// 같은 목록을 읽는다.
+    private func explicitLegs(of activityId: UUID) -> [ScheduledEvent] {
+        events.filter { $0.linkedActivityId == activityId }
+    }
+
+    /// 활동의 명시적 연결 구간을 (가는 편, 오는 편)으로 돌려준다 — 편집·삭제용이라 **추정을 쓰지
+    /// 않는다**(추정은 packingGroups의 배치 묶음에만, D-8 (b)). 같은 역할이 둘 이상인 옛 데이터는
+    /// 첫째를 돌려준다(linkedLegs와 같은 `.first` 규칙).
+    func legs(of activityId: UUID) -> (outbound: ScheduledEvent?, `return`: ScheduledEvent?) {
+        let explicit = explicitLegs(of: activityId)
+        return (explicit.first { ($0.anchor ?? .arrival) == .arrival },
+                explicit.first { $0.anchor == .departure })
+    }
+
+    /// 구간의 linkedActivityId가 가리키는 활동. 없거나 매달렸으면(가리키는 활동이 지워졌으면) nil —
+    /// 편집 라우팅·제목 표시의 단일 조회(REQ-001·006).
+    func activity(forLeg event: ScheduledEvent) -> ActivityBlock? {
+        guard let id = event.linkedActivityId else { return nil }
+        return activities.first { $0.id == id }
+    }
+
+    /// 활동에 명시적으로 연결된 구간 수(같은 역할 중복 포함) — 삭제 확인 문구가 읽는다(REQ-014).
+    /// 반복 회차의 추정 구간은 세지 않는다(연결이 아니라 추정이므로).
+    func explicitLegCount(of activityId: UUID) -> Int {
+        explicitLegs(of: activityId).count
+    }
+
+    /// 같은 제목 삭제 집합(REQ-013) — 연결된 구간은 활동 삭제의 연쇄가 지우므로 이 묶음에 속하지
+    /// 않는다. 연결 없는 구간 자신은 집합에 포함된다.
+    func sameTitleSweep(for event: ScheduledEvent) -> [ScheduledEvent] {
+        events.filter { $0.title == event.title && $0.linkedActivityId == nil }
+    }
+
+    /// 그날 목록의 구간을 배치 묶음의 활동에 대응시킨다(D-8 (b), REQ-015). 활동마다: 명시적 연결
+    /// 구간이 있으면 그 **전부**(같은 역할 둘 포함), 없고 반복 회차이면 linkedLegs와 같은 추정에서
+    /// 가는 편·오는 편 최대 하나씩. 결과는 넘겨받은 events/activities 안의 id만 담는다.
+    // @MX:NOTE 추정은 linkedLegs와 같은 코드(estimatedLegs)이고 배치 묶음에만 쓴다 — 편집·삭제는 쓰지 않는다
+    // @MX:WARN 이 추정은 도착이 다음 날인 오는 편을 놓친다(같은 날 대조) — 이 추정을 삭제에 쓰면 데이터 위험이 된다
+    // @MX:REASON 삭제·편집 경로는 legs(of:)(명시적 연결만)를 쓴다 — 잘못된 추정이 구간을 지우는 일을 구조적으로 끊는다
+    func packingGroups(events: [ScheduledEvent], activities: [ActivityBlock]) -> [UUID: UUID] {
+        let listedIDs = Set(events.map { $0.id })
+        var out: [UUID: UUID] = [:]
+        for a in activities {
+            let explicit = events.filter { $0.linkedActivityId == a.id }
+            if !explicit.isEmpty {
+                for e in explicit { out[e.id] = a.id }
+            } else if a.recurrenceId != nil {
+                let (arrival, departure) = estimatedLegs(for: a)
+                if let arrival, listedIDs.contains(arrival.id) { out[arrival.id] = a.id }
+                if let departure, listedIDs.contains(departure.id) { out[departure.id] = a.id }
+            }
+        }
+        return out
+    }
+
+    /// 활동에 이동 구간 하나를 붙인다 — 구간 생성 경로의 단일 진입점(addActivityWithTravel도 이것을
+    /// 두 번 부른다, 계약 5). 앵커 시각은 활동에서 유도하고(legAnchor) 앵커 쪽은 추정과 무관하다.
+    /// 보호 조건(REQ-009): 같은 역할의 명시적 구간이 이미 있으면 거절(이벤트 수 불변) · 활동 장소가
+    /// 없으면 거절 · await(addEvent) 뒤 활동이 사라졌으면 방금 만든 구간을 지우고 거절한다(보상
+    /// 검사가 기본 — 매달린 링크를 만들지 않는다).
+    /// @MX:ANCHOR fan_in ≥ 3 — 생성 카드·편집 카드·addActivityWithTravel이 같이 부른다
+    @discardableResult
+    func addLeg(activityId: UUID,
+                role: ScheduleAnchor,
+                outerPlace: Place,
+                mode: TransportMode,
+                bufferMinutes: Int,
+                notifyLeadMinutes: Int,
+                notifyEnabled: Bool = true,
+                travelSecondsHint: TimeInterval? = nil,
+                syncToCalendar: Bool? = nil) async -> LegOutcome {
+        guard let activity = activities.first(where: { $0.id == activityId }) else {
+            return .refused(reason: .activityMissing)
+        }
+        // 같은 역할이 이미 있으면 거절 — 이벤트 수가 불변이어야 카드의 저장 diff가 빈자리를 믿는다.
+        if explicitLegs(of: activityId).contains(where: { ($0.anchor ?? .arrival) == role }) {
+            return .refused(reason: .duplicateRole)
+        }
+        // 반복 회차 활동에 만든 명시적 구간은 recurrenceId가 없어 deleteRecurringSeries가 지우지
+        // 못하고 매달린 링크로 남는다(sync 1차 B1). 폼이 이미 막지만 진입점 방어가 없으면 다른
+        // 경로(AI 등)로 다시 열린다. 조건이 "명시 구간 없음"까지인 이유: 명시적 구간이 이미 있는
+        // 옛 데이터는 편집이 허용되므로.
+        if activity.recurrenceId != nil && explicitLegs(of: activityId).isEmpty {
+            return .refused(reason: .recurrenceEpisode)
+        }
+        guard let place = activity.location else { return .refused(reason: .noPlace) }
+        // 구간의 캘린더 동의는 기본으로 활동을 따른다 — "캘린더 안 함" 활동에 붙은 구간이 구글
+        // 캘린더에 오르면 활동과 구간의 동의가 어긋난다(REQ-008, sync 1차 W1). 명시적으로 넘긴
+        // 값(생성 카드의 addActivityWithTravel)은 그대로 이긴다.
+        let legSync = syncToCalendar ?? activity.wantsCalendarSync
+        let leg = await addEvent(title: legTitle(role: role, activity: activity),
+                                 origin: role == .departure ? place : outerPlace,
+                                 destination: role == .departure ? outerPlace : place,
+                                 arrivalDate: legAnchor(role: role, activity: activity),
+                                 mode: mode,
+                                 bufferMinutes: bufferMinutes,
+                                 notifyLeadMinutes: notifyLeadMinutes,
+                                 anchor: role,
+                                 travelSecondsHint: travelSecondsHint,
+                                 linkedActivityId: activityId,
+                                 notifyEnabled: notifyEnabled,
+                                 syncToCalendar: legSync)
+        // await 뒤 배열이 바뀌었을 수 있으니 활동을 다시 본다 — 지워졌으면 방금 만든 구간을
+        // 되돌린다(보상 검사). leg를 검색이 아니라 반환값으로 얻는 건 같은 제목·시각 구간이
+        // 이미 있을 때 엉뚱한 쪽을 집는 일을 막는다(addEvent가 레코드를 돌려주는 이유와 같다).
+        guard activities.contains(where: { $0.id == activityId }) else {
+            deleteEvent(leg)
+            return .refused(reason: .activityMissing)
+        }
+        // 같은 역할 재검사도 await **뒤에** 한 번 더 돈다 — 위 검사는 await 앞에만 있어 두 Task가
+        // 같은 활동·같은 역할으로 겹치면 둘 다 통과한다(더블탭 등). 방금 만든 구간(leg.id) 외에
+        // 같은 역할이 생겨 있으면 방금 것을 지우고 거절한다 — 보상 검사와 같은 패턴으로, 재검사와
+        // 삭제 사이에 await가 없으므로 어느 끼어듦에서도 같은 역할이 둘 남지 않는다.
+        if explicitLegs(of: activityId).contains(where: { ($0.anchor ?? .arrival) == role && $0.id != leg.id }) {
+            deleteEvent(leg)
+            return .refused(reason: .duplicateRole)
+        }
+        return .created(travelKnown: leg.travelSeconds != nil)
+    }
+
+    /// 연결 구간의 줄을 고친다(주어진 것만). 앵커 시각은 활동의 **현재** 값에서 다시 유도한다
+    /// (legAnchor) — 오는 편을 끌어 벌어진 틈은 이 저장으로 닫힌다(design §4). 활동이 사라진
+    /// 매달린 구간은 유도를 못 하므로 저장된 시각을 그대로 쓴다.
+    @discardableResult
+    func updateLeg(legId: UUID,
+                   outerPlace: Place? = nil,
+                   mode: TransportMode? = nil,
+                   bufferMinutes: Int? = nil,
+                   notifyLeadMinutes: Int? = nil,
+                   notifyEnabled: Bool? = nil,
+                   travelSecondsHint: TimeInterval? = nil,
+                   syncToCalendar: Bool? = nil) async -> LegOutcome {
+        guard let leg = events.first(where: { $0.id == legId }) else { return .failed }
+        let role = leg.anchor ?? .arrival
+        let activity = leg.linkedActivityId.flatMap { id in activities.first { $0.id == id } }
+        let anchorDate = activity.map { legAnchor(role: role, activity: $0) }
+            ?? (role == .departure ? (leg.departureDate ?? leg.arrivalDate) : leg.arrivalDate)
+        let title = activity.map { legTitle(role: role, activity: $0) } ?? leg.title
+        // 활동 쪽 끝점은 활동 장소에서, 바깥 쪽은 저장값(또는 인자)에서 — updateEvent가 Place를
+        // 비-Optional로 받으므로 매달린 구간은 저장값으로 폴백한다(modifyEvent과 같은 규칙).
+        let outer = outerPlace ?? (role == .departure ? leg.destination : (leg.origin ?? leg.destination))
+        func write(_ act: ActivityBlock?) async {
+            let activitySide = act?.location
+            await updateEvent(id: legId,
+                              title: act.map { legTitle(role: role, activity: $0) } ?? title,
+                              origin: role == .departure ? (activitySide ?? leg.origin ?? leg.destination) : outer,
+                              destination: role == .departure ? outer : (activitySide ?? leg.destination),
+                              arrivalDate: act.map { legAnchor(role: role, activity: $0) } ?? anchorDate,
+                              mode: mode ?? leg.mode,
+                              bufferMinutes: bufferMinutes ?? leg.bufferMinutes,
+                              notifyLeadMinutes: notifyLeadMinutes ?? leg.notifyLeadMinutes,
+                              anchor: role,
+                              travelSecondsHint: travelSecondsHint,
+                              notifyEnabled: notifyEnabled,
+                              syncToCalendar: syncToCalendar)
+        }
+        await write(activity)
+        // await(추정) 사이 활동이 다른 경로로 바뀌면 위 쓰기에 옛 앵커·끝점·제목이 들어갔다 —
+        // 현재값으로 한 번 더 쓴다(MA code-safety 경고 2의 간단한 형태). 같은 저장 안의 재시도라
+        // 사이에 다른 갱신을 끼우지 않는다(design §5의 직렬 규칙과 같은 이유).
+        if let fresh = activityIfChanged(activity) { await write(fresh) }
+        // 플래그는 레코드에서 읽는다 — 추정 성패를 결과가 거짓말하면 안 된다(AC-010 (2)).
+        guard let updated = events.first(where: { $0.id == legId }) else { return .failed }
+        return .updated(travelKnown: updated.travelSeconds != nil)
+    }
+
+    /// 구간 하나만 지운다(활동은 그대로) — REQ-013의 구간 삭제 몫. 정리 경로는 deleteEvent를 탄다.
+    @discardableResult
+    func removeLeg(legId: UUID) -> LegOutcome {
+        guard let leg = events.first(where: { $0.id == legId }) else { return .failed }
+        deleteEvent(leg)
+        return .removed
+    }
+
+    /// 활동 저장 **뒤**에 불러, 명시적 연결 구간이 저장된 활동을 따라오게 한다(REQ-003) — 시간은
+    /// legAnchor, 활동 쪽 끝점은 활동 location, 제목은 legTitle, 바깥 끝점은 그대로, 이동시간은 다시
+    /// 추정한다(힌트 인자 옵션). **유도한 값이 저장값과 같은 구간은 전혀 쓰지 않는다** — 무변경
+    /// 저장은 레코드 바이트가 동일해야 한다(REQ-008). 구간은 하나씩 직렬로 처리한다: updateEvent는
+    /// await 전 스냅샷을 되쓰므로 갱신 사이에 다른 갱신을 끼우지 않는다(design §5 위험 표).
+    /// 결과의 updated는 "활동을 따르고 있음"의 뜻이지 쓰기가 있었다는 뜻이 아니다 — 쓰지 않은
+    /// 구간도 플래그는 레코드에서 읽어 돌려준다.
+    @discardableResult
+    func realignLegs(of activityId: UUID,
+                     outboundTravelSecondsHint: TimeInterval? = nil,
+                     returnTravelSecondsHint: TimeInterval? = nil) async -> (outbound: LegOutcome?, `return`: LegOutcome?) {
+        guard let activity = activities.first(where: { $0.id == activityId }) else { return (nil, nil) }
+        var results: [ScheduleAnchor: LegOutcome] = [:]
+        for role in [ScheduleAnchor.arrival, ScheduleAnchor.departure] {
+            guard let leg = events.first(where: { $0.linkedActivityId == activityId && ($0.anchor ?? .arrival) == role })
+            else { continue }
+            let anchorDate = legAnchor(role: role, activity: activity)
+            let title = legTitle(role: role, activity: activity)
+            let activitySide = activity.location
+            let newOrigin = role == .departure ? (activitySide ?? leg.origin ?? leg.destination)
+                                               : (leg.origin ?? leg.destination)
+            let newDestination = role == .departure ? leg.destination : (activitySide ?? leg.destination)
+            let anchorSame = role == .departure ? leg.departureDate == anchorDate : leg.arrivalDate == anchorDate
+            // 유도한 값이 저장값과 같으면 updateEvent를 부르지 않는다 — 불러도 레코드가 같으면
+            // 알림 재예약·정렬·저장만 일어나고, 다르면 바이트 동일이 깨진다.
+            if leg.title == title && anchorSame && leg.origin == newOrigin && leg.destination == newDestination {
+                results[role] = .updated(travelKnown: leg.travelSeconds != nil)
+                continue
+            }
+            // 끝점이 그대로면 저장된 이동시간이 여전히 사실이다 — 힌트 없이 재추정하면 실패 때
+            // (오프라인·할당량·경로 없음) applyEstimate가 알림을 취소하고 travelSeconds를 비운
+            // 채 끝나는 값 손실이 생긴다(sync 1차 B2, REQ-010). 끝점이 바뀌면 저장값이 사실이
+            // 아니므로 nil로 재추정을 유지한다. 명시적 힌트 인자가 있으면 그 값이 이긴다.
+            let endpointsSame = leg.origin == newOrigin && leg.destination == newDestination
+            let roleHint = (role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                ?? (endpointsSame ? leg.travelSeconds : nil)
+            await updateEvent(id: leg.id,
+                              title: title,
+                              origin: newOrigin,
+                              destination: newDestination,
+                              arrivalDate: anchorDate,
+                              mode: leg.mode,
+                              bufferMinutes: leg.bufferMinutes,
+                              notifyLeadMinutes: leg.notifyLeadMinutes,
+                              anchor: role,
+                              travelSecondsHint: roleHint)
+            // await(추정) 사이 활동이 다른 경로로 바뀌면 위 쓰기에 옛 앵커·끝점이 들어갔다 —
+            // 현재값으로 한 번 더 쓴다(updateLeg과 같은 형태, MA code-safety 경고 2). 힌트는 이때
+            // **새 끝점** 기준으로 다시 계산한다 — 첫 쓰기의 endpointsSame을 그대로 쓰면 바뀐
+            // 활동 장소의 끝점에 옛 경로 이동시간이 "조회됨"으로 굳는다(수리 diff code-safety W-a).
+            if let fresh = activityIfChanged(activity) {
+                let freshOrigin = role == .departure ? (fresh.location ?? leg.origin ?? leg.destination)
+                                                     : (leg.origin ?? leg.destination)
+                let freshDestination = role == .departure ? leg.destination : (fresh.location ?? leg.destination)
+                let freshHint = (role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                    ?? (leg.origin == freshOrigin && leg.destination == freshDestination ? leg.travelSeconds : nil)
+                await updateEvent(id: leg.id,
+                                  title: legTitle(role: role, activity: fresh),
+                                  origin: freshOrigin,
+                                  destination: freshDestination,
+                                  arrivalDate: legAnchor(role: role, activity: fresh),
+                                  mode: leg.mode,
+                                  bufferMinutes: leg.bufferMinutes,
+                                  notifyLeadMinutes: leg.notifyLeadMinutes,
+                                  anchor: role,
+                                  travelSecondsHint: freshHint)
+            }
+            if let updated = events.first(where: { $0.id == leg.id }) {
+                results[role] = .updated(travelKnown: updated.travelSeconds != nil)
+            }
+        }
+        return (results[.arrival], results[.departure])
     }
 
     /// 이동 일정 하나의 제목·시각·장소·이동수단을 바꾼다(주어진 것만 — 나머지는 그대로 둔다).
@@ -366,21 +671,12 @@ final class Store: ObservableObject {
     }
 
     /// 활동 블록을 삭제한다. 이 활동에 **묶여서 만들어진** 이동 구간(linkedActivityId)도 같이 지운다 —
-    /// 활동만 사라지고 그 활동을 위한 이동만 덩그러니 남으면 시간표가 이상해진다.
+    /// 활동만 사라지고 그 활동을 위한 이동만 덩그러니 남으면 시간표가 이상해진다(일괄 삭제가 이
+    /// 연쇄를 빠뜨려 매달린 링크가 남았다 — SPEC-UIKIT-009 REQ-012의 수리).
     /// 반복 일정이 만든 구간은 명시적 연결이 없으므로 여기서 건드리지 않는다(반복 전체 삭제로 처리).
     func deleteActivity(_ activity: ActivityBlock) {
-        activities.removeAll { $0.id == activity.id }
-        saveActivities()
-        let legs = events.filter { $0.linkedActivityId == activity.id }
-        if !legs.isEmpty {
-            for e in legs { if let nid = e.notificationId { notifications.cancel(id: nid) } }
-            let legIDs = Set(legs.map { $0.id })
-            events.removeAll { legIDs.contains($0.id) }
-            save()
-        }
-        removeUpcomingMeals(eventIDs: Set(legs.map { $0.id }), activityIDs: [activity.id])
-        let gids = ([activity.googleEventId] + legs.map { $0.googleEventId }).compactMap { $0 }
-        if !gids.isEmpty { Task { await removeFromCalendar(gids) } }
+        // 낱개·일괄이 같은 정리 절차를 탄다(계약 5) — 정리 몸통이 둘이면 한쪽만 고쳐지는 날이 온다.
+        deleteActivitiesCore([activity])
     }
 
     private func saveActivities() {
@@ -1117,12 +1413,18 @@ final class Store: ObservableObject {
     /// 그 활동 장소에서 출발하는(출발형) 이동 구간을 찾는다. 명시적 링크 필드 없이 날짜+장소로 추정한다.
     private func linkedLegs(for activity: ActivityBlock) -> (arrival: ScheduledEvent?, departure: ScheduledEvent?) {
         // 명시적으로 묶인 구간이 있으면 그걸 쓴다(수동으로 활동+이동을 같이 만든 경우).
-        let explicit = events.filter { $0.linkedActivityId == activity.id }
+        let explicit = explicitLegs(of: activity.id)
         if !explicit.isEmpty {
             return (explicit.first { ($0.anchor ?? .arrival) == .arrival },
                     explicit.first { $0.anchor == .departure })
         }
-        // 옛 반복 일정 데이터는 명시적 연결이 없어 날짜+장소로 추정한다.
+        return estimatedLegs(for: activity)
+    }
+
+    /// 옛 반복 일정 데이터는 명시적 연결이 없어 날짜+장소 이름으로 추정한다 — 이 추정 분기를 한
+    /// 곳에 둬 linkedLegs(활동 이동)와 packingGroups(배치 묶음)가 **같은 코드**를 읽게 한다
+    /// (추정 복제 금지, AC-015 (12)).
+    private func estimatedLegs(for activity: ActivityBlock) -> (arrival: ScheduledEvent?, departure: ScheduledEvent?) {
         guard let rid = activity.recurrenceId, let placeName = activity.location?.name else { return (nil, nil) }
         let cal = Calendar.current
         let sameDay = events.filter { $0.recurrenceId == rid && cal.isDate($0.arrivalDate, inSameDayAs: activity.startDate) }
@@ -1299,14 +1601,41 @@ final class Store: ObservableObject {
         }
     }
 
-    /// deleteEvents의 활동 블록 버전.
+    /// deleteEvents의 활동 블록 버전. 낱개 deleteActivity와 같은 정리 절차를 탄다(REQ-012) —
+    /// 연결 구간까지 지운다는 점이 옛 코드와 다르다(옛 일괄 삭제는 구간을 남겨 매달린 링크를
+    /// 만들었다). 기존 일괄 최적화(알림 취소·저장·캘린더 삭제가 목록 전체에 한 번)는 유지한다.
     func deleteActivities(_ list: [ActivityBlock]) {
+        deleteActivitiesCore(list)
+    }
+
+    /// 삭제 정리의 공통 몸통 — 낱개·일괄이 같은 절차를 탄다(계약 5). 구간 정리는
+    /// removeExplicitLegs(알림 취소·캘린더 묘비·식사 기록까지)가, 활동 제거·저장·식사·캘린더는
+    /// 여기서 각각 한 번만 돈다.
+    private func deleteActivitiesCore(_ list: [ActivityBlock]) {
         guard !list.isEmpty else { return }
         let ids = Set(list.map { $0.id })
+        removeExplicitLegs(of: ids)
         activities.removeAll { ids.contains($0.id) }
         saveActivities()
         removeUpcomingMeals(activityIDs: ids)
         let gids = list.compactMap { $0.googleEventId }
+        if !gids.isEmpty {
+            Task { await removeFromCalendar(gids) }
+        }
+    }
+
+    /// 활동들의 명시적 연결 구간(linkedActivityId)만 지운다 — 반복 추정 구간(recurrenceId만 공유)은
+    /// 명시적 연결이 없으므로 여기서 건드리지 않는다(반복 전체 삭제의 몫). deleteActivity·
+    /// deleteActivities·modifyActivity(clearPlace)가 같은 절차를 쓴다(정리 절차 두 벌 금지).
+    private func removeExplicitLegs(of activityIds: Set<UUID>) {
+        let legs = events.filter { $0.linkedActivityId != nil && activityIds.contains($0.linkedActivityId!) }
+        guard !legs.isEmpty else { return }
+        for e in legs { if let nid = e.notificationId { notifications.cancel(id: nid) } }
+        let legIDs = Set(legs.map { $0.id })
+        events.removeAll { legIDs.contains($0.id) }
+        save()
+        removeUpcomingMeals(eventIDs: legIDs)
+        let gids = legs.compactMap { $0.googleEventId }
         if !gids.isEmpty {
             Task { await removeFromCalendar(gids) }
         }
