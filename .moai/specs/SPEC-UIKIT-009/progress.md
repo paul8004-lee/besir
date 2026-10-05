@@ -586,4 +586,13 @@ run_status: audit-ready (사람 스크립트·sync 대기 포함, AC 상태 표�
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+### sync 1차 (2026-10-05, 트리 `38bd215`) — FAIL
+
+- 판정문: `.moai/reports/t17/sync-verdict.md`. 기계 게이트는 이 레인이 직접 돌려 통과했다 — 드라이버 **468/468**(✗ 0 · 뺀 수 0 · 더한 라벨 111) · 컴파일 경고 집합 24줄 동일 · iOS `BUILD SUCCEEDED` 무경고 · 카드별 범위(AC-022) 일치 · 계약(AC-019) 통과 · 기준 트리 `021f9fd` 독립 재실행 `372/377`(✗ 5건이 §E.2 기록과 같은 라벨).
+- **차단 2건 — 둘 다 이 레인이 실행으로 재현했다**:
+  - **B1 (REQ-011 위반)** 반복 회차 활동의 카드가 시드에는 구간 줄이 없는데 장소를 고르면 토글 줄이 생기고(`EditCard.swift:332-346`), 저장하면 `Store.addLeg`(반복 검사 없음)가 명시적 구간을 만든다. 반복 전체 삭제 뒤 그 구간이 매달린 링크로 남는다(`repro/b1-store.log`).
+  - **B2 (REQ-010 위반)** `ActivityDetailView.swift:334` `_ = await store.realignLegs(of: a.id)`가 결과를 버린다. 제목만 바꾼 저장도 힌트 없이 재추정하고, 추정이 실패하면 두 구간의 `travelSeconds`가 nil이 되어 경고 블록이 되는데 시트는 안내 없이 닫힌다(`repro/b2-*.log`, 추정 실패 주입 + 도보 양성 대조).
+- 경고 4(W1 캘린더 제외 미반영 · W2·W3 가설 · W4 AI 목록 표지) · 메모 7은 판정문 §5. 문서 갱신(AC-021 인용 재사상 · CHECKLIST · 루트 `plan.md`)은 코드가 다시 움직이므로 수리 뒤로 미뤘다 — 도구와 결정표는 준비됐다(판정문 §6).
+- §E.2 MC code-safety ④(b)의 "재쓰기는 같은 hint 재사용이라 새 네트워크 조회를 만들지 않는다"는 사실이 아니다(뷰 경로의 hint는 항상 nil) — run 레인이 정정한다.
+
+sync_status: FAIL (1차 — B1·B2 수리 뒤 재sync)
