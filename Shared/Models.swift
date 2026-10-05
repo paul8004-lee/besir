@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CoreLocation
 
 /// 이동수단.
@@ -242,6 +243,70 @@ enum ScheduleLogic {
             after = (home, "집")
         }
         return (before, after)
+    }
+
+    // MARK: 시간표 겹침 배치(t17-c C1 — ContentView.positionedBlocks에서 옮김)
+
+    /// 겹침 배치의 입력 항목 — 뷰 레코드가 아니라 (id, 자정 기준 분)쌍만 안다.
+    /// 레코드(ScheduledEvent·ActivityBlock)를 받으면 묶음 키를 스스로 만들고 싶어지므로
+    /// (AC-015 (8)) id는 String으로만 흐른다.
+    struct LayoutItem {
+        let id: String
+        let start: CGFloat        // 자정 기준 분 — span(for:on:)이 이미 잘라·부풀린 값
+        let end: CGFloat
+    }
+
+    /// 겹침 배치의 결과 — 항목별 (열 번호, 무리의 열 수).
+    struct LayoutSlot {
+        let id: String
+        let column: Int           // 0부터
+        let columns: Int
+    }
+
+    /// 하루치 블록을 훑어 겹치는 것끼리 열을 나눈다.
+    ///
+    /// 시간이 겹치는 블록들을 하나의 "무리"로 묶고, 무리 안에서는 먼저 시작한 것부터
+    /// **비어 있는 첫 열**에 넣는다. 무리의 열 수만큼 가로를 나눠 쓰므로, 두 개가 겹치면
+    /// 반씩, 세 개면 1/3씩 차지한다. 겹치지 않는 블록은 전처럼 가로 전체를 쓴다.
+    /// 뷰가 이 계산을 따로 들고 있으면 렌더와 히트테스트가 어긋나므로(AC-016) 순수 함수로
+    /// 뺐다 — 본문은 `ContentView.positionedBlocks`에서 글자 그대로 옮겼다(동작 불변).
+    /// 정렬의 마지막 동률(시작·끝이 모두 같은 두 항목)만 id로 갈랐다 — 안정 정렬을 문서가
+    /// 보장하지 않아 입력 순서가 새면 출력이 흔들리는 것을 끊는다(AC-017 (7)). 같은 시각의
+    /// 둘이 열 0·1을 맞바꿈할 뿐 겉보기 배치는 같다.
+    static func overlapColumns(_ input: [LayoutItem]) -> [LayoutSlot] {
+        var items = input
+        items.sort {
+            $0.start == $1.start
+                ? ($0.end == $1.end ? $0.id < $1.id : $0.end < $1.end)
+                : $0.start < $1.start
+        }
+
+        var out: [LayoutSlot] = []
+        var cluster: [(item: LayoutItem, column: Int)] = []
+        var columnEnds: [CGFloat] = []          // 열별로 현재까지 차 있는 끝 시각
+
+        func flush() {
+            let columns = max(1, columnEnds.count)
+            for entry in cluster {
+                out.append(LayoutSlot(id: entry.item.id, column: entry.column, columns: columns))
+            }
+            cluster.removeAll(); columnEnds.removeAll()
+        }
+
+        for item in items {
+            // 지금까지의 무리와 전혀 겹치지 않으면(모든 열이 이미 끝났으면) 새 무리를 시작한다.
+            if !columnEnds.isEmpty, columnEnds.allSatisfy({ $0 <= item.start }) { flush() }
+            // 비어 있는 첫 열을 찾고, 없으면 열을 하나 늘린다.
+            if let free = columnEnds.firstIndex(where: { $0 <= item.start }) {
+                columnEnds[free] = item.end
+                cluster.append((item, free))
+            } else {
+                columnEnds.append(item.end)
+                cluster.append((item, columnEnds.count - 1))
+            }
+        }
+        flush()
+        return out
     }
 
     /// 일정을 지울 때 **같이 지워야 할 식사 기록**의 id.

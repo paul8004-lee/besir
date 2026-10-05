@@ -4513,6 +4513,72 @@ struct Drv {
                       "notify=\(String(describing: agField(ag113Seed, LegRowKeys.notifyEnabled)?.chosen))/"
                           + "\(String(describing: agField(ag113Seed, LegRowKeys.notifyLeadMinutes)?.chosen)), ops=\(ag113Ops.count)건")
 
+        // ── AH. t17-c(SPEC-UIKIT-009 MC) — C1 특성화: 겹침 배치 순수 함수(ScheduleLogic
+        //        .overlapColumns)의 실제 출력을 단언으로 고정한다. 값은 손 계산(design §6.3)이
+        //        아니라 **함수의 실제 출력**이다 — 그래야 C2의 새 알고리즘이 묶음 없는 날에서
+        //        이 단언들을 그대로 통과할 때 회귀선이 된다(AC-017 (6)). 묶음 키 없는 입력이므로
+        //        지금 단언들이 고정하는 것은 옛 알고리즘의 동작 그대로다(AC-015 (4) — E1·E2).
+        print("\nAH. t17-c C1 — 겹침 배치 특성화(SPEC-UIKIT-009 MC, REQ-015·016·017)")
+        let ahAi = fresh()
+        func ahSlots(_ pairs: [(String, CGFloat, CGFloat)]) -> [String: (column: Int, columns: Int)] {
+            var d: [String: (column: Int, columns: Int)] = [:]
+            for s in ScheduleLogic.overlapColumns(pairs.map { .init(id: $0.0, start: $0.1, end: $0.2) }) {
+                d[s.id] = (s.column, s.columns)
+            }
+            return d
+        }
+        func ahDesc(_ d: [String: (column: Int, columns: Int)]) -> String {
+            d.sorted { $0.key < $1.key }.map { "\($0.key)(\($0.value.column),\($0.value.columns))" }
+                .joined(separator: " ")
+        }
+
+        // AC-015 (4) — E1(묶음 키 없음): 옛 알고리즘이 내는 값을 기록한다.
+        let ahE1 = ahSlots([("O", 810, 840), ("A", 840, 900), ("U", 850, 890), ("R", 900, 930)])
+        ahAi.drvCheck("AH-015-01 E1 옛 출력 — O 전폭 · A/U 반씩 · R 전폭(맞닿기는 무리를 끊는다)",
+                      ahDesc(ahE1) == "A(0,2) O(0,1) R(0,1) U(1,2)",
+                      ahDesc(ahE1))
+
+        // AC-015 (4) — E2 거울: U가 가는 편에만 겹치면 O·U가 반씩이고 활동·오는 편이 전폭.
+        let ahE2 = ahSlots([("O", 810, 840), ("A", 840, 900), ("U", 820, 830), ("R", 900, 930)])
+        ahAi.drvCheck("AH-015-02 E2(거울) 옛 출력 — O/U 반씩 · A·R 전폭",
+                      ahDesc(ahE2) == "A(0,1) O(0,2) R(0,1) U(1,2)",
+                      ahDesc(ahE2))
+
+        // AC-017 (6) — 묶음 없는 시나리오 S1~S6·E5의 회귀선.
+        let ahS1 = ahSlots([("A", 600, 660), ("B", 630, 690)])
+        ahAi.drvCheck("AH-017-01 S1 두 블록 겹침 — 각자 열 0·1, 무리 열 수 2",
+                      ahDesc(ahS1) == "A(0,2) B(1,2)", ahDesc(ahS1))
+
+        let ahS2 = ahSlots([("A", 600, 650), ("B", 620, 670), ("C", 660, 700)])
+        ahAi.drvCheck("AH-017-02 S2 사슬(A–B·B–C 겹침, A–C 안 겹침) — 한 무리 2열에서 C가 A의 열을 재사용",
+                      ahDesc(ahS2) == "A(0,2) B(1,2) C(0,2)", ahDesc(ahS2))
+
+        let ahS3 = ahSlots([("A", 600, 640), ("B", 640, 700)])
+        ahAi.drvCheck("AH-017-03 S3 맞닿음(end == start) — 서로 다른 무리라 둘 다 전폭",
+                      ahDesc(ahS3) == "A(0,1) B(0,1)", ahDesc(ahS3))
+
+        let ahS4 = ahSlots([("A", 600, 700), ("B", 630, 650)])
+        ahAi.drvCheck("AH-017-04 S4 포함(B가 A 안) — 2열 무리, 포함된 쪽이 열 1",
+                      ahDesc(ahS4) == "A(0,2) B(1,2)", ahDesc(ahS4))
+
+        // AC-017 (7) — 시작·끝이 같은 둘: 입력 순서를 뒤집어도 같은 출력(id 동률 깨기).
+        let ahS5a = ahSlots([("X", 600, 660), ("Y", 600, 660)])
+        let ahS5b = ahSlots([("Y", 600, 660), ("X", 600, 660)])
+        ahAi.drvCheck("AH-017-05 S5 시작·끝이 같은 둘 — 입력 순서를 뒤집어도 출력이 같다(2열, X가 열 0)",
+                      ahDesc(ahS5a) == ahDesc(ahS5b) && ahDesc(ahS5a) == "X(0,2) Y(1,2)",
+                      "정순=\(ahDesc(ahS5a)), 역순=\(ahDesc(ahS5b))")
+
+        let ahS6 = ahSlots([("A", 600, 700), ("B", 610, 690), ("C", 620, 680), ("D", 630, 670)])
+        ahAi.drvCheck("AH-017-06 S6 네 열 무리 — 열 0~3, 무리 열 수 4",
+                      ahDesc(ahS6) == "A(0,4) B(1,4) C(2,4) D(3,4)", ahDesc(ahS6))
+
+        let ahE5 = ahSlots([("P", 600, 660), ("Q", 630, 690), ("S", 690, 720)])
+        ahAi.drvCheck("AH-017-07 E5 묶음 없음 — P·Q 반씩, S는 맞닿아 전폭",
+                      ahDesc(ahE5) == "P(0,2) Q(1,2) S(0,1)", ahDesc(ahE5))
+
+        store.events = []
+        store.activities = []
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.

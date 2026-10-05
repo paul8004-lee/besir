@@ -691,11 +691,11 @@ struct ContentView: View {
 
     /// 하루치 블록을 훑어 겹치는 것끼리 열을 나눈다.
     ///
-    /// 시간이 겹치는 블록들을 하나의 "무리"로 묶고, 무리 안에서는 먼저 시작한 것부터
-    /// **비어 있는 첫 열**에 넣는다. 무리의 열 수만큼 가로를 나눠 쓰므로, 두 개가 겹치면
-    /// 반씩, 세 개면 1/3씩 차지한다. 겹치지 않는 블록은 전처럼 가로 전체를 쓴다.
-    /// 범위는 그리는 날(on)로 잘라 계산한다 — 자정을 넘는 블록이 이틀에 나열돼도 각 날의
-    /// 목록·배치는 서로 별개라 같은 블록이 하루 안에서 두 번 세어질 일은 없다.
+    /// 정렬·무리·열 배정은 `ScheduleLogic.overlapColumns`(Models.swift)이 한다 — 뷰가
+    /// 배치 산술을 따로 들고 있으면 렌더와 히트테스트가 어긋난다(AC-016). 여기는 레코드를
+    /// (id, start, end)로 펴서 넣고 결과를 다시 블록으로 매핑하기만 한다. 범위는 그리는 날(on)로
+    /// 잘라 계산한다 — 자정을 넘는 블록이 이틀에 나열돼도 각 날의 목록·배치는 서로 별개라
+    /// 같은 블록이 하루 안에서 두 번 세어질 일은 없다.
     private func positionedBlocks(events dayEvents: [ScheduledEvent],
                                   activities dayActivities: [ActivityBlock],
                                   on date: Date) -> [PositionedBlock] {
@@ -708,37 +708,15 @@ struct ContentView: View {
             let s = span(for: $0, on: date)
             return Item(id: "e-\($0.id)", kind: .event($0), start: s.start, end: s.start + s.minutes)
         }
-        items.sort { $0.start == $1.start ? $0.end < $1.end : $0.start < $1.start }
-
-        var out: [PositionedBlock] = []
-        var cluster: [(item: Item, column: Int)] = []
-        var columnEnds: [CGFloat] = []          // 열별로 현재까지 차 있는 끝 시각
-
-        func flush() {
-            let columns = max(1, columnEnds.count)
-            for entry in cluster {
-                out.append(PositionedBlock(id: entry.item.id, kind: entry.item.kind,
-                                           start: entry.item.start,
-                                           minutes: entry.item.end - entry.item.start,
-                                           column: entry.column, columns: columns))
-            }
-            cluster.removeAll(); columnEnds.removeAll()
+        let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
+        return ScheduleLogic.overlapColumns(items.map {
+            ScheduleLogic.LayoutItem(id: $0.id, start: $0.start, end: $0.end)
+        }).compactMap { slot -> PositionedBlock? in
+            guard let it = byID[slot.id] else { return nil }
+            return PositionedBlock(id: it.id, kind: it.kind, start: it.start,
+                                   minutes: it.end - it.start,
+                                   column: slot.column, columns: slot.columns)
         }
-
-        for item in items {
-            // 지금까지의 무리와 전혀 겹치지 않으면(모든 열이 이미 끝났으면) 새 무리를 시작한다.
-            if !columnEnds.isEmpty, columnEnds.allSatisfy({ $0 <= item.start }) { flush() }
-            // 비어 있는 첫 열을 찾고, 없으면 열을 하나 늘린다.
-            if let free = columnEnds.firstIndex(where: { $0 <= item.start }) {
-                columnEnds[free] = item.end
-                cluster.append((item, free))
-            } else {
-                columnEnds.append(item.end)
-                cluster.append((item, columnEnds.count - 1))
-            }
-        }
-        flush()
-        return out
     }
 
     /// 열 번호에 맞는 가로 위치·폭. `total`은 블록이 놓일 영역 전체 폭.
