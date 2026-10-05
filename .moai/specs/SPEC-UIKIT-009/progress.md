@@ -656,5 +656,17 @@ run_status: audit-ready (사람 스크립트·sync 대기 포함, AC 상태 표�
 - 후속 감 3건(W-b·반복 회차 각주·`endpointsSame`)은 SPEC `plan.md` §6이 아니라 루트 `plan.md` 후속 25로 승계했다(SPEC plan 본문은 `manager-spec` 소유).
 - 남은 것: 시뮬레이터 스크립트 1~22(AC-023·024 🟡)와 실기기 전용(알림 수신·캘린더 앱 모습) — 운영자. 베이타는 만들지 않는다(CLAUDE.md).
 
+(2차 기록 끝 — 당시 sync_status: PASS (경고 F1·F2는 병합 전 작게 닫기 권고, 리드 판단))
+
+### sync 최종 (2026-10-05, 트리 `aed00ed`) — PASS · 3-phase close
+
+- 판정문 `.moai/reports/t17/sync-verdict.md` 「최종 판정」. 리드의 F1·F2 병합 전 수리(코드 `1876772`, 문서 `aed00ed`)를 이 레인이 다시 돌려 닫힘을 확인했다.
+- **게이트(직접 실행)**: 드라이버 **471/471**(✗ 0 · 2차 실행과 ✓ 라벨 집합 동일, 뺀 라벨 0 · AF 69 · AG 10 · AH 35) · 컴파일 경고 집합 24줄 동일 · iOS 새 DerivedData `BUILD SUCCEEDED`·`SwiftCompile` 42·경고 0(`ActivityDetailView.swift` 컴파일 로그 확인 — 드라이버 집합에 뷰가 없다) · 샌드박스 잔여 없음 · AC-019 계약(금지 경로 무출력·색 0·`Image(systemName` 0·플랫폼 지시문 집합 37줄 diff 0·`.onTapGesture` 셋·`#if os(macOS)` 유지)과 명령 항목 전부 기대값. 이번 수리 카드 범위: 기준 `e9be4a2`→`1876772` = `ActivityDetailView.swift` 하나(29+16), 카드 MD 누적(`9936bb2`→`1876772`)은 소스 4파일·100줄 이상 0·새 소스 파일 0.
+- **F1·F2 닫힘 — 실제 `LegSavePlanner`·`Store`로 재현**(뷰의 두 규칙만 같은 모양으로 적용, `repro/r3-f12.log`): F1 — 이동시간이 nil이던 구간의 수단을 바꿔 저장하면 레코드 13567초, 수리 전 규칙(OR 누적)은 안내=참·수리 후 규칙(레코드)은 거짓 = 레코드와 일치, 원래 nil인 구간이 그대로면 여전히 안내 참. F2 — 안내가 남은 뒤 다시 저장: 수리 전 규칙 `refused(duplicateRole)`, 수리 후 규칙 ops 0건, 줄을 더 고치면 그 차이(`add(departure)` 1건)만 나간다.
+- **인용 재사상 갱신**: 같은 도구를 최종 HEAD로 다시 돌렸다 — 원장 237행(처분 분포 불변), 독립 검증기 본문 대조 135건·변경 줄 58·그대로인 줄 1267·삽입 23줄 실패 0, 양성 대조 둘 검출. F1·F2가 `ActivityDetailView.swift` 줄을 옮겨 D9·D11·E7의 줄번호와 D11 서술(미계산 안내는 레코드 하나에서 읽고, 안내 뒤 재시드)을 갱신했고, 루트 `plan.md` t17 행과 후속 26·27을 '닫혔다'로 옮겼다.
+- **독립 렌즈(`code-safety`, 이번 수리 diff 전용)**: 차단 0 · F1·F2 닫힘 판독 · 경고 W1 · 메모 N1~N4. **W1(이 레인이 재현, `repro/r3-w1.log`)**: 코드 주석 '다시 저장은 추정 실패의 복구 경로다'는 사실이 아니다 — 끝점이 그대로인 nil 구간은 무편집 다시 저장에서 `realignLegs`가 건너뛰어 nil로 남고(제목이 다르면 재추정), 수리 전에는 낡은 `seed`가 우연히 재추정하던 경로를 F2 수리가 없앴다. 이 카드가 만든 한계가 아니라 SPEC plan §6의 '복구되지 않는 실패 구간'(기존 동작)이다. 데이터 손실 없음·안내는 사실 → PASS 유지, **병합 전 주석 한 줄 정정을 권고**(run 레인), 재시도 경로를 실제로 만드는 일은 루트 `plan.md` 후속 30. 이 레인의 2차 문서 표현('복구 경로')도 같은 오류라 정정했다.
+- 기계 몫 AC-001~022 전부 충족. AC-023·024는 사람 전용이라 🟡 — 시뮬레이터 스크립트 1~22(13a·20a·20b 포함 25단계)와 실기기 전용(알림 수신·캘린더 앱 모습)이 운영자 몫으로 남는다. 베타는 만들지 않는다(CLAUDE.md).
+- **3-phase close**: `spec.md` frontmatter `status: draft → completed`(run 단계가 `in-progress`로 올리지 않았다 — 선례 SPEC-UIKIT-008은 `in-progress → completed`를 한 커밋으로 닫았다). 병합·push는 리드가 주 체크아웃에서 한다.
+
 sync_complete_at: 2026-10-05
-sync_status: PASS (2차 — 경고 F1·F2는 병합 전 작게 닫기 권고, 리드 판단)
+sync_status: PASS (최종 — F1·F2 닫힘 · 3-phase close · 병합 대기)

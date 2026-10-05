@@ -1,4 +1,4 @@
-문서	줄	옛 토큰	파일	처분	가리키던 원문(base b2c3987)	새 토큰	새 원문(HEAD 951d7de)	근거
+문서	줄	옛 토큰	파일	처분	가리키던 원문(base b2c3987)	새 토큰	새 원문(HEAD aed00ed)	근거
 CHECKLIST.md	29	:234	EditCard.swift	이력 보존		-		머리말 기준선 문단 = 그날 좌표의 기록(관례)
 CHECKLIST.md	29	:257	EditCard.swift	이력 보존		-		머리말 기준선 문단 = 그날 좌표의 기록(관례)
 CHECKLIST.md	35	:234	EditCard.swift	이력 보존		-		머리말 기준선 문단 = 그날 좌표의 기록(관례)
@@ -135,7 +135,7 @@ CHECKLIST.md	400	:300	EditCard.swift	재사상	private static let delayNanos: UI
 CHECKLIST.md	400	:323	EditCard.swift	재사상	if lastQuery[key] == q, !hadLiveTask { return .skip }	:764	if lastQuery[key] == q, !hadLiveTask { return .skip }	
 CHECKLIST.md	499	:179-182	Store.swift	귀속 오류 — 변경 없음		-		AddEventView 좌표(gatedRows 두 벌) — AddEventView는 이 카드 diff 밖
 CHECKLIST.md	499	:201-204	Store.swift	귀속 오류 — 변경 없음		-		AddEventView 좌표(gatedRows 두 벌) — AddEventView는 이 카드 diff 밖
-CHECKLIST.md	502	:362	ActivityDetailView.swift	재사상	.disabled(loadingNearby)	:445	.disabled(loadingNearby)	
+CHECKLIST.md	502	:362	ActivityDetailView.swift	재사상	.disabled(loadingNearby)	:458	.disabled(loadingNearby)	
 CHECKLIST.md	503	:72	EventDetailView.swift	이동량 0 — 변경 없음		-		사상값이 옛 값과 같다
 CHECKLIST.md	503	:153-168	EventDetailView.swift	재사상	systemImage: "person.crop.circle.badge.xmark") ⟂ transitSteps = []	:159-174	systemImage: "person.crop.circle.badge.xmark") ⟂ transitSteps = []	
 CHECKLIST.md	506	:270-279	Store.swift	이력 보존		-		문장이 '당시 좌표'라고 못박은 이력(t13 이전 모양)

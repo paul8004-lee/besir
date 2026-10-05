@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-009
 title: "편집 카드 통일(U-1) — 이동 구간을 활동 카드의 줄로 · 시간 수정 시 결합 유지 · 오는 편 나중 추가 · 삭제 연계 · 겹침 크기 연동"
 version: "0.1.4"
-status: draft
+status: completed
 created: "2026-09-30"
 updated: "2026-10-05"
 author: "manager-spec"
