@@ -516,9 +516,73 @@ E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르�
 
 **C2·C3의 갭(관측하지 않은 것)**: 경고 2의 await-뒤 재쓰기 경로(활동이 추정 await 사이 바뀌는 시나리오)는 실행으로 닿지 않았다 · 시뮬레이터 스크립트 14~22·20a·20b(AC-024 사람 몫) · 묶음 배치의 화면 모습(블록 폭·간격의 실제 렌더링) · F9 간격 결정(간격 3pt가 빈 띠)의 손끝 확인.
 
+### MC(t17-c) ui-design 검사(하네스)
+
+2026-10-05, 커밋 `2ad0f84`(C1)·`9a7e5cd`(C2·C3) 대상, 기준 `7980190` → HEAD `90f00b7` — 읽기 전용 렌즈(코드 수정 없음). 렌즈: ① Theme 토큰(계약 6) ② 맥 전용 코드·`preferredColorScheme` 불변(REQ-019·AC-019 (6)) ③ 간격의 히트 처리 = 렌더 사각형(design §9·F9·AC-016 (4)) ④ 경고 블록의 자정 넘침 취급(design §4) ⑤ `showsTitle` 매달린 링크(REQ-006) ⑥ 새 컨트롤 접근성(design §8).
+
+**관측(전부 코드 읽기 — `git diff 7980190 HEAD -- Shared/ContentView.swift` 전문과 현 파일 줄 인용)**:
+
+- **① 색 직접 사용 0건**: diff의 `^+` 줄에서 `Color|foreground|fill|background|tint|opacity` grep 무출력(관측 명령: `git diff 7980190 HEAD -- Shared/ContentView.swift | grep '^+' | grep -iE 'Color|\.foreground|\.fill|\.background|\.tint|\.opacity|preferredColorScheme'` → exit 1). `failedEstimateBlockView`(현 `:636`)는 이 카드가 건드리지 않았다 — `Theme.warn`·`Theme.warnFill`·`.blockSurface(...)` 토큰 그대로, 바뀐 것은 어느 블록이 이 뷰로 가는지(진입 판정 `failedBlockAnchor != nil`, `:509`)와 세로 자리(`span(for:)`)뿐이다. 렌더에서 `max(width, 1)` 폭 하한만 `columnFrame`에 남아 있고 색·표면 변경은 없다.
+- **② 맥 전용 코드 불변**: `#if os(iOS)` 2·449·849, `#if os(macOS)` 190 — 넷 모두 현존. `.onTapGesture` 셋(`:627`·`:650`·`:685`)과 그 맥 전용 주석(`:625`·`:634`·`:684`)이 이 카드 diff에서 지워지거나 고쳐지지 않았다(diff `^[-+]` grep으로 `#if os|onTapGesture|preferredColorSchema` 히트 0 — 게이트 3의 AC-019 (6) 관측과 같은 결과). `preferredColorScheme`은 ContentView 전체에 없다(무출력).
+- **③ 간격 히트 = 렌더 사각형**: 점 환산의 단일 출처는 `ScheduleLogic.SlotRange.points(in:gap:)`(Models, `columns > 1`일 때 칸 경계마다 gap 3pt, `boundariesBefore = Int((lo*columns).rounded(.down))`). 렌더 `columnFrame`(`:738`, `p.range.points(in: total, gap: Self.columnGap)`)과 히트 `block(atX:y:in:total:)`(`px = x * total` 후 같은 `points` 호출, `guard px >= f.x, px <= f.x + f.width`)이 **같은 PositionedBlock.range · 같은 Self.columnGap(3) · 같은 total**을 읽는다 — total은 렌더 `:434`와 히트 `:459`·`:473` 모두 같은 `GeometryReader`의 `geo.size.width`다. 간격 3pt는 어느 블록 사각형에도 속하지 않아 그 안의 탭은 빈 곳으로 양보된다 — design §9에서 run이 정한 "렌더와 같은 사각형, 간격은 빈 곳"과 정확히 일치한다. 칸 산술이 뷰에 남은 자리는 없다(`columnEnds`·`1 / CGFloat(p.columns)` ContentView 0건 — 게이트 3 AC-016 (1)(2)와 같은 관측).
+- **④ 자정 근처 경고 블록 넘침**: `span(for:on:)` 실패 분기(diff의 새 주석)가 "앵커가 자정 직전이면 블록 끝이 그 날 화면 아래 밖으로 몇 분 넘치는 것은 계산된 구간의 아래 넘침과 같은 규칙"이라고 못박는다 — 이는 design §4 자정 실례(23:50 출발 → 경고 1430–1451, 11.4분 넘침을 기준 트리의 활동 기하와 같은 취급으로 받아들임)의 문서화된 결정 그대로다. 기존 도착 기준 실패 블록도 날짜로 자르지 않았으므로 취급의 변화는 없다. 나열이 앵커의 날 하루로 바뀌어(다) 모양의 옛 도착 날 D+1 화면 맨 위에 생기던 이중 경고(review-2 D14)는 이 카드에서 사라졌다.
+- **⑤ 제목 숨김 조회 교체**: `showsTitle = store.activity(forLeg: event) == nil`(`travelBlockView`). `activity(forLeg:)`(Store `:415`)는 `linkedActivityId`가 가리키는 활동을 배열에서 찾아 매달린 링크면 nil을 내므로, 활동이 지워진 구간은 이제 제목을 그린다 — REQ-006 "매달린 링크 구간은 시간표에 제목을 그린다"와 일치. 링크가 살아 있으면 여전히 숨긴다(기존 의도 유지). 주석이 AC-005 (3)을 인용하고 있다.
+- **⑥ 새 컨트롤 접근성**: 이 카드는 아이콘 전용·스피너 접힘 컨트롤을 새로 만들지 않았다(design §8의 조건부 항목 — "새 컨트롤이 없으면 그렇다고 렌즈 보고서에 적는다"). 블록 자체의 VoiceOver 접근성(탭이 좌표 히트테스트로만 처리되는 구조)은 이 카드 이전의 기존 형태 그대로다.
+
+**발견: 결함 0 · 경고 0 · 메모 2**.
+
+- 메모 1(design §9 갭의 판정 기록): 경고 블록 끌기 강조(`isDragging`)는 `failedEstimateBlockView`에 더하지 않았다 — 끌기 자체는 `offsetY`가 블록 종류와 무관하게 작동하고 경고 블록이 이미 색(Theme.warn 레일·채움)으로 구분되므로 이 카드 범위 밖으로 둔다. 실기기에서 끌 때 피드백 부족이 관측되면 후속 카드.
+- 메모 2(빌드 밖 잔여): 묶음 배치의 실제 화면 모습(블록 폭·간격 3pt·묶음 안쪽 나눔)과 F9 간격 빈 띠의 손끝 확인은 여전히 사람 몫 — 위 C2·C3 갭 목록과 같다.
+
+### MC(t17-c) code-safety 검사(하네스)
+
+2026-10-05, 같은 범위(`2ad0f84`·`9a7e5cd`·`7b47676`, 기준 `7980190` → HEAD `90f00b7`) — 읽기 전용(코드 수정 없음). 렌즈: plan §4의 6개 점검(① departureDate 잔여 읽기 곳의 의미 불변 ② 네 자리 단일 판정 ③ 실패 모양 넷의 경고 하나 ④ 이월 수리 2건의 불변식 ⑤ 4대 위험 클래스 전수+H5~H8·간결성 ⑥ X6 픽스처 정정 판정).
+
+**관측(전부 현 트리 코드 읽기 — 줄은 HEAD 기준)**:
+
+- **① 잔여 읽기 곳 의미 불변 — 확인**: departureDate를 "추정 성공"으로 읽는 곳은 `Store.swift:801`(conflicts, `guard let dep`), `GoogleCalendarService.swift:172`(업로드 start), `EventDetailView.swift:265`("예상 시각" 배지)·`:329`, `AddEventView.swift:237`(시간 줄 시드), `AIAssistant.swift:2038`(묶음 경고 필터)·`:2644`(⚠️태그), `Store.swift:1502~1542`(refreshUpcomingEstimates — dep와 travelSeconds **둘 다** 읽는 복구 경로). 이 카드는 저장값을 하나도 바꾸지 않았고(design §4 "저장은 그대로") `applyEstimate`/`applyDepartureAnchoredEstimate`(`:1268`·`:1292`)가 dep·travel을 세트로 다루는 규칙도 그대로라 위 읽기 곳의 입력 레코드 모양은 변하지 않았다. 단 출발기준 추정 실패 레코드(dep 만 있고 travel nil)는 옛 판정·새 판정(`failedBlockAnchor`)이 갈리는 유일한 모양인데, 이 모양을 만드는 코드는 이 카드 이전부터 있었다 → 아래 경고 1·메모 1 참조.
+- **② 네 자리 단일 판정 — 확인**: 나열 `events(on:)`(ContentView `:88`, `isListed(on:)`) · 점 `recomputeDaysWithSchedule`(Store `:138~142`, `failedBlockAnchor`/`listedSpan`) · 블록 선택(`:509`, `failedBlockAnchor != nil`) · 세로 기하 `span(for:)` 실패 분기(`:564`)가 전부 Models의 계산 속성을 읹고, `isListed` 자체도 `failedBlockAnchor`→`listedSpan`→`Store.overlapsDay`→도착일 폴백 순으로 같은 판정을 내포한다. `failedBlockAnchor` 스며든 곳 grep 전수: ContentView 2곳(`:509`·`:564`) + Store 1곳(`:138`) + Models 정의 + GuardDriver — 네 자리 외 신규 침투 0건. 판정 사본(inline `arrivalDate > dep`류)은 `listedSpan`(Models `:220`, 출처)과 `conflicts`(Store `:801`)만 남는데 후자는 "실제 구간이 있어야 겹침 검사"라는 **다른 질문**의 판정이라 사본이 아니다.
+- **③ 실패 모양 넷의 경고 하나 — 코드 경로로 확인**: 경고 블록은 `failedBlockAnchor`(한 시각)가 non-nil인 레코드에만 서고, 나열은 `isListed`가 앵커의 날 하루만 참 → 자정 (다) 모양에서 D+1에 이중 경고가 설 경로가 없다(옛 도착 날 폴백은 `failedBlockAnchor != nil`이면 도달 불가). 그려지는 블록도 `span(for:)` 실패 분기 하나(`:564`)뿐이다. 드라이버 AH-010-12/13(`:4842~4848`)의 실측과 같은 결론.
+- **④ 이월 수리 2건 불변식 — 성립 확인**: (a) addLeg 같은 역할 재검사(Store `:497~503`)는 await **뒤**에 돌고 `deleteEvent`(`:1551`)는 제거 전 await 없음(동기 제거·save, 캘린더 Task는 제거 후) — 재검사와 삭제 사이 끼어듦 창이 없어 불변식 논증 성립. 드라이버 AH-009-01이 Task.yield 겹침으로 같은 결론 실측. (b) updateLeg/realignLegs의 `activityIfChanged` 재독기(`:388~394`, 호출 `:534`·`:601`)는 4필드(제목·시작·끝·장소)가 같으면 재쓰기를 하지 않고, 재쓰기는 같은 write 클로저/hint 재사용이라 새 네트워크 조회·달력 enqueue 중복을 만들지 않는다(enqueueCalendarUpload `:1094`는 `googleEventId == nil` && pending 플래그라 멱등). 두 write 사이 다른 갱신이 끼우는 창은 있으나(둘 다 MainActor, 사이에 await) 세 번째 경로의 쓰기도 같은 규칙으로 보상되므로 수렴 — 이중 쓰기가 경쟁을 만들지는 않는다.
+- **⑤ 4대 위험 클래스 전수**: **H1** — 신규 `overlapColumns`/`overlapSlots`는 순수 함수, `columnEnds[free]`는 firstIndex 직후·경계 안전; `byID = Dictionary(uniqueKeysWithValues:)`는 id 충돌에 trap이지만 입력 id는 `a-`/`e-` 접두 UUID라 현 경로 중복 불가(메모 3). 이월 수리 자체가 H1 교정 패턴(await 뒤 재검사)이다. **H2** — diff에 신규 `Task { try? … }` 0건(deleteEvent 내 캘린더 Task는 옛것). **H3** — 새 경로가 알림을 늘리지 않는다: 이중 쓰기의 두 번째 apply*는 기존 notificationId를 먼저 취소한다(`:1270`·`:1295`); 무한 증가 신규 상태 없음. **H4** — 칸 산술 단일 출처 `overlapSlots`+`SlotRange.points`(렌더 `:738`·히트 `:760` 같은 호출), 나열 판정 단일 출처 ②와 같음. 단 한 곳 예외 — 아래 경고 2. **H5~H8·간결성** — 루프 내 save/네트워크 신규 없음(overlapSlots는 순수 계산); 강제 언랩 신규 0(`item.groupKey!`는 `isGrouped`가 키 존재를 함의); 죽은 코드 — 옛 `column/columns` 필드·사본 클러스터 코드는 diff에서 전부 제거됨, 폴백 `guard let dep = event.departureDate`(ContentView `:570`)는 travel nil을 만드는 곳이 dep도 같이 비우므로 사실상 도달 불가인 **방어 폴백**으로 주석 명시돼 있음(깨진 레코드 보호 — 제거 대상 아님).
+- **⑥ X6 픽스처 정정 — "원래 의도를 살린 것"으로 판정**: 옛 X절 자정 레코드는 `departureDate`만 있고 `travelSeconds`가 없었다. 옛 규칙(dep만 보고 양쪽 점)에서 이 레코드는 "계산된 자정 넘김"으로 취급됐으나 REQ-023 뒤로는 미계산 모양이 되어 **판정이 뒤집히는** 상태였다. 정정은 판정을 되돌리는 게 아니라 `travelSeconds = 6*3600`을 명시해 레코드를 원래 의미(계산된 구간 = 양쪽 점)로 확정한 것이고, 미계산 자정 모양은 AH 특성화(AH-010-12/13)가 별도 커버한다 — 즉 결함 은폐가 아니라 모호한 픽스처를 두 판정 각각의 명시적 사례로 분리한 것이다. 라벨·단언 문장이 그대로 유지됐다는 §E.2 기록과 일치.
+
+**발견: 결함 0 · 경고 2 · 메모 3**.
+
+- **경고 1(의미 어긋남 — 후속 감, 이 카드 수정 범위 밖)**: `AIAssistant.swift:2644`의 ⚠️태그는 `departureDate == nil` 구식 판정이다. 출발기준 재추정 실패 레코드(dep 있음·travel nil)는 시간표에 경고 블록이 서는데(REQ-023) 모델은 태그 없이 정상이라 말한다 — 같은 "미계산" 판정이 두 곳에서 다르게 계산되는 H4형 어긋남이며, 이 카드가 만든 모양은 아니지만 REQ-023으로 어긋남이 사용자에게 보이게 됐다. `e.failedBlockAnchor != nil` 읽기로 후속 카드에서 맞추는 것을 권고(design §4는 이 카드의 판정 교체를 네 자리로 한정했으므로 여기서 고치지 않았다).
+- **경고 2(AC-016 계약의 미세 예외)**: 렌더 `columnFrame`은 `max(f.width, 1)` 폭 하한을 두지만(`:740`) 히트 `block(atX:)`는 `points`의 날것 폭을 본다(`:760`). 폭 < 1pt(칸 수가 수십 개로 늘어난 병리적 배치)에서만 렌더·히트가 어긋난다 — F9급 실해는 아니나 같은 사각형 계약의 문장상 예외. 폭 하한을 `SlotRange.points` 안으로 옮기면 단일 출처가 회복된다(후속 소카드).
+- **메모 1**: `conflicts`(Store `:801`)·구글 업로드(`:172`)·EventDetailView "예상 시각"(`:265`)도 dep != nil을 계산됨으로 읽어 출발기준 실패 레코드에서 옛 도착과 출발 사이의 유령 구간을 취급한다 — 이 카드 이전의 기존 동작이고(의미 불변 확인) 이 카드가 새로 만든 모양이 아니므로 관측 기록만 남긴다.
+- **메모 2**: `activityIfChanged`는 활동 **변경**만 감지하고 **삭제**는 nil을 내지 않아(`activities.first` 실패 → nil) await 사이 활동이 지워지면 옛 제목·앵커가 남는다. 매달린 링크는 허용 모양이고(REQ-006, `activity(forLeg:)` 조회로 UI는 이미 정상 처리) 다음 편집에서 갱신되므로 수용 가능하다고 본다.
+- **메모 3**: `positionedBlocks`의 `Dictionary(uniqueKeysWithValues:)`(ContentView `:726`)는 향후 같은 블록이 하루 목록에 두 번 들어오는 호출자가 생기면 trap이다. 현 경로(isListed는 레코드당 하루 한 번)에선 불가능하므로 방어 코드를 넣지 않았다 — 호출자 제약이 주석에 이미 적혀 있다.
+
+**판정 레인(run 세션) 재실행 대조(2026-10-05, 커밋 `90f00b7` 트리 — 커밋 전 작업 트리에서 재고 커밋 뒤 동일)**: 드라이버(`/tmp/gd-v6` → `v6-driver-run.log`) exit 0 · ✓ 468 · ✗ 0 · AH 35 · `468/468 통과` · 실제 데이터 대조 통과 · 경고 정규화 집합 기준과 `diff` 0 · 뺀 수(기준 `t17-plan/driver-run.log` 357 대비) **0**. iOS(`mc23-ios-build.log`, 판정 레인 재실행) BUILD SUCCEEDED · 무경고. grep 전 항목(AC-005 (3)·AC-010 (9) 여섯 명령·AC-015 (8)·AC-016 (1)(2)(5)·AC-019 (6) os 집합·금지 경로 0) 재확인 — 구현 레인 관측과 같다. 색 직접 사용 0 + 양성 대조 1(심은 줄 잡힘). 카드 범위(기준 `7980190`): Models·ContentView·Store(63+19, 100줄 미만)·GuardDriver — 크게 고침 2(Models·GuardDriver; ContentView 64+72·Store 미만) — 한도 안, 새 파일 0.
+
+### MC(t17-c) 총괄 — 게이트 표(판정 레인 직접 실행)
+
+| 게이트 | 기준 | 관측 |
+|---|---|---|
+| 드라이버(온라인) | exit 0 · ✗ 0 · T ≥ 460 | **468/468** · AH 35(C1 9 + C2·C3 26) · 실제 데이터 대조 통과 |
+| 뺀 수 | 기존 442(MB 뒤) 유지 | **0**(기준 357 대비도 0 — X6 픽스처 정정은 라벨·문장 불변) |
+| 드라이버 컴파일 경고 | 기준 24줄 집합 동일 | **동일**(새 경고 0) |
+| iOS 빌드 | 무경고 | **BUILD SUCCEEDED · 경고 0** |
+| 카드 범위(AC-022, 기준 7980190) | 선언 목록·크게 고침 ≤ 3(Store 작게) | Models·ContentView·GuardDriver 크게(3) + Store 82줄(작게) · 새 파일 0 |
+| 누적 불변식(AC-019, 기준 b2c3987) | (1)(3)(4)(6) | 전부 통과 + 색 양성 대조 1 |
+| 하네스 | plan §4 MC 몫 | ui-design 결함 0·메모 2 / code-safety 결함 0·경고 2(**후속 감** — AI 목록 ⚠️태그 구식 판정 `AIAssistant.swift:2644`, `max(width,1)` 하한의 렌더·히트 비대칭 — 둘 다 이 카드 범위 밖) |
+
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+run 레인(2026-10-05) — 세 배달 카드가 모두 끝났다.
+
+- **MA(t17-a)**: 커밋 `021f9fd`→`61d84b4`. 재현 5건 ✗ 관측 → 수리 → 424/424. code-safety 결함 0(경고 2건은 MC `7b47676`에서 수리 완료 — AH-009-01 관측).
+- **MB(t17-b)**: 커밋 `d1b8323`→`7980190`. 문법 추출·생성 카드 전환·활동 카드 구간 줄·편집 라우팅. 433/433. ui-design 결함 0·메모 1.
+- **MC(t17-c)**: 커밋 `2ad0f84`→`90f00b7`. 배치 추출(동작 불변)·묶음 알고리즘·칸 함수 하나·REQ-023 실패 표시·Store 이월 수리. **468/468**(기준 357 + AF 67 + AG 9 + AH 35). ui-design 결함 0·메모 2 / code-safety 결함 0·경고 2(후속 감).
+- **드라이버 누적**: 357 → MA 뒤 424(하한 423) → MB 뒤 433(432) → MC 뒤 **468(460)** — 뺀 수 0으로 세 번 모두 하한 초과. iOS 무경고 빌드 세 카드 모두 통과(판정 레인 직접 재실행).
+- **사람 몫 대기(AC-023·024 → 🟡)**: 시뮬레이터 스크립트 1~13·13a(MB 뒤 참)·14~22·20a·20b(MC 뒤 참 — 20·20b는 MC 전 거짓이었다가 참이 됨)는 운영자 실행 대기. 기계 몫은 전부 관측으로 닫혔다.
+- **sync 레인 몫**: AC-021 인용 재사상(CHECKLIST Store 인용 등 — 이 카드가 Store 300줄·ContentView·Models를 움직였다)·AC-022 카드별 실측 확정(§E.2에 있음)·CHECKLIST 행·루트 plan.md 갱신. code-safety 후속 감 2건(AIAssistant:2644 ⚠️태그·SlotRange.points 하한 통일)과 plan §6 후속 목록 승계.
+- 카드별 기준 커밋: MA `42065af` · MB `61d84b4` · MC `7980190`(§E.2 표). 누적 기준 `b2c3987`.
+
+run_complete_at: 2026-10-05
+run_status: audit-ready (사람 스크립트·sync 대기 포함, AC 상태 표는 acceptance.md 매트릭스 기준 🟡 유지)
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
