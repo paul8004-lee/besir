@@ -305,8 +305,9 @@ struct ActivityDetailView: View {
 
     /// 저장 순서는 design §3 그대로: ① 활동 저장(제목·시간·장소 — "장소 없음"이면 clearPlace) →
     /// ② 구간 diff의 제거를 먼저 → ③ 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다) →
-    /// ④ 남은 diff를 수정 → 추가 순서로 하나씩 직렬 → ⑤ 결과 집계 → ⑥ 닫기. 결과에 이동시간
-    /// 미계산·거절이 있으면 시트 안에 안내하고 열어 둔다(REQ-010·009).
+    /// ④ 남은 diff를 수정 → 추가 순서로 하나씩 직렬 → ⑤ 결과 집계(미계산은 연산 뒤 레코드에서) →
+    /// ⑥ 닫기(안내가 있으면 시트를 열어 둔 뒤 재시드). 결과에 이동시간 미계산·거절이 있으면
+    /// 시트 안에 안내하고 열어 둔다(REQ-010·009).
     private func save() {
         guard !saving, let a = activity,
               let start = field("start_iso")?.chosen.flatMap(BesirTime.parseDatetime)?.date,
@@ -329,12 +330,11 @@ struct ActivityDetailView: View {
                                  newEnd: end,
                                  newPlace: newPlace,
                                  clearPlace: newPlace == nil)
-            // ② 장소를 지운 저장은 구간이 이미 ①에서 함께 지워졌다 — 따라오기·diff를 돌지 않는다.
+            // 장소를 지운 저장은 구간이 이미 ①에서 함께 지워졌다 — 따라오기·diff를 돌지 않는다.
             if newPlace != nil {
-                // ③ diff의 제거를 먼저 돈다 — realign이 곧 지울 구간을 다시 쓰며 추정·캘린더
+                // ② diff의 제거를 먼저 돈다 — realign이 곧 지울 구간을 다시 쓰며 추정·캘린더
                 // 업로드 큐에 올리는 일(sync 1차 W3)을 막고, 제거가 빈자리를 내야 추가의 중복
                 // 검사가 그 빈자리를 본다(design §3).
-                var unknownTravel = false
                 var refusedReasons: Set<String> = []
                 var failed = 0
                 for op in ops {
@@ -343,13 +343,12 @@ struct ActivityDetailView: View {
                     guard case .remove(let legId) = op else { continue }
                     if case .failed = store.removeLeg(legId: legId) { failed += 1 }
                 }
-                // ④ 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다). 결과는 버리지
-                // 않는다 — 따라오기 결과를 버리면 제목만 바꾼 저장에서 추정 실패가 조용히
-                // 사라진다(sync 1차 B2, REQ-010 — 미계산은 사실대로 보고한다).
-                let realigned = await store.realignLegs(of: a.id)
-                if case .updated(let known)? = realigned.outbound, !known { unknownTravel = true }
-                if case .updated(let known)? = realigned.return, !known { unknownTravel = true }
-                // ⑤ 남은 diff 연산(수정 → 추가)을 하나씩 직렬 실행한다.
+                // ③ 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다). 결과 플래그는
+                // 따로 모으지 않는다 — 미계산 안내는 연산 뒤 레코드 하나에서 읽는다(sync 2차
+                // F1: 통로별 플래그를 OR로 쌓으면 나중 통로가 값을 고쳐도 처음 통로의 거짓이
+                // 남아 안내가 최종 레코드와 어긋난다).
+                _ = await store.realignLegs(of: a.id)
+                // ④ 남은 diff 연산(수정 → 추가)을 하나씩 직렬 실행한다.
                 for op in ops {
                     let outcome: Store.LegOutcome
                     switch op {
@@ -366,18 +365,21 @@ struct ActivityDetailView: View {
                                                           notifyLeadMinutes: lead, notifyEnabled: enabled)
                     }
                     switch outcome {
-                    case .created(let known), .updated(let known):
-                        if !known { unknownTravel = true }
                     case .refused(let reason):
                         // 결과가 어느 이유인지 말한다(REQ-009) — "저장됐다"로 세지 않는다.
                         refusedReasons.insert(Self.refusalText(reason))
-                    case .removed:
+                    case .created, .updated, .removed:
                         break
                     case .failed:
                         failed += 1
                     }
                 }
-                // ④ 결과 집계 — 안내가 없을 때만 ⑤ 닫는다. 문구의 의미가 기준이다(design §8).
+                // ⑤ 결과 집계 — 안내가 없을 때만 ⑥ 닫는다. 문구의 의미가 기준이다(design §8).
+                // 미계산은 저장이 끝난 레코드가 유일한 사실이다(계약 5) — 존재하는 구간의
+                // travelSeconds가 nil이면 알리고, 없는 구간은 따지지 않는다.
+                let finalLegs = store.legs(of: a.id)
+                let unknownTravel = [finalLegs.outbound, finalLegs.return].compactMap { $0 }
+                    .contains { $0.travelSeconds == nil }
                 var messages: [String] = []
                 if unknownTravel { messages.append("이동시간을 계산하지 못했어요") }
                 if !refusedReasons.isEmpty { messages.append(refusedReasons.sorted().joined(separator: " · ")) }
@@ -387,6 +389,17 @@ struct ActivityDetailView: View {
                     dismiss()
                 } else {
                     saveReport = messages.joined(separator: " · ")
+                    // 안내를 띄우고 시트가 열린 채 남으면 diff 기준을 지금 상태로 다시 잡는다.
+                    // bootstrap은 화면마다 한 번만 돈다 — 낡은 seed로 다시 저장하면 이미 끝난
+                    // 제거가 .failed, 이미 만든 추가가 .refused(.duplicateRole)로 거짓 안내가
+                    // 된다(sync 2차 F2). 다시 저장은 추정 실패의 복구 경로다.
+                    // seed는 guard가 지역 상수로 가려 self.로 쓴다. diff 기준을 current(저장
+                    // 시작 때의 폼)로 잡는 이유: 방금 Store에 적용된 연산은 그 폼의 diff이므로 —
+                    // 저장 도중 줄을 고쳤다면(줄 편집은 잠기지 않는다) 다음 diff는 그 새 값과
+                    // 비교되어야 한다. 구간 목록은 방금 읽은 finalLegs 그대로 — 그 사이 Store를
+                    // 고치는 호출은 없다.
+                    self.seed = current
+                    self.seedLegs = finalLegs
                 }
             } else {
                 saving = false
