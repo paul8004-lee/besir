@@ -4310,6 +4310,111 @@ struct Drv {
         store.events = []
         store.activities = []
 
+        // ── AG. t17-b(SPEC-UIKIT-009 MB) — 구간 줄 문법(LegCardForm)의 전이를 AC-006 (4)–(8)
+        //        모양으로 본다. 이 절이 뷰 없이 컴파일·실행된다는 것 자체가 문법이 SwiftUI-free로
+        //        추출됐다는 증명이기도 하다(AC-006 (3)은 grep이 임다). Store을 건드리지 않으므로
+        //        네트워크와 무관하게 결정적이다.
+        print("\nAG. t17-b B1 — 구간 줄 문법 전이(SPEC-UIKIT-009 MB, REQ-007)")
+        let agAi = fresh()
+        // 생성 카드의 bootstrap과 같은 네 기본 줄(즐겨찾기 없음 — 칩 씨앗 대신 place 인자로 좌표를
+        // 직접 실어 준다). 시각 줄은 end_iso의 삽입 위치를 재려고 온 것이다.
+        func agCard() -> LegCardForm {
+            LegCardForm(card: EditCard(fields: [
+                .init(key: "title", kind: .title, label: "활동 제목", options: [], allowsCustom: true,
+                      startsOpen: true),
+                .init(key: "location_query", kind: .place, label: "장소 (선택)", options: [], allowsCustom: true),
+                .init(key: "start_iso", kind: .datetime, label: "시작", options: [], allowsCustom: false,
+                      anchored: false),
+                .init(key: "end_iso", kind: .datetime, label: "종료", options: [], allowsCustom: false,
+                      anchored: false),
+            ]))
+        }
+        func agField(_ f: LegCardForm, _ key: String) -> EditField? {
+            f.card.fields.first { $0.key == key }
+        }
+        func agCount(_ f: LegCardForm, _ key: String) -> Int {
+            f.card.fields.filter { $0.key == key }.count
+        }
+        // 단언이 빨개진 상태에서 범위 밖 접근으로 드라이버 전체가 죽지 않게 하는 안전 접근자.
+        func agAt(_ f: LegCardForm, _ i: Int) -> EditField? {
+            f.card.fields.indices.contains(i) ? f.card.fields[i] : nil
+        }
+        let agHome = Place(name: "집", address: "서울 A", latitude: 37.500, longitude: 127.000)
+
+        // (4) 실제 장소 → 토글 둘이 end_iso 바로 뒤에.
+        var ag1 = agCard()
+        let ag1Loc = ag1.card.fields[1]
+        ag1.choose(field: ag1Loc.id, value: agHome.name, place: agHome)
+        let ag1End = ag1.card.fields.firstIndex(where: { $0.key == "end_iso" })!
+        agAi.drvCheck("AG-006-01 실제 장소를 고르면 토글 줄 둘이 end_iso 바로 뒤에 초기값 \"false\"로 선다",
+                      ag1.card.fields.count == 6
+                          && agAt(ag1, ag1End + 1)?.key == LegRowKeys.outboundEnabled
+                          && agAt(ag1, ag1End + 1)?.chosen == "false"
+                          && agAt(ag1, ag1End + 2)?.key == LegRowKeys.returnEnabled
+                          && agAt(ag1, ag1End + 2)?.chosen == "false",
+                      "fields=\(ag1.card.fields.map(\.key))")
+
+        // (5) 다리 켜기 → 줄 셋(가는)·둘(오는)·알림 둘, 그리고 멤버십 가드.
+        var ag2 = ag1
+        ag2.choose(field: agField(ag2, LegRowKeys.outboundEnabled)!.id, value: "true")
+        let ag2ToggleAt = ag2.card.fields.firstIndex(where: { $0.key == LegRowKeys.outboundEnabled })!
+        agAi.drvCheck("AG-006-02 가는 편을 켜면 origin_query·outbound_mode·buffer_minutes가 토글 뒤에 서고 "
+                      + "알림 줄 둘이 한 번만 선다. 오는 편을 켜면 return_query·return_mode. "
+                      + "이미 켠 토글을 다시 골라도 줄이 겹치지 않는다",
+                      agAt(ag2, ag2ToggleAt + 1)?.key == LegRowKeys.originQuery
+                          && agAt(ag2, ag2ToggleAt + 2)?.key == LegRowKeys.outboundMode
+                          && agAt(ag2, ag2ToggleAt + 3)?.key == LegRowKeys.bufferMinutes
+                          && agCount(ag2, LegRowKeys.notifyEnabled) == 1
+                          && agCount(ag2, LegRowKeys.notifyLeadMinutes) == 1
+                          && {
+                              ag2.choose(field: agField(ag2, LegRowKeys.returnEnabled)!.id, value: "true")
+                              return agField(ag2, LegRowKeys.returnQuery) != nil
+                                  && agField(ag2, LegRowKeys.returnMode) != nil
+                          }()
+                          && {
+                              ag2.choose(field: agField(ag2, LegRowKeys.outboundEnabled)!.id, value: "true")
+                              return agCount(ag2, LegRowKeys.originQuery) == 1
+                                  && agCount(ag2, LegRowKeys.outboundMode) == 1
+                          }(),
+                      "fields=\(ag2.card.fields.map(\.key))")
+
+        // (6) 껐다 켜면 수단·여유·이름·좌표가 되살아난다 — 좌표는 새 줄 신원에 다시 걸린다.
+        var ag3 = ag1
+        ag3.choose(field: agField(ag3, LegRowKeys.outboundEnabled)!.id, value: "true")
+        let ag3Origin0 = agField(ag3, LegRowKeys.originQuery)!
+        ag3.choose(field: ag3Origin0.id, value: agHome.name, place: agHome)
+        ag3.choose(field: agField(ag3, LegRowKeys.outboundMode)!.id, value: TransportMode.walk.rawValue)
+        ag3.choose(field: agField(ag3, LegRowKeys.bufferMinutes)!.id, value: "20")
+        ag3.choose(field: agField(ag3, LegRowKeys.outboundEnabled)!.id, value: "false")
+        ag3.choose(field: agField(ag3, LegRowKeys.outboundEnabled)!.id, value: "true")
+        let ag3Origin1 = agField(ag3, LegRowKeys.originQuery)
+        agAi.drvCheck("AG-006-03 껐다 켜면 수단·여유·이름·좌표가 되살아난다(좌표는 새 줄 신원에 걸린다)",
+                      ag3Origin1 != nil && ag3Origin1!.id != ag3Origin0.id
+                          && ag3Origin1!.chosen == agHome.name
+                          && ag3.confirmedPlaces[ag3Origin1!.id]?.latitude == agHome.latitude
+                          && ag3.confirmedPlaces[ag3Origin1!.id]?.longitude == agHome.longitude
+                          && agField(ag3, LegRowKeys.outboundMode)?.chosen == TransportMode.walk.rawValue
+                          && agField(ag3, LegRowKeys.bufferMinutes)?.chosen == "20",
+                      "origin id 새로찍힘=\(ag3Origin1 != nil && ag3Origin1!.id != ag3Origin0.id), "
+                          + "좌표=\(String(describing: ag3Origin1.flatMap { ag3.confirmedPlaces[$0.id] })), "
+                          + "mode=\(String(describing: agField(ag3, LegRowKeys.outboundMode)?.chosen)), "
+                          + "buffer=\(String(describing: agField(ag3, LegRowKeys.bufferMinutes)?.chosen))")
+
+        // (7) 문법이 만든 어떤 줄도 시각 줄이 아니다 — ag2는 아홉 줄 전부가 서 있는 상태다.
+        agAi.drvCheck("AG-006-04 문법이 만든 어떤 줄도 kind == .datetime이 아니다",
+                      ag2.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }
+                          .allSatisfy { $0.kind != .datetime },
+                      "datetime 줄=\(ag2.card.fields.filter { LegRowKeys.allKeys.contains($0.key) && $0.kind == .datetime }.map(\.key))")
+
+        // (8) "장소 없음" — 씨앗에도 검색에도 없는 값을 고르면 아홉 키가 모두 빠진다.
+        var ag5 = ag2
+        let ag5Loc = agField(ag5, "location_query")!
+        ag5.choose(field: ag5Loc.id, value: "지워진 장소", place: nil)
+        agAi.drvCheck("AG-006-05 장소를 지우면(좌표 없는 값) 아홉 키가 모두 빠진다",
+                      ag5.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.isEmpty
+                          && ag5.card.fields.count == 4,
+                      "남은 구간 줄=\(ag5.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.map(\.key))")
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.
