@@ -392,7 +392,8 @@ struct ActivityDetailView: View {
                     // 안내를 띄우고 시트가 열린 채 남으면 diff 기준을 지금 상태로 다시 잡는다.
                     // bootstrap은 화면마다 한 번만 돈다 — 낡은 seed로 다시 저장하면 이미 끝난
                     // 제거가 .failed, 이미 만든 추가가 .refused(.duplicateRole)로 거짓 안내가
-                    // 된다(sync 2차 F2). 다시 저장은 추정 실패의 복구 경로다.
+                    // 된다(sync 2차 F2). 다시 저장은 제목·끝점이 바뀐 구간의 추정을 다시 한다 —
+                    // 끝점이 그대로인 nil 구간은 realignLegs가 건너뛴다(기존 동작, sync 최종 W1).
                     // seed는 guard가 지역 상수로 가려 self.로 쓴다. diff 기준을 current(저장
                     // 시작 때의 폼)로 잡는 이유: 방금 Store에 적용된 연산은 그 폼의 diff이므로 —
                     // 저장 도중 줄을 고쳤다면(줄 편집은 잠기지 않는다) 다음 diff는 그 새 값과
