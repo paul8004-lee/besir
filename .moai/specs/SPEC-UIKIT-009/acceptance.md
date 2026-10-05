@@ -288,7 +288,7 @@
   2. (명령) 배치 알고리즘이 뷰를 떠났다: `grep -c 'columnEnds' Shared/ContentView.swift` = **0**(기준 8) **그리고** `grep -c 'columnEnds' Shared/Models.swift` ≥ **1**(기준 0). 변수 이름을 바꾸면 run이 명령을 고친다(머리말 규칙).
   3. (드라이버) 같은 시각에 겹치는 두 블록의 칸 범위가 겹치지 않는다(E1·E3b 전 쌍에서 x 구간의 교집합이 비어 있다) — 렌더와 히트테스트가 같은 칸을 쓰면 한 점이 두 블록에 맞지 않는다.
   4. (드라이버) 같은 입력에서 렌더용 범위와 히트용 범위가 같은 값이다.
-  5. (명령) 두 호출자가 쓰는 칸 함수가 하나다: 칸 함수 이름(제안 — run이 §E.2에 적는다)을 `grep -c`로 센 값이 `Shared/ContentView.swift`에서 ≥ **2**(렌더 프레임 + 히트테스트)이고 `Shared/Models.swift`에 정의가 **1**이다.
+  5. (명령) 두 호출자가 쓰는 칸 함수가 하나다: 칸 함수는 `ScheduleLogic.overlapSlots`로 확정됐다(run MC, 2026-10-05). `grep -c 'overlapSlots' Shared/ContentView.swift` = **2**(배치 호출 1 + 렌더·히트가 읽는 값의 출처를 밝힌 계약 주석 1 — 렌더 프레임과 히트테스트는 `SlotRange.points`로 **같은** 점 사각형을 얻는다)이고 `grep -c 'overlapSlots' Shared/Models.swift` = **1**(정의)이며 `grep -c 'struct SlotRange' Shared/Models.swift` = **1**(결과 타입 정의). 점 환산(간격 포함)의 단일 출처는 `SlotRange.points`다.
 
 ## AC-017 — 묶음 안 겹침·틈·그룹 없는 날의 회귀 ⬜
 

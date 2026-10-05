@@ -80,18 +80,13 @@ struct ContentView: View {
     // MARK: - 날짜별 데이터
 
     /// 자정을 넘는 이동은 출발일과 도착일 양쪽에 나열한다(결함 G) — 도착일에만 두면 출발일
-    /// 저녁 구간이 통째로 그려지지 않는다. 겹침 판정은 Store.overlapsDay(start:end:day:) 한
-    /// 곳에 있고 월간·주간 점(daysWithSchedule)도 같은 판정으로 켜진다 — 같은 앱이 같은 날에
-    /// 대해 다른 말을 하지 않게(계약 5). 출발시각이 없는(계산 실패) 일정은 구간이 없으므로
-    /// 도착일에만 세우는 기존 동작을 유지한다.
+    /// 저녁 구간이 통째로 그려지지 않는다. 어느 날에 나열되는지의 판정은 `isListed(on:calendar:)`
+    /// (Models.swift) 한 곳에서 낸다 — 월간·주간 점(daysWithSchedule)도 같은 판정으로 켜지므로
+    /// 같은 앱이 같은 날에 대해 다른 말을 하지 않게(계약 5). 이동시간 미계산 구간은 앵커 시각이
+    /// 든 날 하루에만 나열된다(REQ-023 — 경고 블록이 날짜로 잘리지 않는 것과 세트).
     private func events(on date: Date) -> [ScheduledEvent] {
-        store.events.filter { e in
-            guard let dep = e.departureDate, e.arrivalDate > dep else {
-                return calendar.isDate(e.arrivalDate, inSameDayAs: date)
-            }
-            return Store.overlapsDay(start: dep, end: e.arrivalDate, day: date, calendar: calendar)
-        }
-        .sorted { $0.arrivalDate < $1.arrivalDate }
+        store.events.filter { $0.isListed(on: date, calendar: calendar) }
+            .sorted { $0.arrivalDate < $1.arrivalDate }
     }
 
     /// 활동도 이동과 같은 기준으로 [시작, 끝) 구간이 그 날과 겹치면 나열한다 — 자정을 넘는
@@ -461,7 +456,7 @@ struct ContentView: View {
                     .overlay(
                         RescheduleOverlay(
                             onBegin: { x, y in
-                                guard let found = block(atX: x, y: y, in: placed) else { return false }
+                                guard let found = block(atX: x, y: y, in: placed, total: geo.size.width) else { return false }
                                 activeDrag = ActiveDrag(kind: found, deltaMinutes: 0)
                                 return true
                             },
@@ -475,7 +470,7 @@ struct ContentView: View {
                                 if committed && drag.deltaMinutes != 0 { finalizeDrag(drag) }
                             },
                             onTap: { x, y in
-                                guard let found = block(atX: x, y: y, in: placed) else { return }
+                                guard let found = block(atX: x, y: y, in: placed, total: geo.size.width) else { return }
                                 switch found {
                                 case .event(let e): selection = e.id
                                 case .activity(let a): selectedActivityId = a.id
@@ -508,7 +503,10 @@ struct ContentView: View {
             activityBlockView(a, on: date)
         case .event(let e):
             // 이동시간 계산 실패(API 할당량 소진 등)는 조용히 숨기지 않고 따로 표시한다.
-            if e.departureDate != nil { travelBlockView(e, on: date) } else { failedEstimateBlockView(e) }
+            // 판정은 앵커 함수 하나가 낸다(REQ-023) — 출발 기준인데 출발만 저장된 모양(재추정 실패의
+            // 옛 도착·새로 만든 출발=도착)도 경고 블록이 되고, 레코드 생김새를 여기서 다시 해석하지 않는다.
+            // 경고 블록의 세로 자리(앵커 분에서 아래로)는 span(for:on:)의 실패 분기가 낸다.
+            if e.failedBlockAnchor != nil { failedEstimateBlockView(e) } else { travelBlockView(e, on: date) }
         }
     }
 
@@ -534,6 +532,9 @@ struct ContentView: View {
     private static let minTravelMinutes: CGFloat = 16
     /// 이동시간 계산 실패 블록의 고정 높이(pt).
     private static let failedBlockHeight: CGFloat = 20
+    /// 같은 줄에 놓인 블록 사이 간격(pt) — 칸 경계에만 들어가고 묶음 안쪽 나눔에는 안 들어간다.
+    /// 렌더와 히트테스트가 같은 값을 쓰는지는 `SlotRange.points`가 보증한다.
+    private static let columnGap: CGFloat = 3
 
     /// 일간 시간표에서 블록이 차지하는 세로 범위(자정 기준 분). 렌더링 위치·높이와 히트 테스트가
     /// 반드시 같은 값을 보도록 여기 한 곳에서만 계산한다. 자정을 넘는 블록은 이틀에 나뉘어
@@ -555,9 +556,17 @@ struct ContentView: View {
     }
 
     private func span(for event: ScheduledEvent, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
+        // 이동시간 미계산 구간은 경고 블록 하나 — 앵커 시각(REQ-023의 A)의 분에서 "아래로" 고정
+        // 높이만큼 그린다. **날짜로 자르지 않는다**: 미계산 구간은 앵커가 든 날 하루에만 나열되므로
+        // 자르기가 필요 없고, 앵커가 자정 직전이면 블록 끝이 그 날 화면 아래 밖으로 몇 분 넘치는
+        // 것은 계산된 구간의 아래 넘침과 같은 규칙이다(위 활동 span 주석). 출발 기준의 옛 도착
+        // (재추정 실패 모양)은 앵커가 아니므로 여기 오지 않는다.
+        if let anchor = event.failedBlockAnchor {
+            return (minutesSinceMidnight(anchor), Self.failedBlockHeight / hourHeight * 60)
+        }
         guard let dep = event.departureDate else {
-            // 이동 시간 계산 실패 블록은 도착 시각에서 "아래로" 고정 높이만큼 그려진다.
-            // 실패 블록은 도착일에만 나열되므로 그리는 날이 곧 도착일이다.
+            // 여기 오는 건 이동시간은 계산됐는데 출발이 없는 깨진 레코드뿐이다(nil을 만드는 곳은
+            // travelSeconds도 같이 비운다). 도착 시각에서 아래로 그려 옛 경고 모양으로 폴백한다.
             return (minutesSinceMidnight(event.arrivalDate), Self.failedBlockHeight / hourHeight * 60)
         }
         // 출발·도착을 그리는 날의 0~1440분 안으로 자른다 — 전날 밤에 출발해 자정을 넘겨 도착하는
@@ -648,7 +657,9 @@ struct ContentView: View {
         // 활동에 묶인 이동 구간(식당 왕복 등)은 제목을 그리지 않는다 — 대개 도보 몇 분이라
         // 블록이 최소 높이로 그려지는데, 글자가 그 안에 안 들어가 옆 블록 위로 삐져나와 겹쳐 보였다.
         // 바로 옆 활동 블록에 이미 제목이 있어 무엇을 위한 이동인지는 충분히 드러난다.
-        let showsTitle = event.linkedActivityId == nil
+        // 링크가 **살아 있는지**는 조회로 본다(AC-005 (3)) — linkedActivityId만 보면 활동이 지워진
+        // 매달린 링크가 연결된 것처럼 제목을 숨긴다.
+        let showsTitle = store.activity(forLeg: event) == nil
         // 아이콘조차 들어가지 않을 만큼 낮으면 색 띠만 남긴다.
         let showsIcon = height >= 20
         return HStack(spacing: 4) {
@@ -679,71 +690,74 @@ struct ContentView: View {
 
     // MARK: - 겹친 블록 나란히 배치
 
-    /// 화면에 놓일 자리가 정해진 블록. 겹치는 것끼리 가로로 나눠 놓기 위해 열 번호를 함께 갖는다.
+    /// 화면에 놓일 자리가 정해진 블록. 가로 범위는 칸 함수가 낸 [lo, hi]를 통째로 든다 —
+    /// 렌더(columnFrame)와 히트테스트(block(atX:))가 이 값을 그대로 읽는다(AC-016).
     private struct PositionedBlock: Identifiable {
         let id: String
         let kind: ActiveDrag.Kind
         let start: CGFloat      // 자정 기준 분
         let minutes: CGFloat
-        let column: Int         // 0부터
-        let columns: Int        // 이 블록이 속한 겹침 무리의 열 수
+        let range: ScheduleLogic.SlotRange
     }
 
-    /// 하루치 블록을 훑어 겹치는 것끼리 열을 나눈다.
+    /// 하루치 블록을 겹침·묶음 배치로 자리 정한다.
     ///
-    /// 정렬·무리·열 배정은 `ScheduleLogic.overlapColumns`(Models.swift)이 한다 — 뷰가
-    /// 배치 산술을 따로 들고 있으면 렌더와 히트테스트가 어긋난다(AC-016). 여기는 레코드를
-    /// (id, start, end)로 펴서 넣고 결과를 다시 블록으로 매핑하기만 한다. 범위는 그리는 날(on)로
-    /// 잘라 계산한다 — 자정을 넘는 블록이 이틀에 나열돼도 각 날의 목록·배치는 서로 별개라
-    /// 같은 블록이 하루 안에서 두 번 세어질 일은 없다.
+    /// 배치 산술 전부는 `ScheduleLogic.overlapSlots`(Models.swift)이 한다 — 뷰가 칸 계산을
+    /// 따로 들고 있으면 렌더와 히트테스트가 어긋난다(AC-016). 여기는 레코드를 (id, start, end)로
+    /// 펴서 넣고 결과를 다시 블록으로 매핑하기만 한다. 범위는 그리는 날(on)로 잘라 계산한다 —
+    /// 자정을 넘는 블록이 이틀에 나열돼도 각 날의 목록·배치는 서로 별개라 같은 블록이 하루 안에서
+    /// 두 번 세어질 일은 없다. 묶음 키는 여기서 주입한다(REQ-015): 활동은 자기 id, 구간은
+    /// `packingGroups`가 대응시켜 준 활동 id, 대응이 없으면 nil(단독 이동·매달린 링크).
     private func positionedBlocks(events dayEvents: [ScheduledEvent],
                                   activities dayActivities: [ActivityBlock],
                                   on date: Date) -> [PositionedBlock] {
-        struct Item { let id: String; let kind: ActiveDrag.Kind; let start: CGFloat; let end: CGFloat }
+        let groups = store.packingGroups(events: dayEvents, activities: dayActivities)
+        struct Item { let id: String; let kind: ActiveDrag.Kind; let start: CGFloat; let end: CGFloat; let key: String? }
         var items: [Item] = dayActivities.map {
             let s = span(for: $0, on: date)
-            return Item(id: "a-\($0.id)", kind: .activity($0), start: s.start, end: s.start + s.minutes)
+            return Item(id: "a-\($0.id)", kind: .activity($0), start: s.start, end: s.start + s.minutes,
+                        key: $0.id.uuidString)
         }
         items += dayEvents.map {
             let s = span(for: $0, on: date)
-            return Item(id: "e-\($0.id)", kind: .event($0), start: s.start, end: s.start + s.minutes)
+            return Item(id: "e-\($0.id)", kind: .event($0), start: s.start, end: s.start + s.minutes,
+                        key: groups[$0.id]?.uuidString)
         }
         let byID = Dictionary(uniqueKeysWithValues: items.map { ($0.id, $0) })
-        return ScheduleLogic.overlapColumns(items.map {
-            ScheduleLogic.LayoutItem(id: $0.id, start: $0.start, end: $0.end)
-        }).compactMap { slot -> PositionedBlock? in
-            guard let it = byID[slot.id] else { return nil }
+        return ScheduleLogic.overlapSlots(items.map {
+            ScheduleLogic.LayoutItem(id: $0.id, start: $0.start, end: $0.end, groupKey: $0.key)
+        }).compactMap { range -> PositionedBlock? in
+            guard let it = byID[range.id] else { return nil }
             return PositionedBlock(id: it.id, kind: it.kind, start: it.start,
-                                   minutes: it.end - it.start,
-                                   column: slot.column, columns: slot.columns)
+                                   minutes: it.end - it.start, range: range)
         }
     }
 
-    /// 열 번호에 맞는 가로 위치·폭. `total`은 블록이 놓일 영역 전체 폭.
+    /// 칸 범위 [lo, hi]에 맞는 가로 위치·폭. `total`은 블록이 놓일 영역 전체 폭 — 점 환산(간격
+    /// 포함)은 `SlotRange.points`가 하므로 여기엔 칸 산술이 없다(AC-016).
     private func columnFrame(_ p: PositionedBlock, total: CGFloat) -> (x: CGFloat, width: CGFloat) {
-        guard p.columns > 1 else { return (0, total) }
-        let gap: CGFloat = 3
-        let width = (total - gap * CGFloat(p.columns - 1)) / CGFloat(p.columns)
-        return (CGFloat(p.column) * (width + gap), max(width, 1))
+        let f = p.range.points(in: total, gap: Self.columnGap)
+        return (f.x, max(f.width, 1))
     }
 
     // MARK: - 시간표 재조정: 어느 블록을 눌렀는지 좌표로 찾기
 
-    /// 좌표(세로 y, 가로는 0~1로 정규화한 x)가 어느 블록 위인지 찾는다.
+    /// 좌표(세로 y pt, 가로는 정규화 x에 `total`을 곱한 점)가 어느 블록 위인지 찾는다.
     ///
     /// 겹치는 블록은 가로로 나눠 놓기 때문에 세로만 봐서는 어느 쪽을 눌렀는지 알 수 없다 —
-    /// 그려질 때 쓴 열 정보(`positionedBlocks`)를 그대로 써서 가로 범위까지 확인한다.
+    /// 가로 판정은 **렌더와 같은 점 사각형**(`SlotRange.points`, 칸 경계 간격 포함)으로 한다.
+    /// 예전엔 히트가 칸 비율만 봐 렌더의 3pt 간격과 어긋났다(F9). 간격 3pt 자체는 어느 블록도
+    /// 아니므로 그 안의 탭은 빈 곳으로 양보된다(잘못된 블록이 열리는 것보다 낫다 — 렌더와
+    /// 히트가 같은 사각형을 쓰는 것 자체가 계약이다, AC-016).
     /// 여전히 여러 개가 걸리면 지속시간이 가장 짧은(=가장 구체적인) 블록을 고른다.
-    private func block(atX x: CGFloat, y: CGFloat, in blocks: [PositionedBlock]) -> ActiveDrag.Kind? {
+    private func block(atX x: CGFloat, y: CGFloat, in blocks: [PositionedBlock], total: CGFloat) -> ActiveDrag.Kind? {
+        let px = x * total
         let minutes = y / hourHeight * 60
         var best: (duration: CGFloat, kind: ActiveDrag.Kind)?
         for p in blocks {
             guard minutes >= p.start, minutes <= p.start + p.minutes else { continue }
-            if p.columns > 1 {
-                let slot = 1 / CGFloat(p.columns)
-                let lo = CGFloat(p.column) * slot
-                guard x >= lo, x <= lo + slot else { continue }
-            }
+            let f = p.range.points(in: total, gap: Self.columnGap)
+            guard px >= f.x, px <= f.x + f.width else { continue }
             let duration = max(p.minutes, 1)
             if best == nil || duration < best!.duration { best = (duration, p.kind) }
         }
