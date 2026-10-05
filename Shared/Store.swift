@@ -126,15 +126,19 @@ final class Store: ObservableObject {
     }
 
     /// 점(달력 날짜 키)은 일간 나열과 같은 겹침 판정으로 채운다 — 자정을 넘는 블록은 구간이
-    /// 걸치는 모든 날에 점이 켜진다. 출발시각이 없는(계산 실패) 일정과 끝≤시작으로 깨진 레코드는
-    /// 구간이 없으므로 도착일/시작일 하나만(일간 나열의 폴백과 같은 규칙). 저장·네트워크 호출은
-    /// 없고 집합만 다시 만든다 — 반복 그룹이 118건이어도 이 함수 자체는 레코드당 한 번 돈다.
+    /// 걸치는 모든 날에 점이 켜진다. 이벤트 쪽 판정은 레코드의 계산 속성(REQ-023)에서만 나온다:
+    /// 미계산 구간은 앵커 시각의 날 키 하나, 계산된 구간은 나열 구간(listedSpan)이 걸치는 날,
+    /// 그도 없으면 도착일 하나 — 일간 나열(isListed)과 점이 같은 날을 내는 것도 같은 계산이
+    /// 보증한다(AC-010 (13)). 저장·네트워크 호출은 없고 집합만 다시 만든다 — 반복 그룹이
+    /// 118건이어도 이 함수 자체는 레코드당 한 번 돈다.
     private func recomputeDaysWithSchedule() {
         let cal = Calendar.current
         var set = Set<Int>(minimumCapacity: events.count + activities.count)
         for e in events {
-            if let dep = e.departureDate, e.arrivalDate > dep {
-                set.formUnion(Self.dayKeys(start: dep, end: e.arrivalDate, calendar: cal))
+            if let anchor = e.failedBlockAnchor {
+                set.insert(Self.dayKey(anchor, calendar: cal))
+            } else if let span = e.listedSpan {
+                set.formUnion(Self.dayKeys(start: span.start, end: span.end, calendar: cal))
             } else {
                 set.insert(Self.dayKey(e.arrivalDate, calendar: cal))
             }
@@ -381,6 +385,16 @@ final class Store: ObservableObject {
         role == .departure ? "\(activity.title) (복귀)" : activity.title
     }
 
+    /// await(updateEvent의 추정) 사이 활동이 다른 경로로 바뀌었는지 — 바뀌었으면 현재값,
+    /// 아니면 nil. 유도값(앵커·끝점·제목)을 await 전 스냅샷으로 쓰는 updateLeg·realignLegs가
+    /// await 뒤 이것을 불러 옛 스냅샷이 들어갔으면 현재값으로 다시 쓴다(MA code-safety 경고 2).
+    private func activityIfChanged(_ before: ActivityBlock?) -> ActivityBlock? {
+        guard let before, let now = activities.first(where: { $0.id == before.id }) else { return nil }
+        if now.title == before.title, now.startDate == before.startDate,
+           now.endDate == before.endDate, now.location == before.location { return nil }
+        return now
+    }
+
     /// 활동의 명시적 연결 구간 전부(같은 역할 둘 포함) — legs(of:)·linkedLegs·packingGroups가
     /// 같은 목록을 읽는다.
     private func explicitLegs(of activityId: UUID) -> [ScheduledEvent] {
@@ -480,6 +494,14 @@ final class Store: ObservableObject {
             deleteEvent(leg)
             return .refused(reason: .activityMissing)
         }
+        // 같은 역할 재검사도 await **뒤에** 한 번 더 돈다 — 위 검사는 await 앞에만 있어 두 Task가
+        // 같은 활동·같은 역할으로 겹치면 둘 다 통과한다(더블탭 등). 방금 만든 구간(leg.id) 외에
+        // 같은 역할이 생겨 있으면 방금 것을 지우고 거절한다 — 보상 검사와 같은 패턴으로, 재검사와
+        // 삭제 사이에 await가 없으므로 어느 끼어듦에서도 같은 역할이 둘 남지 않는다.
+        if explicitLegs(of: activityId).contains(where: { ($0.anchor ?? .arrival) == role && $0.id != leg.id }) {
+            deleteEvent(leg)
+            return .refused(reason: .duplicateRole)
+        }
         return .created(travelKnown: leg.travelSeconds != nil)
     }
 
@@ -502,21 +524,28 @@ final class Store: ObservableObject {
             ?? (role == .departure ? (leg.departureDate ?? leg.arrivalDate) : leg.arrivalDate)
         let title = activity.map { legTitle(role: role, activity: $0) } ?? leg.title
         // 활동 쪽 끝점은 활동 장소에서, 바깥 쪽은 저장값(또는 인자)에서 — updateEvent가 Place를
-        // 비-Optional로 받으므로 매달린 구간은 저장값으로 폴백한다(modifyEvent와 같은 규칙).
+        // 비-Optional로 받으므로 매달린 구간은 저장값으로 폴백한다(modifyEvent과 같은 규칙).
         let outer = outerPlace ?? (role == .departure ? leg.destination : (leg.origin ?? leg.destination))
-        let activitySide = activity?.location
-        await updateEvent(id: legId,
-                          title: title,
-                          origin: role == .departure ? (activitySide ?? leg.origin ?? leg.destination) : outer,
-                          destination: role == .departure ? outer : (activitySide ?? leg.destination),
-                          arrivalDate: anchorDate,
-                          mode: mode ?? leg.mode,
-                          bufferMinutes: bufferMinutes ?? leg.bufferMinutes,
-                          notifyLeadMinutes: notifyLeadMinutes ?? leg.notifyLeadMinutes,
-                          anchor: role,
-                          travelSecondsHint: travelSecondsHint,
-                          notifyEnabled: notifyEnabled,
-                          syncToCalendar: syncToCalendar)
+        func write(_ act: ActivityBlock?) async {
+            let activitySide = act?.location
+            await updateEvent(id: legId,
+                              title: act.map { legTitle(role: role, activity: $0) } ?? title,
+                              origin: role == .departure ? (activitySide ?? leg.origin ?? leg.destination) : outer,
+                              destination: role == .departure ? outer : (activitySide ?? leg.destination),
+                              arrivalDate: act.map { legAnchor(role: role, activity: $0) } ?? anchorDate,
+                              mode: mode ?? leg.mode,
+                              bufferMinutes: bufferMinutes ?? leg.bufferMinutes,
+                              notifyLeadMinutes: notifyLeadMinutes ?? leg.notifyLeadMinutes,
+                              anchor: role,
+                              travelSecondsHint: travelSecondsHint,
+                              notifyEnabled: notifyEnabled,
+                              syncToCalendar: syncToCalendar)
+        }
+        await write(activity)
+        // await(추정) 사이 활동이 다른 경로로 바뀌면 위 쓰기에 옛 앵커·끝점·제목이 들어갔다 —
+        // 현재값으로 한 번 더 쓴다(MA code-safety 경고 2의 간단한 형태). 같은 저장 안의 재시도라
+        // 사이에 다른 갱신을 끼우지 않는다(design §5의 직렬 규칙과 같은 이유).
+        if let fresh = activityIfChanged(activity) { await write(fresh) }
         // 플래그는 레코드에서 읽는다 — 추정 성패를 결과가 거짓말하면 안 된다(AC-010 (2)).
         guard let updated = events.first(where: { $0.id == legId }) else { return .failed }
         return .updated(travelKnown: updated.travelSeconds != nil)
@@ -569,6 +598,21 @@ final class Store: ObservableObject {
                               notifyLeadMinutes: leg.notifyLeadMinutes,
                               anchor: role,
                               travelSecondsHint: role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+            // await(추정) 사이 활동이 다른 경로로 바뀌면 위 쓰기에 옛 앵커·끝점이 들어갔다 —
+            // 현재값으로 한 번 더 쓴다(updateLeg과 같은 형태, MA code-safety 경고 2).
+            if let fresh = activityIfChanged(activity) {
+                await updateEvent(id: leg.id,
+                                  title: legTitle(role: role, activity: fresh),
+                                  origin: role == .departure ? (fresh.location ?? leg.origin ?? leg.destination)
+                                                             : (leg.origin ?? leg.destination),
+                                  destination: role == .departure ? leg.destination : (fresh.location ?? leg.destination),
+                                  arrivalDate: legAnchor(role: role, activity: fresh),
+                                  mode: leg.mode,
+                                  bufferMinutes: leg.bufferMinutes,
+                                  notifyLeadMinutes: leg.notifyLeadMinutes,
+                                  anchor: role,
+                                  travelSecondsHint: role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+            }
             if let updated = events.first(where: { $0.id == leg.id }) {
                 results[role] = .updated(travelKnown: updated.travelSeconds != nil)
             }
