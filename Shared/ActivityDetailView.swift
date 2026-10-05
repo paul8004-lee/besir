@@ -1,27 +1,31 @@
 import SwiftUI
 import CoreLocation
 
-/// 활동(체류형) 블록의 정보 보기·편집 화면. 이동 구간(ScheduledEvent)과 달리 경로·수단이 없어
-/// EventDetailView보다 훨씬 단순하다(제목·장소·시작/종료 시각만 편집).
+/// 활동(체류형) 블록의 정보 보기·편집 화면. 이동 구간(ScheduledEvent)의 편집도 연결된 구간이면
+/// 이 카드가 맡는다(SPEC-UIKIT-009 REQ-001 — 시간을 고치면 활동과 분리되던 창이 나오지 않게).
+/// 구간 줄의 문법은 생성 카드(AddActivityView)와 같은 LegCardForm이다(REQ-007).
 struct ActivityDetailView: View {
     let activityId: UUID
     @EnvironmentObject var store: Store
     @Environment(\.dismiss) private var dismiss
 
-    // 편집값 넷(제목·장소·시작·종료)은 전부 카드(card.fields)에 산다 — 옛 load()의 되읽기와
-    // 저장 버튼의 판정이 카드 생성 한 번으로 대체된다(REQ-020). 화면이 들고 있는 것은 카드가
-    // 가질 수 없는 것뿐: 좌표 사전, 검색 묶음, 주변 맛집, 삭제 대화상자.
-    @State private var card: EditCard?
-    /// 후보를 탭한 순간 좌표까지 확정된 장소. 열쇠는 이름이 아니라 **줄 신원**(EditField.id)이다.
-    /// 이름으로 걸면 저장된 장소와 같은 이름의 즐겨찾기가 서로를 덮어, 어느 좌표가 살아남는지가
-    /// 씨앗을 뿌린 순서로 정해진다 — 이름이 겹칠 수 있다는 것은 Place 주석이 이미 말한 사실이다
-    /// (같은 상호의 다른 지점). 줄 신원은 생성 때 한 번 찍혀 겹칠 수가 없다. 지연 해석 함수는
-    /// 여전히 만들지 않는다(계약 5: 만들면 resolvePlace의 세 번째 구현이 된다).
-    @State private var confirmedPlaces: [UUID: Place] = [:]
-    /// 즐겨찾기 칩의 라벨 → 장소. 칩 탭은 Place를 들고 오지 않고 라벨만 준다(placeOptions가
-    /// value에 라벨을 싣는다) — 그 라벨을 좌표로 푸는 씨앗이다. 줄 신원 사전과 합치지 않는
-    /// 이유: 라벨은 줄이 아니라 즐겨찾기 목록의 것이다.
-    @State private var favoritePlaces: [String: Place] = [:]
+    // 편집값 넷(제목·장소·시작·종료)과 구간 줄의 문법·좌표 사전·기억값은 전부 LegCardForm 한 몸에
+    // 산다(SPEC-UIKIT-009 MB). 화면이 직접 드는 것은 문법이 가질 수 없는 것뿐: 시드 때의 스냅샷
+    // (저장 diff의 기준), 검색 묶음, 주변 맛집, 저장 진행·결과, 삭제 대화상자.
+    @State private var form: LegCardForm?
+    /// 저장 diff의 기준 — 시드 때의 폼 그대로. diff가 (시드, 현재, 시드 때 구간)의 순수 함수라
+    /// await 사이에도 늙지 않는다.
+    @State private var seed: LegCardForm?
+    /// 시드 때의 명시적 연결 구간(Store.legs(of:)). 저장이 끝난 뒤엔 다시 읽지 않는다 — 시드와
+    /// diff가 같은 순간을 보아야 무변경 저장이 바이트 동일로 닫힌다(REQ-008).
+    @State private var seedLegs: (outbound: ScheduledEvent?, `return`: ScheduledEvent?) = (nil, nil)
+    /// 저장 도중 저장·닫기를 잠근다(생성 카드의 saving 패턴 그대로) — 활동만 저장되고 구간은
+    /// 미적용인 중간 상태에서 시트가 내려가는 것을 막는다(design §3). 이 잠금이 MA code-safety
+    /// 경고 1(addLeg 중복 역할 검사가 await 앞에만 있다)의 뷰 경로를 닫는다 — 같은 카드에서
+    /// 두 번 저장이 겹칠 수 없으므로 이 화면에서는 같은 역할 addLeg가 경쟁하지 않는다.
+    @State private var saving = false
+    /// 저장 결과 안내(REQ-010·REQ-009). nil이면 저장이 조용히 닫혔다는 뜻이다.
+    @State private var saveReport: String?
     /// 카드 검색 에디터의 묶음(350ms 지연·취소·같은 질의 스킵). 지연 상수는 이 타입이 단독으로
     /// 소유한다 — 화면이 들고 있으면 카카오 할당량 정책이 두 벌이 된다.
     @State private var placeDebounce = PlaceSearchDebouncer()
@@ -60,9 +64,14 @@ struct ActivityDetailView: View {
                     // 카드는 이 자리에 무조건 둔다 — Group·AnyView·가변 .id로 감싸면 줄 에디터의
                     // 지역 상태가 매번 새 UUID로 앉아 장소 이름을 한 글자도 못 친다. nil→값 전이는
                     // .task가 딱 한 번 일으킨다.
-                    if let card {
-                        EditCardView(card: card, busy: false, actions: actions,
+                    if let card = form?.card {
+                        EditCardView(card: card, busy: saving, actions: actions,
                                      chrome: EditCardChrome(header: nil, confirmTitle: nil))
+                    }
+                    if let saveReport {
+                        // 저장 결과는 시트 안에서 말한다(REQ-010) — 닫고 나면 들을 자리가 없다.
+                        Label(saveReport, systemImage: "exclamationmark.triangle")
+                            .font(.callout).foregroundStyle(Theme.warn)
                     }
                     if activity?.recurrenceId != nil {
                         Text("반복 일정의 한 회차입니다. 여기서 저장하면 이 날짜만 바뀝니다.")
@@ -88,10 +97,11 @@ struct ActivityDetailView: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("닫기") { dismiss() }
+                    Button("닫기") { dismiss() }.disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("저장") { save() }.disabled(!(card?.isReady ?? false))
+                    Button("저장") { save() }
+                        .disabled(!(form?.card.isReady ?? false) || saving)
                 }
             }
             .confirmationDialog("반복 일정을 어떻게 삭제할까요?", isPresented: $showingDeleteMenu, titleVisibility: .visible) {
@@ -99,7 +109,7 @@ struct ActivityDetailView: View {
                 Button("이 일정만 삭제", role: .destructive) { delete() }
                 Button("취소", role: .cancel) {}
             }
-            .confirmationDialog("이 활동을 삭제할까요?", isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
+            .confirmationDialog(deleteConfirmTitle, isPresented: $showingDeleteConfirm, titleVisibility: .visible) {
                 Button("삭제", role: .destructive) { delete() }
                 Button("취소", role: .cancel) {}
             }
@@ -136,29 +146,19 @@ struct ActivityDetailView: View {
 
     // MARK: - 카드 만들기
 
-    /// 화면이 뜨는 동안 딱 한 번, 저장된 활동에서 카드를 만든다. 편집 화면이므로 모든 줄이
-    /// chosen으로 seed된다 — 기본값으로 덮으면 편집이 값을 조용히 바꾸는 게 된다.
+    /// 화면이 뜨는 동안 딱 한 번, 저장된 활동에서 카드를 만든다. 구간 줄의 시드는 전부
+    /// LegCardForm.seeded가 안다(REQ-011 — 반복 회차엔 구간 줄이 아예 없다).
     private func bootstrap() {
-        guard card == nil, let a = activity else { return }
+        guard form == nil, let a = activity else { return }
+        let legs = store.legs(of: a.id)
+        var f = LegCardForm.seeded(activity: a, outbound: legs.outbound, returnLeg: legs.return,
+                                   noPlaceValue: Self.noPlaceMarker,
+                                   placeOptions: placeOptions, favoriteOptions: favoriteOptions)
         // 즐겨찾기는 칩을 만드는 시점에 좌표까지 확정해 둔다 — 탭 순간에 되찾기만 한다.
-        for fav in store.favorites { favoritePlaces[fav.label] = fav.place }
-        // 저장된 장소는 줄을 먼저 만든 뒤 그 줄 신원에 건다 — 이름으로 걸면 같은 이름의 즐겨찾기와
-        // 서로를 덮어, 칩을 탭한 사용자가 고르지 않은 좌표를 받는다.
-        let locationRow = EditField(key: "location_query", kind: .place, label: "장소",
-                                    options: placeOptions, allowsCustom: true,
-                                    chosen: a.location?.name ?? Self.noPlaceMarker)
-        if let loc = a.location { confirmedPlaces[locationRow.id] = loc }
-        card = EditCard(fields: [
-            .init(key: "title", kind: .title, label: "제목", options: [], allowsCustom: true,
-                  chosen: a.title),
-            locationRow,
-            // 활동의 시작·종료는 도착/출발 기준을 갖지 않는 시각이다(REQ-020) — 접두 없는 ISO로
-            // seed하고 기준 칩도 생기지 않는다.
-            .init(key: "start_iso", kind: .datetime, label: "시작", options: [], allowsCustom: false,
-                  chosen: BesirTime.isoFormatter.string(from: a.startDate), anchored: false),
-            .init(key: "end_iso", kind: .datetime, label: "종료", options: [], allowsCustom: false,
-                  chosen: BesirTime.isoFormatter.string(from: a.endDate), anchored: false),
-        ])
+        for fav in store.favorites { f.favoritePlaces[fav.label] = fav.place }
+        seed = f
+        seedLegs = legs
+        form = f
     }
 
     /// 장소 줄의 칩: 즐겨찾기 + "장소 없음".
@@ -167,22 +167,20 @@ struct ActivityDetailView: View {
             + [.init(label: "장소 없음", value: Self.noPlaceMarker)]
     }
 
+    private var favoriteOptions: [EditField.Option] {
+        store.favorites.map { .init(label: $0.label, value: $0.label) }
+    }
+
     // MARK: - 칩 선택 · 확정
 
-    /// 칩을 탭했을 때. 이 카드에는 딸린 줄이 없어 값과 좌표만 적으며, 장소가 바뀌면 주변 맛집
-    /// 결과를 낡은 채로 두지 않는다. `place`는 검색 후보를 탭해 지점까지 특정된 경우에만 실려
-    /// 온다(choosePlace) — 칩 탭은 nil로 들어와 라벨을 즐겨찾기 씨앗에서 푼다.
+    /// 칩을 탭했을 때. 값 적기·좌표 걸기·구간 줄의 멤버십 전이는 전부 LegCardForm이 안다 —
+    /// 문법이 뷰에 남으면 생성 카드와 규칙이 두 벌이 된다(REQ-007). 화면이 더하는 일은 문법이
+    /// 모르는 것 하나: 장소가 바뀌면 주변 맛집 결과를 낡은 채로 두지 않는다.
     private func choose(field: UUID, value: String, place: Place? = nil) {
-        guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return }
-        let key = c.fields[i].key
-        let previous = c.fields[i].chosen
-        c.fields[i].chosen = value
-        // 좌표는 값을 적은 그 줄 자리에 건다. 실려 온 place가 즐겨찾기 씨앗을 이기는 순서인 이유:
-        // 검색 후보는 지점까지 특정된 값이고 즐겨찾기 라벨은 우연히 같을 수 있는 이름일 뿐이라,
-        // 반대로 두면 검색해서 고른 지점이 같은 이름 즐겨찾기의 좌표로 조용히 바뀐다. 씨앗에도
-        // 없으면("장소 없음" 칩) nil이 들어가 옛 좌표가 지워진다 — 이름이 열쇠이던 시절엔 열쇠가
-        // 바뀌며 저절로 풀리던 자리라, 이제 명시로 갚는다.
-        if c.fields[i].kind == .place { confirmedPlaces[field] = place ?? favoritePlaces[value] }
+        guard let f = form, let row = f.card.fields.first(where: { $0.id == field }) else { return }
+        let key = row.key
+        let previous = row.chosen
+        form?.choose(field: field, value: value, place: place)
         if key == "location_query", previous != value {
             // 좌표가 달라질 장소를 골랐다는 뜻이다 — 비우지 않으면 저장 뒤 새 장소 이름 아래
             // 옛 장소의 식당이 남는다(§1.2의 결함이 형태만 바꿔 살아남는 경로, REQ-021).
@@ -193,11 +191,9 @@ struct ActivityDetailView: View {
             nearby = []
             nearbyLoaded = false
         }
-        card = c
     }
 
-    /// 검색 후보를 탭했을 때 — 이름은 chosen에, 좌표는 이 순간 확정한다(REQ-021). 옛 폼은 이름만
-    /// 고르고 좌표는 옛 장소 것을 그대로 써서 "집"을 "회사"로 고치면 이름만 회사였다.
+    /// 검색 후보를 탭했을 때 — 이름은 chosen에, 좌표는 이 순간 확정한다(REQ-021).
     private func choosePlace(field: UUID, place: Place) {
         choose(field: field, value: place.name, place: place)
     }
@@ -206,10 +202,10 @@ struct ActivityDetailView: View {
     /// 에디터라 여기 오지 않는다.
     @discardableResult
     private func submitCustom(field: UUID, text: String) -> Bool {
-        guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }),
-              let value = c.fields[i].accepts(text) else { return false }
-        c.fields[i].chosen = value
-        card = c
+        guard var f = form, let i = f.card.fields.firstIndex(where: { $0.id == field }),
+              let value = f.card.fields[i].accepts(text) else { return false }
+        f.card.fields[i].chosen = value
+        form = f
         return true
     }
 
@@ -219,29 +215,29 @@ struct ActivityDetailView: View {
     /// 이유를 말한다 — 카드 뷰의 rejected 표시는 직접입력 줄 전용이라 시각 줄엔 오지 않는다.
     @discardableResult
     private func chooseTimePlain(field: UUID, date: Date) -> Bool {
-        guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return false }
-        if c.fields[i].key == "end_iso",
-           let startRaw = chosenIn("start_iso", c),
+        guard var f = form, let i = f.card.fields.firstIndex(where: { $0.id == field }) else { return false }
+        if f.card.fields[i].key == "end_iso",
+           let startRaw = f.card.fields.first(where: { $0.key == "start_iso" })?.chosen,
            let start = BesirTime.parseDatetime(startRaw)?.date,
            date <= start {
-            c.fields[i].note = "종료는 시작보다 뒤여야 해요"
-            card = c
+            f.card.fields[i].note = "종료는 시작보다 뒤여야 해요"
+            form = f
             return false
         }
-        c.fields[i].chosen = BesirTime.isoFormatter.string(from: date)
+        f.card.fields[i].chosen = BesirTime.isoFormatter.string(from: date)
         // 거절 사유는 유효 확정과 함께 지운다 — 남아 있으면 방금 고른 값도 거절된 것처럼 보인다
-        c.fields[i].note = nil
-        if c.fields[i].key == "start_iso",
-           let ei = c.fields.firstIndex(where: { $0.key == "end_iso" }),
-           let endRaw = c.fields[ei].chosen,
+        f.card.fields[i].note = nil
+        if f.card.fields[i].key == "start_iso",
+           let ei = f.card.fields.firstIndex(where: { $0.key == "end_iso" }),
+           let endRaw = f.card.fields[ei].chosen,
            let end = BesirTime.parseDatetime(endRaw)?.date,
            end <= date {
             // 시작을 종료 뒤로 옮기면 확정된 종료는 무효가 된다 — 옛 폼이 종료>시작 판정으로
             // 저장을 막던 것의 계승. 줄 문법에서는 chosen을 비워 isReady를 다시 잠근다.
-            c.fields[ei].chosen = nil
-            c.fields[ei].note = "종료는 시작보다 뒤여야 해요"
+            f.card.fields[ei].chosen = nil
+            f.card.fields[ei].note = "종료는 시작보다 뒤여야 해요"
         }
-        card = c
+        form = f
         return true
     }
 
@@ -263,7 +259,7 @@ struct ActivityDetailView: View {
             setLookup(field, .searching)
             var armed = placeDebounce
             armed.arm(field, q) {
-                let found = await self.store.placeSearch.search(q, near: nil)
+                let found = await store.placeSearch.search(q, near: nil)
                 guard !Task.isCancelled else { return }
                 self.finishPlaceSearch(field: field, query: q, found: found)
             }
@@ -281,52 +277,124 @@ struct ActivityDetailView: View {
                   : .results(Array(found.prefix(AIAssistant.maxPlaceSuggestions))))
     }
 
-    /// 검색 상태를 줄에 얹는다. await에서 돌아온 뒤 id로 다시 찾는다 — 줄이 없어졌으면 조용히
-    /// 버린다(위험 부류 H1과 같은 이유로 잡아둔 자리에 쓰지 않는다).
+    /// 검색 상태를 줄에 얹는다. await에서 돌아온 뒤 id로 다시 찾는다 — 줄이 없어졌으면(장소를
+    /// 지워 구간 줄이 빠졌으면) 조용히 버린다(위험 부류 H1과 같은 이유로 잡아둔 자리에 쓰지 않는다).
     private func setLookup(_ field: UUID, _ lookup: EditField.Lookup) {
-        guard var c = card, let i = c.fields.firstIndex(where: { $0.id == field }) else { return }
-        c.fields[i].lookup = lookup
-        card = c
+        guard var f = form, let i = f.card.fields.firstIndex(where: { $0.id == field }) else { return }
+        f.card.fields[i].lookup = lookup
+        form = f
     }
 
     // MARK: - 읽기 보조
 
     private func field(_ key: String) -> EditField? {
-        card?.fields.first { $0.key == key }
-    }
-
-    private func chosenIn(_ key: String, _ c: EditCard) -> String? {
-        c.fields.first(where: { $0.key == key })?.chosen
+        form?.card.fields.first { $0.key == key }
     }
 
     /// 줄에 걸린 좌표를 되찾는다 — 열쇠는 chosen 이름이 아니라 줄 신원이다. "장소 없음" 칩은
     /// 고르는 순간 그 줄의 좌표가 지워지므로(choose) 여기서 nil이 나온다.
     /// `chosen == nil`을 먼저 거르는 이유는 지금 막히는 경로가 있어서가 아니라 **실패 방향을
-    /// 닫아두기 위해서다.** 열쇠가 이름이던 시절엔 이름 없는 줄이 사전을 못 찾아 저절로 nil이
-    /// 나왔다. 신원 열쇠에서는 "좌표만 걸리고 이름은 없는 줄"이 생기면 그 좌표가 조용히 실려
-    /// 나간다 — 지금은 쓰기 세 자리가 이름과 좌표를 늘 함께 적어 도달 불가지만, 그 불변식을
-    /// 강제하는 것은 코드가 아니라 규율뿐이라 한 절로 갚아 둔다(잘못된 장소보다 없는 장소가 낫다).
+    /// 닫아두기 위해서다.** 좌표만 걸리고 이름은 없는 줄이 생기면 그 좌표가 조용히 실려
+    /// 나간다 — 쓰기 자리가 이름과 좌표를 늘 함께 적어 도달 불가하지만, 그 불변식을 강제하는
+    /// 것은 코드가 아니라 규율뿐이라 잘못된 장소보다 없는 장소가 낫다.
     private func confirmedPlace(_ key: String) -> Place? {
-        field(key).flatMap { $0.chosen == nil ? nil : confirmedPlaces[$0.id] }
+        field(key).flatMap { $0.chosen == nil ? nil : form?.confirmedPlaces[$0.id] }
     }
 
     // MARK: - 저장 · 삭제
 
+    /// 저장 순서는 design §3 그대로: ① 활동 저장(제목·시간·장소 — "장소 없음"이면 clearPlace) →
+    /// ② 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다) → ③ 구간 diff를 제거 → 수정 →
+    /// 추가 순서로 하나씩 직렬 → ④ 결과 집계 → ⑤ 닫기. 결과에 이동시간 미계산·거절이 있으면
+    /// 시트 안에 안내하고 열어 둔다(REQ-010·009).
     private func save() {
-        // 카드가 다 차 있어도 시각 해석은 여기서 한다 — isReady는 줄의 chosen만 본다.
-        guard let a = activity,
+        guard !saving, let a = activity,
               let start = field("start_iso")?.chosen.flatMap(BesirTime.parseDatetime)?.date,
-              let end = field("end_iso")?.chosen.flatMap(BesirTime.parseDatetime)?.date else { return }
-        // updateActivity가 아니라 modifyActivity를 쓴다 — 그래야 이 활동에 묶인 이동 구간도
-        // 같이 옮겨진다(예전엔 여기서 시각을 고쳐도 이동 블록이 제자리에 남았다).
-        store.modifyActivity(id: a.id,
-                             newTitle: field("title")?.chosen ?? "",
-                             newStart: start,
-                             newEnd: end,
-                             // 장소는 고른 시점에 좌표까지 확정된 것만 흘러간다 — "장소 없음" 칩은
-                             // 좌표 사전에 없는 값이라 여기서 nil로 풀린다(REQ-021).
-                             newPlace: confirmedPlace("location_query"))
-        dismiss()
+              let end = field("end_iso")?.chosen.flatMap(BesirTime.parseDatetime)?.date,
+              let seed, let current = form else { return }
+        let newPlace = confirmedPlace("location_query")
+        let ops = LegSavePlanner.ops(seed: seed, current: current,
+                                     outboundLeg: seedLegs.outbound, returnLeg: seedLegs.return)
+        saving = true
+        // 뷰는 구조체라 weak 캡처가 없다 — Task가 값 복사를 잡지만 @State는 참조 지지대라
+        // 화면이 사라져도 쓰기가 시트 재생성으로 새는 일 없이 그 시트의 상태에만 닿는다
+        // (EventDetailView의 Task 패턴과 같은 판단).
+        Task { @MainActor in
+            // ① 활동 먼저 확정한다 — 구간 시간 유도의 입력이 활동 시각이므로(design §3).
+            // modifyActivity여야 묶인 구간이 같이 움직인다. "장소 없음"은 좌표가 nil로 풀리는
+            // 것과 clearPlace로 구분해 넘긴다(REQ-004).
+            store.modifyActivity(id: a.id,
+                                 newTitle: field("title")?.chosen ?? "",
+                                 newStart: start,
+                                 newEnd: end,
+                                 newPlace: newPlace,
+                                 clearPlace: newPlace == nil)
+            // ② 장소를 지운 저장은 구간이 이미 ①에서 함께 지워졌다 — 따라오기·diff를 돌지 않는다.
+            if newPlace != nil {
+                _ = await store.realignLegs(of: a.id)
+                // ③ diff 연산을 제거 → 수정 → 추가 순서로 하나씩 직렬 실행한다.
+                var unknownTravel = false
+                var refusedReasons: Set<String> = []
+                var failed = 0
+                for op in ops {
+                    let outcome: Store.LegOutcome
+                    switch op {
+                    case .remove(let legId):
+                        outcome = store.removeLeg(legId: legId)
+                    case .update(let legId, _, let outer, let mode, let buffer, let lead, let enabled):
+                        outcome = await store.updateLeg(legId: legId, outerPlace: outer, mode: mode,
+                                                             bufferMinutes: buffer,
+                                                             notifyLeadMinutes: lead,
+                                                             notifyEnabled: enabled)
+                    case .add(let role, let outer, let mode, let buffer, let lead, let enabled):
+                        outcome = await store.addLeg(activityId: a.id, role: role, outerPlace: outer,
+                                                          mode: mode, bufferMinutes: buffer,
+                                                          notifyLeadMinutes: lead, notifyEnabled: enabled)
+                    }
+                    switch outcome {
+                    case .created(let known), .updated(let known):
+                        if !known { unknownTravel = true }
+                    case .refused(let reason):
+                        // 결과가 어느 이유인지 말한다(REQ-009) — "저장됐다"로 세지 않는다.
+                        refusedReasons.insert(Self.refusalText(reason))
+                    case .removed:
+                        break
+                    case .failed:
+                        failed += 1
+                    }
+                }
+                // ④ 결과 집계 — 안내가 없을 때만 ⑤ 닫는다. 문구의 의미가 기준이다(design §8).
+                var messages: [String] = []
+                if unknownTravel { messages.append("이동시간을 계산하지 못했어요") }
+                if !refusedReasons.isEmpty { messages.append(refusedReasons.sorted().joined(separator: " · ")) }
+                if failed > 0 { messages.append("저장하지 못한 이동이 있어요") }
+                saving = false
+                if messages.isEmpty {
+                    dismiss()
+                } else {
+                    saveReport = messages.joined(separator: " · ")
+                }
+            } else {
+                saving = false
+                dismiss()
+            }
+        }
+    }
+
+    /// 거절 사유의 안내 문구 — 화면이 이유를 사실대로 말한다(REQ-009).
+    private static func refusalText(_ reason: Store.LegRefusalReason) -> String {
+        switch reason {
+        case .duplicateRole: return "이미 같은 역할의 이동이 있어 만들지 못했어요"
+        case .noPlace: return "장소가 없는 활동에는 이동을 만들 수 없어요"
+        case .activityMissing: return "활동이 이미 지워져 이동을 만들지 못했어요"
+        }
+    }
+
+    /// 삭제 확인 제목 — 딸린 이동 수를 Store 조회 하나로 읽는다(REQ-014). 반복 회차 안내 문구는
+    /// 그대로 둔다(AC-011 (4)).
+    private var deleteConfirmTitle: String {
+        let n = store.explicitLegCount(of: activityId)
+        return n >= 1 ? "이 활동과 딸린 이동 \(n)건을 삭제할까요?" : "이 활동을 삭제할까요?"
     }
 
     private func delete() {
