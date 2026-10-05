@@ -268,7 +268,7 @@ _<pending run-phase>_
 |---|---|---|
 | MA (t17-a) | `42065af` | run 레인 착수 시 `git rev-parse --short HEAD`(2026-10-05) — plan 산출 커밋(0.1.4) 위. 워크트리 분기점은 `b2c3987`이고 그 위의 plan 커밋 둘(e7e34f6·42065af)은 문서 전용이라 MA의 코드 기준은 이 커밋이다 |
 | MB (t17-b) | `61d84b4` | run 레인 MB 착수 시 `git rev-parse --short HEAD`(2026-10-05) — MA 완료 커밋(§E.2 A5 게이트 표) 위 |
-| MC (t17-c) | _<pending run-phase>_ | _<pending run-phase>_ |
+| MC (t17-c) | `7980190` | run 레인 MC 착수 시 `git rev-parse --short HEAD`(2026-10-05) — MB 완료 커밋(ui-design 검사·판정 레인 대조 포함) 위 |
 
 ### MA(t17-a) A1 — 재현·특성화(드라이버만)
 
@@ -460,6 +460,34 @@ MB(t17-b) 완료 요약: B1(문법 추출) → B2(생성 카드 전환) → B3(�
 **발견**: 결함 0 · 경고 0. 메모 1건 — `saveReport` 라벨이 여러 메시지를 `" · "`로 이어 붙이는데(`:375`·`:370` refusedReasons 결합) 안내가 2종 이상 겹치면 한 줄이 길어진다. VoiceOver는 `Label` 텍스트를 그대로 읽어 의미 전달에는 지장 없고, 시트 안 여백 방향과도 모순 없어 두었다(운영자 실기기 확인 항목으로만 남김).
 
 MB(t17-b) ui-design 검사 요약: 렌즈 6종 전부 관측 근거와 함께 통과. 빌드로 검증 못 하는 것 — 큰 글꼴에서 안내 라벨 줄바꿈, 스크립트 2번(토글 문구 어색함)·13a·22번의 사람 판정 — 은 운영자 몫.
+
+### MC(t17-c) C1 — 배치 추출(동작 불변)·특성화
+
+카드 기준 `7980190` · 커밋 **`2ad0f84`**(코드) · 이 문서 커밋(§E.2 기록). `git diff --name-only 7980190 HEAD -- . ':!.moai/specs/SPEC-UIKIT-009' ':!.moai/reports'` = `Shared/Models.swift`·`Shared/ContentView.swift`·`Tools/GuardDriver.swift` — 선언 목록과 같다.
+
+**추출(동작 불변)** — `ScheduleLogic.overlapColumns(_ input: [LayoutItem]) -> [LayoutSlot]`(Models.swift `:276` 일대, `ScheduleLogic` 안 — 일정 판단 순수 함수 영역 문체를 따랐다). 정렬(`start == start ? end < end : start < start`)·무리 끊기(`columnEnds.allSatisfy { $0 <= item.start }`)·첫 빈 열 재사용·`flush`의 무리 전체 열 수 부여까지 본문을 **글자 그대로** 옮겼고, `columnEnds`는 Models 쪽으로 갔다(AC-016 (2): ContentView = 0 · Models = 8). 정렬의 마지막 동률(시작·끝 모두 같은 두 항목)만 **id로 갈랐다**(design §6.6/AC-017 (7) 허용) — 안정 정렬을 문서가 보장하지 않아 입력 순서가 출력을 흔드는 것을 끊는다. 같은 시각의 둘이 열 0·1을 맞바꿈할 뿐 겉보기 배치는 같고, 특성화 기록은 넣은 뒤의 실제 출력으로 남겼다(AH-017-05). `positionedBlocks`는 items를 만들어 이 함수를 부르고 결과를 `PositionedBlock`에만 매핑한다 — **이 커밋에서 화면 배치가 달라지는 길은 없다**: 고친 것은 (1) 배정 루프를 호출로 치환 (2) `PositionedBlock` 생성을 flush 안에서 루프 뒤 매핑으로 옮긴 것뿐이고, 출력 순서도 슬롯 순서(=정렬 순서)라 기존 `out` 배열 순서와 같다. `columnFrame`·`block(atX:y:in:)`·`span(for:on:)`은 건드리지 않았다(C3 몫 — `gap * CGFloat`·`1 / CGFloat(p.columns)` ContentView 기준 2 그대로).
+
+**AH절(Tools/GuardDriver.swift, AG-011-03 뒤·backstop 앞) — 단언 9개(전부 기대 ✓)**:
+
+| 라벨 | 시나리오 | 기록값(실제 출력, id 정렬 표기 `id(열,열수)`) |
+|---|---|---|
+| AH-015-01 | E1(묶음 키 없음) | `A(0,2) O(0,1) R(0,1) U(1,2)` — O 전폭·A/U 반씩·R 전폭 |
+| AH-015-02 | E2 거울(U 820–830) | `A(0,1) O(0,2) R(0,1) U(1,2)` — O/U 반씩·A·R 전폭 |
+| AH-017-01 | S1 두 블록 겹침 | `A(0,2) B(1,2)` |
+| AH-017-02 | S2 사슬(A–B·B–C 겹침, A–C 안 겹침) | `A(0,2) B(1,2) C(0,2)` — C가 A의 열 재사용 |
+| AH-017-03 | S3 맞닿음(end == start) | `A(0,1) B(0,1)` — 서로 다른 무리 |
+| AH-017-04 | S4 포함(B가 A 안) | `A(0,2) B(1,2)` |
+| AH-017-05 | S5 시작·끝 같은 둘, 입력 순서 뒤집기 | 정순=역순 `X(0,2) Y(1,2)` — 동률 깨기로 결정성 확보 |
+| AH-017-06 | S6 네 열 무리 | `A(0,4) B(1,4) C(2,4) D(3,4)` |
+| AH-017-07 | E5 묶음 없음 | `P(0,2) Q(1,2) S(0,1)` |
+
+E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르지 않다**(어긋난 항목 없음 — §E.2 판정 대상 없음). 단언은 전부 함수의 실제 출력으로 썼다. C2가 새 알고리즘을 만든 뒤 묶음 없는 입력에서 이 아홉(+E1·E2 둘)이 그대로 ✓여야 회귀선이 된다(AC-017 (6)). 절 끝 `store.events = []`·`store.activities = []` 정리는 AG절 관례를 따랐다. **AC-015 (8)**: 선언 줄 `static func overlapColumns(_ input: [LayoutItem]) -> [LayoutSlot]`(Models.swift `:276`)에 `grep -c 'ScheduledEvent\|ActivityBlock'` = **0** — 묶음 키는 호출자만 넣을 수 있다.
+
+**게이트(이 레인이 직접 실행)**:
+
+1. 드라이버 컴파일: CLAUDE.md 명령 → **exit 0**(`mc1-driver-compile.log`) · 경고 24줄, 정규화 집합(줄·열 제거 sed)이 기준 `mb12-driver-compile.log`와 `diff` exit 0 — 새 경고 0.
+2. 드라이버 실행: `/tmp/gd-mc1 > mc1-driver-run.log` → **exit 0 · ✓ 433 + 9 = 442 · ✗ 0** · P/T 원문 `442/442 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 기존 라벨(AF 67·AG 9)은 하나도 빼지 않았다.
+3. iOS 빌드: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` → **exit 0 · BUILD SUCCEEDED**(`mc1-ios-build.log`) · 툴체인 안내(`appintentsmetadataprocessor`)를 뺀 `warning:` = **0**(무경고 — ContentView를 고쳤으므로 필수 항목).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
