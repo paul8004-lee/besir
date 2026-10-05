@@ -592,6 +592,8 @@ E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르�
 | iOS 빌드 | `BUILD SUCCEEDED` · 코드 경고 **0**(appintentsmetadataprocessor 도구 알림 제외) |
 | 렌즈(수리 diff) | code-safety: 차단 0 — W-a 같은 커밋 수리·재판정 통과, W-b(아래)는 설계 수용 갭 · ui-design: 결함 0 |
 
+로그 보존(2026-10-05 18:16~18:18, 트리 `02b9363`에서 재실행 — 코드 `6586cf7`과 바이트 동일): 전부 `.moai/state/verify/t17/`(gitignored) — 드라이버 `md-driver-compile.log`(경고 24줄)·`md-driver-run.log`(471/471)과 컴파일 원본 `md-driver-src.swift` · 재현 `md-repro-compile.log`·`md-repro-b1.log`·`md-repro-b2.log`·`md-repro-b2-offline.log` · iOS `md-ios-build.log`(새 dd 경로 전체 빌드 `SwiftCompile` 42, 변경 세 파일 컴파일 확인, dd는 삭제). 위 표의 관측은 전부 이 파일들에서 나온다.
+
 후속 감(리드가 묶음을 결정 — 판정문 §5 Cross-Check 형식):
 - **W-b**(code-safety, 코드 읽기 확정): 명시적 구간이 하나만 있는 옛 반복 회차에서 반대 역할 토글을 켜면 `.add`가 Store 가드를 통과한다(명시 구간이 비어 있지 않으므로) — 기존 구간 자체가 이미 매달린 옛 데이터라 새 위험 부류는 아니고, 판정문 수리 방향이 "옛 데이터 편집 허용"을 명시했으므로 이 카드에서는 수용.
 - **반복 회차 각주 문구**(ui-design UX 소견): "반복 일정의 한 회차입니다" 각주는 이동을 못 만든다고 말하지 않는다 — 실기기에서 "장소를 골랐는데 왜 이동이 없지" 반응이 나오면 한 문장 보태는 것이 최소 대응.
