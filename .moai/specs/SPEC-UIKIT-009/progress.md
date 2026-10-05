@@ -442,6 +442,25 @@ AG 라벨 목록: AG-006-01 · AG-006-02 · AG-006-03 · AG-006-04 · AG-006-05(
 
 MB(t17-b) 완료 요약: B1(문법 추출) → B2(생성 카드 전환) → B3(시드·diff + 활동 카드) → B4(이동 상세 라우팅·삭제 집합) → 게이트 전 항목 관측 통과. 사람 몫(스크립트 1~13·13a — AC-023)은 운영자 대기.
 
+**판정 레인(run 세션) 재실행 대조(2026-10-05, 커밋 `44748cd`)**: 드라이버(`/tmp/gd-v4` → `v4-driver-run.log`) exit 0 · ✓ 433 · ✗ 0 · AG 9 · `433/433 통과` · 실제 데이터 대조 통과 · 경고 정규화 집합 `diff` 0. iOS(`mb-final-ios-build.log`) BUILD SUCCEEDED · 무경고. 범위·numstat·grep 7항목 재확인 — 구현 레인 관측과 같다. MB 누적 하한 432 초과(433).
+
+### MB(t17-b) ui-design 검사(하네스)
+
+판정 범위: 커밋 `d1b8323`(B1)·`bb3c2a9`(B2)·`aa696a7`(B3)·`241395a`(B4) — 카드 기준 `61d84b4` 이후 `git diff 61d84b4 HEAD -- Shared`(1328줄)을 통째로 읽고, 아래 렌즈를 돌렸다. 판정 문서: design.md §2(줄 표·줄 위치)·§8(UX 메모)·plan.md §4 MB행. **읽기 전용 검사 — 코드는 고치지 않았다.**
+
+**돌린 렌즈와 관측(판정 근거 줄은 현 트리 줄번호)**:
+
+1. **Theme 토큰 계약(계약 6)** — 통과. `git diff 61d84b4 HEAD -- Shared | grep '^+' | grep -cE 'Color\(|foregroundStyle\(\.(red|green|blue|orange|yellow|purple|pink|white|black|gray|secondary|tertiary|primary)\b'` → **0**(양성 대조: 패턴에 `Theme.warn` 등 토큰 사용은 잡히지 않음을 확인한 뒤의 0이다). 추가된 착색 뷰 코드는 `ActivityDetailView.swift:74` `.foregroundStyle(Theme.warn)` 한 곳 — `ConflictBanner`(AddEventView.swift:750-756)가 쓰는 `Theme.warn` 토큰 패턴과 같다. 유의: ConflictBanner는 `Theme.warnFill` 배경을 함께 쓰지만, 이 안내는 한 줄 라벨(배경 없는 텍스트+아이콘)이라 카드 표면을 만들지 않는다는 점에서 "카드·그림자 금지" 방향과도 모순 없음. 진행 표시는 생성 카드의 `busy: saving` 스핀 패턴 재사용(`ActivityDetailView.swift:62`·`AddActivityView.swift:41`).
+2. **접근성(AC-019 (5), design §8 셋째 항)** — 새 컨트롤 **없음**, 관측 근거: `git diff 61d84b4 HEAD -- Shared | grep -c '^+.*Image(systemName'` → **0**. 유일한 새 심볼은 `ActivityDetailView.swift:73` `Label(saveReport, systemImage: "exclamationmark.triangle")`인데 `Label(_:titleKey:systemImage:)`는 텍스트를 라벨로 함께 읽는 생성자라 아이콘 전용이 아니다 — 명시 `accessibilityLabel` 불필요(design §8이 요구하는 조건에 해당하지 않음). 기존 보존 확인: 생성 카드의 접힘 스피너 라벨 `.accessibilityLabel("추가")`(AddActivityView.swift:273)은 `form?.card.isReady` 전환 뒤로도 그대로 살아 있다. 스크립트 22 VoiceOver 실측은 운영자 몫.
+3. **문법 동등성의 화면 증거(design §2·§8)** — 통과. 활동 카드의 구간 줄은 `LegCardForm.seeded`가 **전이 자체를 돌려** 세운다(EditCard.swift `seeded` — 줄을 손으로 배열하지 않으므로 라벨·옵션·순서·멤버십이 생성 카드와 어긋날 수 없는 구조). 줄 위치도 전이가 정한다: 토글 둘은 `end_iso` 뒤(`choose`의 `location_query` 분기), 알림 줄은 `ensureNotifyRows`가 `calendar_sync` 앞·없으면 맨 끝 — 활동 카드엔 캘린더 줄이 없어 맨 끝(design §2 줄 위치 문단과 일치). 토글 칩 문구 `만들기`/`안 만들기`는 design §8 첫째 항의 지시대로 **바꾸지 않았다**(사람 판정은 스크립트 2번).
+4. **결과 안내의 자리와 문구(design §8 둘째 항, REQ-010·009)** — 통과. "시트 안 문구"로 구현됐다: `saveReport != nil`이면 시트 안 라벨(`ActivityDetailView.swift:71-74`)을 보여주고 시트를 닫지 않고 열어 둔다(`save()`의 ④⑤ — 안내가 없을 때만 `dismiss()`). 문구 `이동시간을 계산하지 못했어요`는 design §8이 든 제안 문구와 글자까지 같고, 거절·실패 문구(`refusalText`·`저장하지 못한 이동이 있어요`)도 "계산하지 못했다/저장되지 않았다"는 의미를 정확히 전한다(스크립트 13a 기준 — 의미 일치). 진행 중 잠금은 생성 카드 `saving` 패턴과 같은 모양: 저장·닫기 버튼 `disabled(saving)`(`:100`·`:110-111`), `guard !saving` 재진입 가드.
+5. **다크 모드** — 통과. diff에 `preferredColorScheme` **0건**(grep 관측). 유일한 착색이 `Theme.warn` 토큰이라 기기 설정을 따르는 다크 값은 Theme가 정의한 대로 흘러간다.
+6. **REQ-019 플랫림 절(AC-019 (6))** — 통과. diff에서 `#if os` 헝크 **0건**(grep 관측 — `#if os(iOS)`(ActivityDetailView.swift:95)·`#if os(macOS)`(AddActivityView.swift:52)은 문맥 줄로만 등장, 내용 불변). ContentView는 diff에 없어 `.onTapGesture` 셋 무관실.
+
+**발견**: 결함 0 · 경고 0. 메모 1건 — `saveReport` 라벨이 여러 메시지를 `" · "`로 이어 붙이는데(`:375`·`:370` refusedReasons 결합) 안내가 2종 이상 겹치면 한 줄이 길어진다. VoiceOver는 `Label` 텍스트를 그대로 읽어 의미 전달에는 지장 없고, 시트 안 여백 방향과도 모순 없어 두었다(운영자 실기기 확인 항목으로만 남김).
+
+MB(t17-b) ui-design 검사 요약: 렌즈 6종 전부 관측 근거와 함께 통과. 빌드로 검증 못 하는 것 — 큰 글꼴에서 안내 라벨 줄바꿈, 스크립트 2번(토글 문구 어색함)·13a·22번의 사람 판정 — 은 운영자 몫.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_
