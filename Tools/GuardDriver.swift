@@ -3460,6 +3460,328 @@ struct Drv {
         store.events = []
         store.activities = []
 
+        // ── AF. t17-a(SPEC-UIKIT-009 MA) — 재현·특성화(REQ-020). 수리 *전에* 바라는 동작으로 쓴
+        //        단언을 기준 트리에서 돌려 ✗ 줄을 먼저 관측한다(AC-004·005·012의 다섯 — 이 절의
+        //        ✗는 실패가 아니라 결함의 기록이다). 활동은 구간 없이 만들고(추정 호출이 없어
+        //        결정적), 구간은 addEvent(… travelSecondsHint:)로 직접 만든다 — 기준 트리의
+        //        addActivityWithTravel에는 힌트 인자가 없으므로 이 경로만이 AC-018 Given을
+        //        네트워크와 무관하게 만든다. 절 전체에서 Store만 직접 부른다(다른 절은
+        //        AIAssistant를 거치지만 Store 직접 호출이 금지된 건 아니다).
+        print("\nAF. t17-a A1 — 재현·특성화(SPEC-UIKIT-009 MA, REQ-020)")
+        let afAi = fresh()
+        // JSONEncoder의 키 순서는 호출마다 흔들린다(이 드라이버를 짜며 실측) — 바이트 대조가
+        // 내용이 아니라 순서 노이즈에 빨개지지 않게 sortedKeys로 정규화한다.
+        let afCanon = JSONEncoder()
+        afCanon.outputFormatting = [.sortedKeys]
+        func afLegBytes(_ e: ScheduledEvent) -> String {
+            (try? String(data: afCanon.encode(e), encoding: .utf8)) ?? "<인코딩 실패>"
+        }
+        let afHome = Place(name: "집", address: "서울 A", latitude: 37.500, longitude: 127.000)
+        let afOffice = Place(name: "회사", address: "서울 B", latitude: 37.550, longitude: 127.100)
+
+        // AF-004 — 장소 지우기(a)·잘못된 종료(b). 1·2·4·5·6은 같은 활동, 3은 회귀선용 별도 활동.
+        let af004Start = Date(timeIntervalSinceReferenceDate: 812_000_000)
+        let (afA4, _) = await store.addActivityWithTravel(
+            title: "AF004 활동", location: afOffice, startDate: af004Start,
+            endDate: af004Start.addingTimeInterval(5400),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        let af004Out = await store.addEvent(
+            title: "AF004 활동", origin: afHome, destination: afOffice,
+            arrivalDate: af004Start, mode: .transit, bufferMinutes: 20, notifyLeadMinutes: 15,
+            anchor: .arrival, travelSecondsHint: 1800, linkedActivityId: afA4,
+            notifyEnabled: false, syncToCalendar: false)
+        let af004Ret = await store.addEvent(
+            title: "AF004 활동 (복귀)", origin: afOffice, destination: afHome,
+            arrivalDate: af004Start.addingTimeInterval(5400), mode: .transit, bufferMinutes: 0,
+            notifyLeadMinutes: 15, anchor: .departure, travelSecondsHint: 1800,
+            linkedActivityId: afA4, notifyEnabled: false, syncToCalendar: false)
+        _ = store.modifyActivity(id: afA4, newPlace: nil)
+        afAi.drvCheck("AF-004-01 장소 없음(newPlace: nil) 저장 뒤 location == nil이다",
+                      store.activities.first { $0.id == afA4 }?.location == nil,
+                      "location=\(String(describing: store.activities.first { $0.id == afA4 }?.location))")
+        afAi.drvCheck("AF-004-02 그 저장 뒤 이 활동에 연결된 구간이 0건이다",
+                      store.events.filter { $0.linkedActivityId == afA4 }.isEmpty,
+                      "남은 구간=\(store.events.filter { $0.linkedActivityId == afA4 }.count)건")
+        // (a′ 회귀선) AI 경로의 기존 호출 모양은 지우기 인자가 없다 — 수리 뒤에도 이 모양은
+        // 장소를 그대로 둬야 하므로, 1·2와 같은 호출이 되더라도 별도 활동으로 관측해 둔다.
+        let (afA4b, _) = await store.addActivityWithTravel(
+            title: "AF004 회귀선 활동", location: afHome, startDate: af004Start,
+            endDate: af004Start.addingTimeInterval(3600),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        _ = store.modifyActivity(id: afA4b, newPlace: nil)
+        afAi.drvCheck("AF-004-03 (a′) 지우기 인자 없는 기존 호출 모양은 장소를 그대로 둔다",
+                      store.activities.first { $0.id == afA4b }?.location != nil,
+                      "location이 nil이 됐다")
+        // (b) 종료 ≤ 시작 — 저장 전 구간 레코드 바이트를 먼저 찍어 둔다.
+        let af004OutBefore = store.events.first { $0.id == af004Out.id }.map(afLegBytes) ?? ""
+        let af004RetBefore = store.events.first { $0.id == af004Ret.id }.map(afLegBytes) ?? ""
+        let af004EndBefore = store.activities.first { $0.id == afA4 }?.endDate
+        _ = store.modifyActivity(id: afA4, newEnd: af004Start)
+        afAi.drvCheck("AF-004-04 종료 ≤ 시작인 newEnd 시도 뒤 endDate가 그대로다",
+                      store.activities.first { $0.id == afA4 }?.endDate == af004EndBefore,
+                      "endDate=\(String(describing: store.activities.first { $0.id == afA4 }?.endDate))")
+        afAi.drvCheck("AF-004-05 그 시도 뒤 두 구간 레코드가 저장 전과 바이트 동일하다(재정렬 없음)",
+                      store.events.first { $0.id == af004Out.id }.map(afLegBytes) == af004OutBefore
+                          && store.events.first { $0.id == af004Ret.id }.map(afLegBytes) == af004RetBefore,
+                      "출발편 동일=\(store.events.first { $0.id == af004Out.id }.map(afLegBytes) == af004OutBefore), 복귀편 동일=\(store.events.first { $0.id == af004Ret.id }.map(afLegBytes) == af004RetBefore)")
+        let af004NewEnd = af004Start.addingTimeInterval(7200)
+        _ = store.modifyActivity(id: afA4, newEnd: af004NewEnd)
+        afAi.drvCheck("AF-004-06 (b′) 유효한 newEnd에서는 오는 편 출발이 새 종료에 재정렬된다",
+                      store.events.first { $0.id == af004Ret.id }?.departureDate == af004NewEnd,
+                      "departureDate=\(String(describing: store.events.first { $0.id == af004Ret.id }?.departureDate))")
+
+        // AF-005-01 — 일괄 삭제 재현(✓로 관측 = 결함이 재현된 것이다).
+        let af005Base = Date(timeIntervalSinceReferenceDate: 812_100_000)
+        let (afB5, _) = await store.addActivityWithTravel(
+            title: "AF005 활동", location: afOffice, startDate: af005Base,
+            endDate: af005Base.addingTimeInterval(3600),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        _ = await store.addEvent(
+            title: "AF005 활동", origin: afHome, destination: afOffice,
+            arrivalDate: af005Base, mode: .transit, bufferMinutes: 20, notifyLeadMinutes: 15,
+            anchor: .arrival, travelSecondsHint: 1800, linkedActivityId: afB5,
+            notifyEnabled: false, syncToCalendar: false)
+        if let afB5Inst = store.activities.first(where: { $0.id == afB5 }) {
+            store.deleteActivities([afB5Inst])
+        }
+        afAi.drvCheck("AF-005-01 일괄 삭제 뒤 구간이 남아 매달린 링크가 된다(재현)",
+                      store.events.contains { $0.linkedActivityId == afB5 }
+                          && !store.activities.contains { $0.id == afB5 },
+                      "구간 남음=\(store.events.contains { $0.linkedActivityId == afB5 }), 활동 존재=\(store.activities.contains { $0.id == afB5 })")
+
+        // AF-012 — 삭제 연계. A1(구간 둘)·A2(구간 하나)·연결 없는 E(A1과 같은 제목)·A3(같은 역할 둘).
+        let af012Base = Date(timeIntervalSinceReferenceDate: 812_200_000)
+        let (afA1, _) = await store.addActivityWithTravel(
+            title: "AF012 A1", location: afOffice, startDate: af012Base,
+            endDate: af012Base.addingTimeInterval(3600),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        let afA1Out = await store.addEvent(
+            title: "AF012 A1", origin: afHome, destination: afOffice,
+            arrivalDate: af012Base, mode: .transit, bufferMinutes: 20, notifyLeadMinutes: 15,
+            anchor: .arrival, travelSecondsHint: 1800, linkedActivityId: afA1,
+            notifyEnabled: false, syncToCalendar: false)
+        let afA1Ret = await store.addEvent(
+            title: "AF012 A1 (복귀)", origin: afOffice, destination: afHome,
+            arrivalDate: af012Base.addingTimeInterval(3600), mode: .transit, bufferMinutes: 0,
+            notifyLeadMinutes: 15, anchor: .departure, travelSecondsHint: 1800,
+            linkedActivityId: afA1, notifyEnabled: false, syncToCalendar: false)
+        let (afA2, _) = await store.addActivityWithTravel(
+            title: "AF012 A2", location: afOffice, startDate: af012Base.addingTimeInterval(86400),
+            endDate: af012Base.addingTimeInterval(90000),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        let afA2Leg = await store.addEvent(
+            title: "AF012 A2", origin: afHome, destination: afOffice,
+            arrivalDate: af012Base.addingTimeInterval(86400), mode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15,
+            anchor: .arrival, travelSecondsHint: 1800, linkedActivityId: afA2,
+            notifyEnabled: false, syncToCalendar: false)
+        // E — 연결 없는 이동 일정. A1과 제목이 같아도 linkedActivityId가 없으면 삭제 대상이 아니다.
+        let afE = await store.addEvent(
+            title: "AF012 A1", origin: afHome, destination: afOffice,
+            arrivalDate: af012Base.addingTimeInterval(172800), mode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15,
+            notifyEnabled: false, syncToCalendar: false)
+        let (afA3, _) = await store.addActivityWithTravel(
+            title: "AF012 A3", location: afOffice, startDate: af012Base.addingTimeInterval(259200),
+            endDate: af012Base.addingTimeInterval(262800),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        _ = await store.addEvent(
+            title: "AF012 A3 오는편1", origin: afOffice, destination: afHome,
+            arrivalDate: af012Base.addingTimeInterval(259200), mode: .transit, bufferMinutes: 0,
+            notifyLeadMinutes: 15, anchor: .departure, travelSecondsHint: 1800,
+            linkedActivityId: afA3, notifyEnabled: false, syncToCalendar: false)
+        _ = await store.addEvent(
+            title: "AF012 A3 오는편2", origin: afOffice, destination: afHome,
+            arrivalDate: af012Base.addingTimeInterval(262800), mode: .transit, bufferMinutes: 0,
+            notifyLeadMinutes: 15, anchor: .departure, travelSecondsHint: 1800,
+            linkedActivityId: afA3, notifyEnabled: false, syncToCalendar: false)
+        if let afA1Inst = store.activities.first(where: { $0.id == afA1 }) {
+            store.deleteActivity(afA1Inst)
+        }
+        afAi.drvCheck("AF-012-01 낱개 deleteActivity(A1) → A1과 구간 둘이 모두 사라진다",
+                      !store.activities.contains { $0.id == afA1 }
+                          && store.events.first { $0.id == afA1Out.id } == nil
+                          && store.events.first { $0.id == afA1Ret.id } == nil,
+                      "활동=\(!store.activities.contains { $0.id == afA1 }), 가는편=\(store.events.first { $0.id == afA1Out.id } != nil), 오는편=\(store.events.first { $0.id == afA1Ret.id } != nil)")
+        if let afA2Inst = store.activities.first(where: { $0.id == afA2 }) {
+            store.deleteActivities([afA2Inst])
+        }
+        afAi.drvCheck("AF-012-02 일괄 deleteActivities([A2]) → A2와 그 구간이 모두 사라진다",
+                      !store.activities.contains { $0.id == afA2 }
+                          && store.events.first { $0.id == afA2Leg.id } == nil,
+                      "활동=\(!store.activities.contains { $0.id == afA2 }), 구간 남음=\(store.events.first { $0.id == afA2Leg.id } != nil)")
+        afAi.drvCheck("AF-012-03 E(연결 없음, 같은 제목)는 남는다",
+                      store.events.first { $0.id == afE.id } != nil,
+                      "E가 사라졌다")
+        let afA3LegCountBefore = store.events.filter { $0.linkedActivityId == afA3 }.count
+        if let afA3Inst = store.activities.first(where: { $0.id == afA3 }) {
+            store.deleteActivity(afA3Inst)
+        }
+        afAi.drvCheck("AF-012-04 A3 낱개 삭제 → 같은 역할(.departure) 구간 둘이 모두 사라진다",
+                      !store.activities.contains { $0.id == afA3 }
+                          && afA3LegCountBefore == 2
+                          && store.events.filter { $0.linkedActivityId == afA3 }.isEmpty,
+                      "삭제 전 구간 수=\(afA3LegCountBefore), 삭제 후=\(store.events.filter { $0.linkedActivityId == afA3 }.count)")
+        let afAliveIds = Set(store.activities.map { $0.id })
+        afAi.drvCheck("AF-012-05 삭제 뒤 events에 존재하지 않는 활동을 가리키는 linkedActivityId가 없다",
+                      store.events.allSatisfy { $0.linkedActivityId == nil || afAliveIds.contains($0.linkedActivityId!) },
+                      "매달린 구간=\(store.events.filter { $0.linkedActivityId != nil && !afAliveIds.contains($0.linkedActivityId!) }.count)건")
+
+        // AF-018 — 드래그 특성화(전부 기준 ✓ — 구현을 바꾸기 전에 의미를 못박는다).
+        let af018Start = Date(timeIntervalSinceReferenceDate: 812_300_000)
+        let (afA18, _) = await store.addActivityWithTravel(
+            title: "AF018 활동", location: afOffice, startDate: af018Start,
+            endDate: af018Start.addingTimeInterval(3600),
+            travelFrom: nil, returnTo: nil, outboundMode: .transit, returnMode: .transit,
+            bufferMinutes: 20, notifyLeadMinutes: 15, notifyEnabled: false, syncToCalendar: false)
+        let af18Out = await store.addEvent(
+            title: "AF018 활동", origin: afHome, destination: afOffice,
+            arrivalDate: af018Start, mode: .transit, bufferMinutes: 20, notifyLeadMinutes: 15,
+            anchor: .arrival, travelSecondsHint: 1800, linkedActivityId: afA18,
+            notifyEnabled: false, syncToCalendar: false)
+        let af18Ret = await store.addEvent(
+            title: "AF018 활동 (복귀)", origin: afOffice, destination: afHome,
+            arrivalDate: af018Start.addingTimeInterval(3600), mode: .transit, bufferMinutes: 0,
+            notifyLeadMinutes: 15, anchor: .departure, travelSecondsHint: 1800,
+            linkedActivityId: afA18, notifyEnabled: false, syncToCalendar: false)
+        let af18OutBefore = store.events.first { $0.id == af18Out.id }!
+        let af18RetBefore = store.events.first { $0.id == af18Ret.id }!
+        let af18ActBefore = store.activities.first { $0.id == afA18 }!
+        store.moveActivity(af18ActBefore, byMinutes: 30, wholeSeries: false)
+        let af18OutAfterMove = store.events.first { $0.id == af18Out.id }!
+        let af18RetAfterMove = store.events.first { $0.id == af18Ret.id }!
+        afAi.drvCheck("AF-018-01 활동 +30분 이동 → 두 구간의 도착·출발이 함께 +30분(초 단위까지 같은 변위)이다",
+                      af18OutAfterMove.arrivalDate == af18OutBefore.arrivalDate.addingTimeInterval(1800)
+                          && af18OutAfterMove.departureDate == af18OutBefore.departureDate?.addingTimeInterval(1800)
+                          && af18RetAfterMove.arrivalDate == af18RetBefore.arrivalDate.addingTimeInterval(1800)
+                          && af18RetAfterMove.departureDate == af18RetBefore.departureDate?.addingTimeInterval(1800),
+                      "가는편 도착 변위=\(af18OutAfterMove.arrivalDate.timeIntervalSince(af18OutBefore.arrivalDate))s, 오는편 출발 변위=\(String(describing: af18RetAfterMove.departureDate?.timeIntervalSince(af18RetBefore.departureDate!)))s")
+        store.adjustTravelLeg(af18RetAfterMove, byMinutes: 15, wholeSeries: false)
+        let af18RetAfterDrag = store.events.first { $0.id == af18Ret.id }!
+        let af18ActAfterDrag = store.activities.first { $0.id == afA18 }!
+        afAi.drvCheck("AF-018-02 오는 편 +15분 드래그 → 구간이 통째로 +15분, 활동은 그대로다",
+                      af18RetAfterDrag.arrivalDate == af18RetAfterMove.arrivalDate.addingTimeInterval(900)
+                          && af18RetAfterDrag.departureDate == af18RetAfterMove.departureDate?.addingTimeInterval(900)
+                          && af18ActAfterDrag.startDate == af18ActBefore.startDate.addingTimeInterval(1800)
+                          && af18ActAfterDrag.endDate == af18ActBefore.endDate.addingTimeInterval(1800),
+                      "도착 변위=\(af18RetAfterDrag.arrivalDate.timeIntervalSince(af18RetAfterMove.arrivalDate))s, 출발 변위=\(String(describing: af18RetAfterDrag.departureDate?.timeIntervalSince(af18RetAfterMove.departureDate!)))s")
+        store.adjustTravelLeg(af18OutAfterMove, byMinutes: 15, wholeSeries: false)
+        let af18OutAfterDrag = store.events.first { $0.id == af18Out.id }!
+        let af18ActAfterDrag2 = store.activities.first { $0.id == afA18 }!
+        afAi.drvCheck("AF-018-03 가는 편 +15분 드래그 → 도착 고정, 여유 20→5(clampBuffer), 활동 시작·구간 도착 그대로다",
+                      af18OutAfterDrag.arrivalDate == af18OutAfterMove.arrivalDate
+                          && af18OutAfterDrag.bufferMinutes == 5
+                          && af18OutAfterDrag.departureDate == af18OutAfterDrag.arrivalDate.addingTimeInterval(-1800 - 300)
+                          && af18ActAfterDrag2.startDate == af18ActBefore.startDate.addingTimeInterval(1800),
+                      "buffer=\(af18OutAfterDrag.bufferMinutes), 도착 고정=\(af18OutAfterDrag.arrivalDate == af18OutAfterMove.arrivalDate)")
+
+        // AF-019 — 구 형식 JSON 디코딩 고정점. 리터럴은 이 트리의 인코더가 실제으로 뱉은
+        //        출력 문자열을 그대로 박아둔 것이다(키 순서는 실행마다 흔들려도 디코딩은
+        //        순서와 무관하다). 이 카드는 저장 필드를 더하지 않으므로 최종 트리에서도
+        //        같은 리터럴이 풀려야 한다(F11 — 비-Optional 저장 필드가 더해지면 여기서 던진다).
+        let af019EventJSON = #"{"departureDate":809998200,"destination":{"name":"회사","latitude":37.55,"address":"서울 B","longitude":127.1},"bufferMinutes":20,"travelSeconds":1680.5,"arrivalDate":810000000,"origin":{"longitude":127,"address":"서울 A","latitude":37.5,"name":"집"},"calendarUpload":"pending","notifyLeadMinutes":15,"anchor":"departure","linkedActivityId":"AAAAAAAA-BBBB-CCCC-DDDD-000000000001","syncToCalendar":true,"id":"AAAAAAAA-BBBB-CCCC-DDDD-0000000000E1","title":"AF고정 이동","mode":"transit"}"#
+        let af019ActivityJSON = #"{"startDate":810000000,"syncToCalendar":true,"id":"AAAAAAAA-BBBB-CCCC-DDDD-0000000000A1","endDate":810007200,"title":"AF고정 활동","location":{"latitude":37.55,"longitude":127.1,"name":"회사","address":"서울 B"}}"#
+        let af019Dec = JSONDecoder()
+        if let af019Ev = try? af019Dec.decode(ScheduledEvent.self, from: Data(af019EventJSON.utf8)) {
+            afAi.drvCheck("AF-019-01 구 형식 JSON 리터럴이 ScheduledEvent로 디코딩돼 전 필드가 같다",
+                          af019Ev.id == UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-0000000000E1")
+                              && af019Ev.title == "AF고정 이동" && af019Ev.mode == .transit
+                              && af019Ev.origin == Place(name: "집", address: "서울 A", latitude: 37.5, longitude: 127.0)
+                              && af019Ev.destination == Place(name: "회사", address: "서울 B", latitude: 37.55, longitude: 127.1)
+                              && af019Ev.arrivalDate == Date(timeIntervalSinceReferenceDate: 810_000_000)
+                              && af019Ev.departureDate == Date(timeIntervalSinceReferenceDate: 809_998_200)
+                              && af019Ev.travelSeconds == 1680.5 && af019Ev.bufferMinutes == 20
+                              && af019Ev.notifyLeadMinutes == 15 && af019Ev.notifyEnabled == nil
+                              && af019Ev.syncToCalendar == true && af019Ev.notificationId == nil
+                              && af019Ev.googleEventId == nil && af019Ev.calendarUpload == .pending
+                              && af019Ev.recurrenceId == nil
+                              && af019Ev.linkedActivityId == UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000001")
+                              && af019Ev.anchor == .departure,
+                          "필드 불일치")
+        } else {
+            afAi.drvCheck("AF-019-01 구 형식 JSON 리터럴이 ScheduledEvent로 디코딩돼 전 필드가 같다", false, "디코딩 자체가 실패했다")
+        }
+        if let af019Act = try? af019Dec.decode(ActivityBlock.self, from: Data(af019ActivityJSON.utf8)) {
+            afAi.drvCheck("AF-019-02 구 형식 JSON 리터럴이 ActivityBlock로 디코딩돼 전 필드가 같다",
+                          af019Act.id == UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-0000000000A1")
+                              && af019Act.title == "AF고정 활동"
+                              && af019Act.location == Place(name: "회사", address: "서울 B", latitude: 37.55, longitude: 127.1)
+                              && af019Act.startDate == Date(timeIntervalSinceReferenceDate: 810_000_000)
+                              && af019Act.endDate == Date(timeIntervalSinceReferenceDate: 810_007_200)
+                              && af019Act.recurrenceId == nil && af019Act.googleEventId == nil
+                              && af019Act.calendarUpload == nil && af019Act.syncToCalendar == true,
+                          "필드 불일치")
+        } else {
+            afAi.drvCheck("AF-019-02 구 형식 JSON 리터럴이 ActivityBlock로 디코딩돼 전 필드가 같다", false, "디코딩 자체가 실패했다")
+        }
+
+        // AF-010-04 — 힌트 없이 만든 구간의 실패 모양 함의(도달 기록 — AC-010 (4)). 단언은
+        //        함의이므로 온라인(추정 성공)에서도 ✓이고, "실패 분기 도달" 줄만으로 닿았는지를
+        //        남긴다. 게이트를 통과하는 실행의 기대는 "아니오"다.
+        // 좌표·수단은 S절 전제와 같은 모양(도보·약 1.5km)으로 맞춘다 — MapKit ETA는 transit·
+        // automobile을 이 환경에서 못 돌려주므로(이 실행에서 실측), "도달: 아니오" 기대를 만드는
+        // 것은 S절이 실제로 성공하는 조합뿐이다.
+        let afWalkFrom = Place(name: "집", address: "서울 A", latitude: 37.500, longitude: 127.000)
+        let afWalkTo = Place(name: "회사", address: "서울 B", latitude: 37.510, longitude: 127.010)
+        let af1004Out = await store.addEvent(
+            title: "AF01004 가는편", origin: afWalkFrom, destination: afWalkTo,
+            arrivalDate: Date(timeIntervalSinceReferenceDate: 812_400_000), mode: .walk,
+            bufferMinutes: 20, notifyLeadMinutes: 15,
+            notifyEnabled: false, syncToCalendar: false)
+        let af1004Ret = await store.addEvent(
+            title: "AF01004 오는편", origin: afWalkTo, destination: afWalkFrom,
+            arrivalDate: Date(timeIntervalSinceReferenceDate: 812_400_3600), mode: .walk,
+            bufferMinutes: 0, notifyLeadMinutes: 15, anchor: .departure,
+            notifyEnabled: false, syncToCalendar: false)
+        let af1004OutFailed = af1004Out.travelSeconds == nil
+        let af1004RetFailed = af1004Ret.travelSeconds == nil
+        print("  · AF-010-04 실패 분기 도달: \(af1004OutFailed || af1004RetFailed ? "예" : "아니오") (가는편 travelSeconds=\(String(describing: af1004Out.travelSeconds)), 오는편 travelSeconds=\(String(describing: af1004Ret.travelSeconds)))")
+        afAi.drvCheck("AF-010-04 힌트 없는 구간 — travelSeconds == nil이면 가는 편은 출발 없음(가), 오는 편은 출발 == 도착(나)이다",
+                      (!af1004OutFailed || af1004Out.departureDate == nil)
+                          && (!af1004RetFailed || (af1004Ret.departureDate != nil && af1004Ret.departureDate == af1004Ret.arrivalDate)),
+                          "가는편 travelSeconds=\(String(describing: af1004Out.travelSeconds)) departure=\(String(describing: af1004Out.departureDate)), 오는편 travelSeconds=\(String(describing: af1004Ret.travelSeconds)) departure=\(String(describing: af1004Ret.departureDate)) arrival=\(af1004Ret.arrivalDate)")
+
+        // AF-010-10 — 재추정 실패 모양(결정적). 출발지가 nil이면 추정 함수가 출발지 guard에서
+        //        빠지므로(Store.swift:1001·:1026) 네트워크와 무관하게 두 모양이 남는다.
+        var af1010Dep = ScheduledEvent(title: "AF01010 출발기준", origin: nil, destination: afOffice,
+                                       arrivalDate: Date().addingTimeInterval(70 * 60),
+                                       mode: .car, bufferMinutes: 0, notifyLeadMinutes: 0)
+        af1010Dep.anchor = .departure
+        af1010Dep.departureDate = Date().addingTimeInterval(30 * 60)
+        af1010Dep.travelSeconds = 2400
+        af1010Dep.notifyEnabled = false
+        var af1010Arr = ScheduledEvent(title: "AF01010 도착기준", origin: nil, destination: afOffice,
+                                       arrivalDate: af1010Dep.arrivalDate,
+                                       mode: .car, bufferMinutes: 0, notifyLeadMinutes: 0)
+        af1010Arr.anchor = .arrival
+        af1010Arr.departureDate = af1010Dep.departureDate
+        af1010Arr.travelSeconds = 2400
+        af1010Arr.notifyEnabled = false
+        let af1010DepBefore = af1010Dep, af1010ArrBefore = af1010Arr
+        store.events.append(af1010Arr)
+        store.events.append(af1010Dep)
+        await store.refreshUpcomingEstimates()
+        let af1010DepAfter = store.events.first { $0.id == af1010DepBefore.id }!
+        let af1010ArrAfter = store.events.first { $0.id == af1010ArrBefore.id }!
+        afAi.drvCheck("AF-010-10-a 출발 기준 — 재추정 실패 시 travelSeconds == nil이고 출발·(옛) 도착이 그대로다(모양 다)",
+                      af1010DepAfter.travelSeconds == nil
+                          && af1010DepAfter.departureDate == af1010DepBefore.departureDate
+                          && af1010DepAfter.arrivalDate == af1010DepBefore.arrivalDate,
+                      "travelSeconds=\(String(describing: af1010DepAfter.travelSeconds)), 출발 동일=\(af1010DepAfter.departureDate == af1010DepBefore.departureDate), 도착 동일=\(af1010DepAfter.arrivalDate == af1010DepBefore.arrivalDate)")
+        afAi.drvCheck("AF-010-10-b 도착 기준 — 재추정 실패 시 departureDate == nil·travelSeconds == nil이고 도착이 그대로다(모양 가)",
+                      af1010ArrAfter.departureDate == nil && af1010ArrAfter.travelSeconds == nil
+                          && af1010ArrAfter.arrivalDate == af1010ArrBefore.arrivalDate,
+                      "departure=\(String(describing: af1010ArrAfter.departureDate)), travelSeconds=\(String(describing: af1010ArrAfter.travelSeconds)), 도착 동일=\(af1010ArrAfter.arrivalDate == af1010ArrBefore.arrivalDate)")
+
+        store.events = []
+        store.activities = []
+
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
         // 한계는 분명하다: 중간 절이 깼다가 다음 절이 되세우면 이 단언은 통과한다. 절 경계마다
         // drvAssertGlobalInvariants를 부르는 것이 진짜 방어이고, 이건 꼬리 구간의 backstop이다.

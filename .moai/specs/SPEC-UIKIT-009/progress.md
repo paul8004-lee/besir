@@ -266,9 +266,37 @@ _<pending run-phase>_
 
 | 카드 | card_base_sha | 무엇의 커밋인가 |
 |---|---|---|
-| MA (t17-a) | _<pending run-phase>_ | _<pending run-phase>_ |
+| MA (t17-a) | `42065af` | run 레인 착수 시 `git rev-parse --short HEAD`(2026-10-05) — plan 산출 커밋(0.1.4) 위. 워크트리 분기점은 `b2c3987`이고 그 위의 plan 커밋 둘(e7e34f6·42065af)은 문서 전용이라 MA의 코드 기준은 이 커밋이다 |
 | MB (t17-b) | _<pending run-phase>_ | _<pending run-phase>_ |
 | MC (t17-c) | _<pending run-phase>_ | _<pending run-phase>_ |
+
+### MA(t17-a) A1 — 재현·특성화(드라이버만)
+
+실행 트리: `42065af` + `Tools/GuardDriver.swift` AF절. `Shared/` 불변 확인: `git diff --quiet 42065af -- Shared/` → exit 0.
+
+컴파일 경고 집합 대조: `sed -E 's/^[^:]*:[0-9]+:[0-9]+: //' <컴파일 로그> | grep 'warning:' | sort` — 기준 `t17-plan/driver-compile.log` 24줄과 새 로그 `.moai/state/verify/t17/a1-driver-compile.log` 24줄이 `diff` exit 0로 동일(새 코드가 경고를 더하지 않았다).
+
+실행(온라인): `/tmp/gd-a1 > .moai/state/verify/t17/a1-driver-run.log 2>&1` → **exit 1(기대값 — 재현 ✗ 때문)**. `grep -c '^  ✓ '` = **372** · `grep -c '^  ✗ '` = **5** · P/T 줄 원문: `372/377 통과`.
+
+재현 ✗ 다섯 줄 원문:
+
+```text
+  ✗ AF-004-01 장소 없음(newPlace: nil) 저장 뒤 location == nil이다
+  ✗ AF-004-02 그 저장 뒤 이 활동에 연결된 구간이 0건이다
+  ✗ AF-004-05 그 시도 뒤 두 구간 레코드가 저장 전과 바이트 동일하다(재정렬 없음)
+  ✗ AF-012-02 일괄 deleteActivities([A2]) → A2와 그 구간이 모두 사라진다
+  ✗ AF-012-05 삭제 뒤 events에 존재하지 않는 활동을 가리키는 linkedActivityId가 없다
+```
+
+특성화·고정점 ✓ 라벨(전부 기준 트리 ✓ — REQ-020): AF-004-03 · AF-004-04 · AF-004-06 · AF-005-01(재현 ✓ 관측) · AF-012-01 · AF-012-03 · AF-012-04 · AF-018-01 · AF-018-02 · AF-018-03 · AF-019-01 · AF-019-02 · AF-010-04(함의) · AF-010-10-a · AF-010-10-b — 라벨 20개 중 ✓ 15·✗ 5.
+
+AF-010-04 도달 기록 줄 원문(이 실행, 온라인):
+
+```text
+  · AF-010-04 실패 분기 도달: 예 (가는편 travelSeconds=nil, 오는편 travelSeconds=nil)
+```
+
+**"예"의 원인은 코드가 아니라 이 기기의 MapKit ETA 한도다.** 같은 실행의 이른 시점 `✓ S 전제 — 이 환경에서 이동시간 조회가 된다`는 통과했고, 격리 프로브(같은 좌표·도보)로 실측한 결과 이 환경의 MapKit `calculateETA`는 짧은 창에 약 8~9건만 응답하고 그 뒤 `Directions are not available.`로 거절한다(프로브 150연발: 9번째부터 전량 거절, 회복은 분 단위). AF절은 드라이버 맨 끝이라 drvCreate 22곳이 쓴 한도 뒤라 추정이 항상 실패한다. 좌표·수단은 S절과 같은 모양(37.500→37.510 도보)으로 맞췄음에도 같다. 단언 자체는 함의라 ✓이며(AC-010 (4)), "예" 관측 자체는 오프라인 실행 없이도 failure 모양 (가)·(나)를 실물로 본 기록으로 남긴다. "도달: 아니오"를 얻으려면 한도 창이 비었을 때 드라이버를 단독 실행해야 한다(잔여 위험).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
