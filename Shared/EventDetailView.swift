@@ -89,7 +89,13 @@ struct EventDetailView: View {
             }
         }
         .sheet(isPresented: $showingEdit) {
-            AddEventView(editing: event)
+            // 연결된 구간의 편집은 활동 카드로 간다(REQ-001·006) — 시간을 고치면 활동과 분리되던
+            // 창이 나오지 않게 한다. 활동이 없으면(단독 구간·매달린 링크) 지금처럼 이동 일정 폼.
+            if let linked = store.activity(forLeg: event) {
+                ActivityDetailView(activityId: linked.id)
+            } else {
+                AddEventView(editing: event)
+            }
         }
     }
 
@@ -325,11 +331,13 @@ struct EventDetailView: View {
         return departure.addingTimeInterval(Double(elapsed) * 60)
     }
 
-    /// recurrenceId가 없어도(옛날에 반복 대신 낱개로 여러 날 따로 만들어진 경우 등) 제목이 완전히
-    /// 같은 일정이 여러 건 있으면 그것도 "일괄 삭제" 대상으로 봐준다 — recurrenceId만 보면 이런
-    /// 낱개 중복들은 하나씩만 지울 수 있어 여러 건을 한 번에 정리할 방법이 없었다.
+    /// 같은 제목 일괄 삭제의 집합은 Store 조회가 정한다(REQ-013) — 연결된 구간은 활동 삭제의
+    /// 연쇄가 지우므로 이 묶음에 속하지 않는다. recurrenceId가 없어도(옛날에 반복 대신 낱개로
+    /// 여러 날 따로 만들어진 경우 등) 제목이 완전히 같은 **연결 없는** 일정이 여러 건이면
+    /// "일괄 삭제" 대상으로 봐준다 — 하나씩만 지울 수 있어 여러 건을 한 번에 정리할 방법이
+    /// 없었기 때문이다.
     private var sameTitleEvents: [ScheduledEvent] {
-        store.events.filter { $0.title == event.title }
+        store.sameTitleSweep(for: event)
     }
 
     private var detailRows: some View {
