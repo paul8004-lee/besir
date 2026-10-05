@@ -3939,6 +3939,22 @@ struct Drv {
                           && afFlagOf(af3NoOut) == (af3Out?.travelSeconds != nil)
                           && afFlagOf(af3NoRet) == (af3Ret?.travelSeconds != nil),
                       "가는편=\(String(describing: af3Out?.travelSeconds)), 플래그=\(String(describing: afFlagOf(af3NoOut)))")
+        // AF-003-06 — 뷰가 실제로 부르는 모양(힌트 없는 따라오기)으로 제목만 바꾼 저장. 끝점이
+        // 불변이면 저장된 travelSeconds가 힌트로 재사용되므로 재추정 없이 값이 유지되어야 한다
+        // (sync 1차 B2 — 추정 실패 환경에서 1800이 nil로 씻기던 회귀선).
+        let af36Act = await afBareActivity("AF003B 회의", afOffice, afDay.addingTimeInterval(12 * 3600), 3600)
+        _ = await store.addLeg(activityId: af36Act, role: .arrival, outerPlace: afHome,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 1800, syncToCalendar: false)
+        _ = await store.addLeg(activityId: af36Act, role: .departure, outerPlace: afCafe,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 1800, syncToCalendar: false)
+        _ = store.modifyActivity(id: af36Act, newTitle: "AF003B 새제목")
+        _ = await store.realignLegs(of: af36Act)
+        let (af36Out, af36Ret) = store.legs(of: af36Act)
+        afAi.drvCheck("AF-003-06 제목만 바꾼 힌트 없는 따라오기 뒤에도 두 구간의 travelSeconds가 그대로 1800이다(끝점 불변 → 저장값 재사용)",
+                      af36Out?.travelSeconds == 1800 && af36Ret?.travelSeconds == 1800,
+                      "가는편=\(String(describing: af36Out?.travelSeconds)), 오는편=\(String(describing: af36Ret?.travelSeconds))")
         store.events = []
         store.activities = []
 
@@ -4143,6 +4159,21 @@ struct Drv {
                       af9ThirdRefused && store.legs(of: af9d).1?.title == af9Old1.title
                           && store.events.filter { $0.linkedActivityId == af9d }.count == 2,
                       "거절=\(af9ThirdRefused), 첫째=\(store.legs(of: af9d).1?.title ?? "nil")")
+        // AF-009-06 — 반복 회차 활동(명시적 연결 없음)에는 구간을 만들 수 없다(sync 1차 B1).
+        // 명시적 구간은 recurrenceId가 없어 반복 전체 삭제가 지우지 못하므로 진입점에서 거절한다.
+        let af9EpisodeAct = ActivityBlock(title: "AF009 반복회차", location: afOffice,
+                                          startDate: af9Day.addingTimeInterval(19 * 3600),
+                                          endDate: af9Day.addingTimeInterval(20 * 3600), recurrenceId: UUID())
+        store.activities.append(af9EpisodeAct)
+        let af9EpisodeCountBefore = store.events.count
+        let af9EpisodeLeg = await store.addLeg(activityId: af9EpisodeAct.id, role: .arrival, outerPlace: afHome,
+                                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                                               notifyEnabled: false, travelSecondsHint: 1800, syncToCalendar: false)
+        var af9EpisodeRefused = false
+        if case .refused(.recurrenceEpisode) = af9EpisodeLeg { af9EpisodeRefused = true }
+        afAi.drvCheck("AF-009-06 반복 회차 활동(명시적 연결 없음)의 addLeg는 거절되고 구간이 생기지 않는다",
+                      af9EpisodeRefused && store.events.count == af9EpisodeCountBefore,
+                      "거절=\(af9EpisodeRefused), Δ=\(store.events.count - af9EpisodeCountBefore)")
 
         // AF-010 — 결과 플래그(REQ-010). ① 힌트 준 호출 ② 힌트 없는 호출의 플래그 ⇔ 레코드 ③ 거절 계수.
         let af10a = await afBareActivity("AF010 회의", afOffice, af9Day.addingTimeInterval(17 * 3600), 3600)
@@ -4516,6 +4547,16 @@ struct Drv {
                           && ag113Ops.isEmpty,
                       "notify=\(String(describing: agField(ag113Seed, LegRowKeys.notifyEnabled)?.chosen))/"
                           + "\(String(describing: agField(ag113Seed, LegRowKeys.notifyLeadMinutes)?.chosen)), ops=\(ag113Ops.count)건")
+
+        // AC-011 (4) 보강 — 시드 가드는 시드 때만 돈다. 장소를 **고른 뒤**의 전이도 반복 회차
+        // 폼이 구간 줄을 만들지 않는다(sync 1차 B1).
+        var ag114Form = LegCardForm.seeded(activity: ag11RecAct, outbound: nil, returnLeg: nil,
+                                           noPlaceValue: "__no_place__", placeOptions: [],
+                                           favoriteOptions: [])
+        ag114Form.choose(field: agField(ag114Form, "location_query")!.id, value: agOffice.name, place: agOffice)
+        agAi.drvCheck("AG-011-04 반복 회차 폼에서 장소를 고른 뒤에도 구간 줄(토글 포함)이 0개다",
+                      ag114Form.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.isEmpty,
+                      "남은 구간 줄=\(ag114Form.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.map(\.key))")
 
         // ── AH. t17-c(SPEC-UIKIT-009 MC) — C1 특성화: 겹침 배치 순수 함수(ScheduleLogic
         //        .overlapColumns)의 실제 출력을 단언으로 고정한다. 값은 손 계산(design §6.3)이

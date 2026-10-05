@@ -362,7 +362,7 @@ final class Store: ObservableObject {
 
     /// 구간 추가·수정·제거·따라오기의 결과 값(REQ-009·010). travelKnown은 결과 플래그이고
     /// 레코드의 travelSeconds와 일치해야 한다 — 성공 판정의 단일 출처는 레코드다(계약 5).
-    enum LegRefusalReason { case duplicateRole, noPlace, activityMissing }
+    enum LegRefusalReason { case duplicateRole, noPlace, activityMissing, recurrenceEpisode }
     enum LegOutcome {
         case created(travelKnown: Bool)
         case updated(travelKnown: Bool)
@@ -466,7 +466,7 @@ final class Store: ObservableObject {
                 notifyLeadMinutes: Int,
                 notifyEnabled: Bool = true,
                 travelSecondsHint: TimeInterval? = nil,
-                syncToCalendar: Bool = true) async -> LegOutcome {
+                syncToCalendar: Bool? = nil) async -> LegOutcome {
         guard let activity = activities.first(where: { $0.id == activityId }) else {
             return .refused(reason: .activityMissing)
         }
@@ -474,7 +474,18 @@ final class Store: ObservableObject {
         if explicitLegs(of: activityId).contains(where: { ($0.anchor ?? .arrival) == role }) {
             return .refused(reason: .duplicateRole)
         }
+        // 반복 회차 활동에 만든 명시적 구간은 recurrenceId가 없어 deleteRecurringSeries가 지우지
+        // 못하고 매달린 링크로 남는다(sync 1차 B1). 폼이 이미 막지만 진입점 방어가 없으면 다른
+        // 경로(AI 등)로 다시 열린다. 조건이 "명시 구간 없음"까지인 이유: 명시적 구간이 이미 있는
+        // 옛 데이터는 편집이 허용되므로.
+        if activity.recurrenceId != nil && explicitLegs(of: activityId).isEmpty {
+            return .refused(reason: .recurrenceEpisode)
+        }
         guard let place = activity.location else { return .refused(reason: .noPlace) }
+        // 구간의 캘린더 동의는 기본으로 활동을 따른다 — "캘린더 안 함" 활동에 붙은 구간이 구글
+        // 캘린더에 오르면 활동과 구간의 동의가 어긋난다(REQ-008, sync 1차 W1). 명시적으로 넘긴
+        // 값(생성 카드의 addActivityWithTravel)은 그대로 이긴다.
+        let legSync = syncToCalendar ?? activity.wantsCalendarSync
         let leg = await addEvent(title: legTitle(role: role, activity: activity),
                                  origin: role == .departure ? place : outerPlace,
                                  destination: role == .departure ? outerPlace : place,
@@ -486,7 +497,7 @@ final class Store: ObservableObject {
                                  travelSecondsHint: travelSecondsHint,
                                  linkedActivityId: activityId,
                                  notifyEnabled: notifyEnabled,
-                                 syncToCalendar: syncToCalendar)
+                                 syncToCalendar: legSync)
         // await 뒤 배열이 바뀌었을 수 있으니 활동을 다시 본다 — 지워졌으면 방금 만든 구간을
         // 되돌린다(보상 검사). leg를 검색이 아니라 반환값으로 얻는 건 같은 제목·시각 구간이
         // 이미 있을 때 엉뚱한 쪽을 집는 일을 막는다(addEvent가 레코드를 돌려주는 이유와 같다).
@@ -588,6 +599,13 @@ final class Store: ObservableObject {
                 results[role] = .updated(travelKnown: leg.travelSeconds != nil)
                 continue
             }
+            // 끝점이 그대로면 저장된 이동시간이 여전히 사실이다 — 힌트 없이 재추정하면 실패 때
+            // (오프라인·할당량·경로 없음) applyEstimate가 알림을 취소하고 travelSeconds를 비운
+            // 채 끝나는 값 손실이 생긴다(sync 1차 B2, REQ-010). 끝점이 바뀌면 저장값이 사실이
+            // 아니므로 nil로 재추정을 유지한다. 명시적 힌트 인자가 있으면 그 값이 이긴다.
+            let endpointsSame = leg.origin == newOrigin && leg.destination == newDestination
+            let roleHint = (role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                ?? (endpointsSame ? leg.travelSeconds : nil)
             await updateEvent(id: leg.id,
                               title: title,
                               origin: newOrigin,
@@ -597,21 +615,27 @@ final class Store: ObservableObject {
                               bufferMinutes: leg.bufferMinutes,
                               notifyLeadMinutes: leg.notifyLeadMinutes,
                               anchor: role,
-                              travelSecondsHint: role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                              travelSecondsHint: roleHint)
             // await(추정) 사이 활동이 다른 경로로 바뀌면 위 쓰기에 옛 앵커·끝점이 들어갔다 —
-            // 현재값으로 한 번 더 쓴다(updateLeg과 같은 형태, MA code-safety 경고 2).
+            // 현재값으로 한 번 더 쓴다(updateLeg과 같은 형태, MA code-safety 경고 2). 힌트는 이때
+            // **새 끝점** 기준으로 다시 계산한다 — 첫 쓰기의 endpointsSame을 그대로 쓰면 바뀐
+            // 활동 장소의 끝점에 옛 경로 이동시간이 "조회됨"으로 굳는다(수리 diff code-safety W-a).
             if let fresh = activityIfChanged(activity) {
+                let freshOrigin = role == .departure ? (fresh.location ?? leg.origin ?? leg.destination)
+                                                     : (leg.origin ?? leg.destination)
+                let freshDestination = role == .departure ? leg.destination : (fresh.location ?? leg.destination)
+                let freshHint = (role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                    ?? (leg.origin == freshOrigin && leg.destination == freshDestination ? leg.travelSeconds : nil)
                 await updateEvent(id: leg.id,
                                   title: legTitle(role: role, activity: fresh),
-                                  origin: role == .departure ? (fresh.location ?? leg.origin ?? leg.destination)
-                                                             : (leg.origin ?? leg.destination),
-                                  destination: role == .departure ? leg.destination : (fresh.location ?? leg.destination),
+                                  origin: freshOrigin,
+                                  destination: freshDestination,
                                   arrivalDate: legAnchor(role: role, activity: fresh),
                                   mode: leg.mode,
                                   bufferMinutes: leg.bufferMinutes,
                                   notifyLeadMinutes: leg.notifyLeadMinutes,
                                   anchor: role,
-                                  travelSecondsHint: role == .departure ? returnTravelSecondsHint : outboundTravelSecondsHint)
+                                  travelSecondsHint: freshHint)
             }
             if let updated = events.first(where: { $0.id == leg.id }) {
                 results[role] = .updated(travelKnown: updated.travelSeconds != nil)

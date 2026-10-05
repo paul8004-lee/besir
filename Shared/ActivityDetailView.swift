@@ -304,9 +304,9 @@ struct ActivityDetailView: View {
     // MARK: - 저장 · 삭제
 
     /// 저장 순서는 design §3 그대로: ① 활동 저장(제목·시간·장소 — "장소 없음"이면 clearPlace) →
-    /// ② 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다) → ③ 구간 diff를 제거 → 수정 →
-    /// 추가 순서로 하나씩 직렬 → ④ 결과 집계 → ⑤ 닫기. 결과에 이동시간 미계산·거절이 있으면
-    /// 시트 안에 안내하고 열어 둔다(REQ-010·009).
+    /// ② 구간 diff의 제거를 먼저 → ③ 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다) →
+    /// ④ 남은 diff를 수정 → 추가 순서로 하나씩 직렬 → ⑤ 결과 집계 → ⑥ 닫기. 결과에 이동시간
+    /// 미계산·거절이 있으면 시트 안에 안내하고 열어 둔다(REQ-010·009).
     private func save() {
         guard !saving, let a = activity,
               let start = field("start_iso")?.chosen.flatMap(BesirTime.parseDatetime)?.date,
@@ -331,16 +331,30 @@ struct ActivityDetailView: View {
                                  clearPlace: newPlace == nil)
             // ② 장소를 지운 저장은 구간이 이미 ①에서 함께 지워졌다 — 따라오기·diff를 돌지 않는다.
             if newPlace != nil {
-                _ = await store.realignLegs(of: a.id)
-                // ③ diff 연산을 제거 → 수정 → 추가 순서로 하나씩 직렬 실행한다.
+                // ③ diff의 제거를 먼저 돈다 — realign이 곧 지울 구간을 다시 쓰며 추정·캘린더
+                // 업로드 큐에 올리는 일(sync 1차 W3)을 막고, 제거가 빈자리를 내야 추가의 중복
+                // 검사가 그 빈자리를 본다(design §3).
                 var unknownTravel = false
                 var refusedReasons: Set<String> = []
                 var failed = 0
                 for op in ops {
+                    // removeLeg는 비-Optional 결과를 주므로 조건 바인딩이 아니라 그대로
+                    // 패턴 매칭한다 — .removed는 세지 않고 .failed만 계수한다(기존 집계와 동등).
+                    guard case .remove(let legId) = op else { continue }
+                    if case .failed = store.removeLeg(legId: legId) { failed += 1 }
+                }
+                // ④ 구간 따라오기(바뀐 구간만, Store가 바이트 동일을 지킨다). 결과는 버리지
+                // 않는다 — 따라오기 결과를 버리면 제목만 바꾼 저장에서 추정 실패가 조용히
+                // 사라진다(sync 1차 B2, REQ-010 — 미계산은 사실대로 보고한다).
+                let realigned = await store.realignLegs(of: a.id)
+                if case .updated(let known)? = realigned.outbound, !known { unknownTravel = true }
+                if case .updated(let known)? = realigned.return, !known { unknownTravel = true }
+                // ⑤ 남은 diff 연산(수정 → 추가)을 하나씩 직렬 실행한다.
+                for op in ops {
                     let outcome: Store.LegOutcome
                     switch op {
-                    case .remove(let legId):
-                        outcome = store.removeLeg(legId: legId)
+                    case .remove:
+                        continue
                     case .update(let legId, _, let outer, let mode, let buffer, let lead, let enabled):
                         outcome = await store.updateLeg(legId: legId, outerPlace: outer, mode: mode,
                                                              bufferMinutes: buffer,
@@ -387,6 +401,7 @@ struct ActivityDetailView: View {
         case .duplicateRole: return "이미 같은 역할의 이동이 있어 만들지 못했어요"
         case .noPlace: return "장소가 없는 활동에는 이동을 만들 수 없어요"
         case .activityMissing: return "활동이 이미 지워져 이동을 만들지 못했어요"
+        case .recurrenceEpisode: return "반복 일정 회차에는 이동을 따로 만들 수 없어요"
         }
     }
 

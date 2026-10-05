@@ -312,6 +312,11 @@ import Foundation
     var lastNotifyOn = true
     /// 알림 줄이 꺼져 있는 동안의 마지막 리드 값.
     var lastNotifyLead = "30"
+    /// 반복 회차(명시적 연결 없음) — 이 폼에서는 구간을 만들 수 없다(REQ-011). 시드의 가드는
+    /// 시드 때만 돌고 장소를 고르는 전이는 반복 여부를 모르므로, 시드가 이 깃발을 심어 전이가
+    /// 이걸 본다(sync 1차 B1 — 깃발이 없으면 장소 선택만으로 토글 줄이 살아나 저장 시 매달린
+    /// 링크가 되는 구간이 만들어진다).
+    var recurrenceEpisodeWithoutLegs = false
 
     /// 칩을 탭했을 때의 전이 — 생성 카드의 choose(field:value:place:)에서 구간 네 분기와 공통
     /// 몸통(값 적기·좌표 걸기)을 그대로 옮겼다. 문구·멤버십·줄 위치가 한 글자도 다르지 않아야
@@ -335,8 +340,10 @@ import Foundation
             if confirmedPlaces[field] != nil {
                 // 실제 장소를 고른 순간 다리 토글 줄이 태어난다 — 옛 화면의 else 가지가 줄 멤버십으로
                 // 옮겨온 자리다. "장소 없음"은 즐겨찾기 씨앗에도 검색 결과에도 없어 바로 위에서
-                // 이 줄의 좌표가 nil로 지워지므로 이 가지를 타지 않는다.
-                if !card.fields.contains(where: { $0.key == LegRowKeys.outboundEnabled }) {
+                // 이 줄의 좌표가 nil로 지워지므로 이 가지를 타지 않는다. 반복 회차 폼은 예외다 —
+                // 깃발이 참이면 삽입을 건너뛴다(위 recurrenceEpisodeWithoutLegs 주석).
+                if !recurrenceEpisodeWithoutLegs,
+                   !card.fields.contains(where: { $0.key == LegRowKeys.outboundEnabled }) {
                     let at = card.fields.firstIndex(where: { $0.key == "end_iso" }).map { $0 + 1 }
                         ?? card.fields.count
                     card.fields.insert(contentsOf: [
@@ -575,8 +582,12 @@ extension LegCardForm {
                   chosen: BesirTime.isoFormatter.string(from: activity.endDate), anchored: false),
         ]), favoriteOptions: favoriteOptions)
         // 명시적 연결이 있는 반복 회차는 그 구간으로 시드한다 — 연결이 추정에 우선한다는
-        // 규칙(linkedLegs와 같다)을 시드도 따른다.
-        guard activity.recurrenceId == nil || outbound != nil || returnLeg != nil else { return f }
+        // 규칙(linkedLegs와 같다)을 시드도 따른다. 연결 없는 반복 회차는 폼이 구간을 못 만들게
+        // 깃발을 심는다(sync 1차 B1).
+        guard activity.recurrenceId == nil || outbound != nil || returnLeg != nil else {
+            f.recurrenceEpisodeWithoutLegs = true
+            return f
+        }
         // 장소 칩을 고른 것으로 전이를 돈다 — 좌표가 실리는 순간 토글 둘이 end_iso 뒤에 선다.
         f.choose(field: locationRow.id, value: activity.location?.name ?? noPlaceValue,
                  place: activity.location)
