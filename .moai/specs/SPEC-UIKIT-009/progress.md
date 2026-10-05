@@ -269,6 +269,7 @@ _<pending run-phase>_
 | MA (t17-a) | `42065af` | run 레인 착수 시 `git rev-parse --short HEAD`(2026-10-05) — plan 산출 커밋(0.1.4) 위. 워크트리 분기점은 `b2c3987`이고 그 위의 plan 커밋 둘(e7e34f6·42065af)은 문서 전용이라 MA의 코드 기준은 이 커밋이다 |
 | MB (t17-b) | `61d84b4` | run 레인 MB 착수 시 `git rev-parse --short HEAD`(2026-10-05) — MA 완료 커밋(§E.2 A5 게이트 표) 위 |
 | MC (t17-c) | `7980190` | run 레인 MC 착수 시 `git rev-parse --short HEAD`(2026-10-05) — MB 완료 커밋(ui-design 검사·판정 레인 대조 포함) 위 |
+| MD (t17-d) | `6586cf7` | sync 1차 차단 수리 커밋(2026-10-05, 판정문 §8.1 — 수리 커밋의 SHA). 카드 착수는 판정 커밋 `9936bb2` 위, 산출은 이 커밋 하나(§E.2 MD 절) |
 
 ### MA(t17-a) A1 — 재현·특성화(드라이버만)
 
@@ -543,7 +544,7 @@ E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르�
 - **① 잔여 읽기 곳 의미 불변 — 확인**: departureDate를 "추정 성공"으로 읽는 곳은 `Store.swift:801`(conflicts, `guard let dep`), `GoogleCalendarService.swift:172`(업로드 start), `EventDetailView.swift:265`("예상 시각" 배지)·`:329`, `AddEventView.swift:237`(시간 줄 시드), `AIAssistant.swift:2038`(묶음 경고 필터)·`:2644`(⚠️태그), `Store.swift:1502~1542`(refreshUpcomingEstimates — dep와 travelSeconds **둘 다** 읽는 복구 경로). 이 카드는 저장값을 하나도 바꾸지 않았고(design §4 "저장은 그대로") `applyEstimate`/`applyDepartureAnchoredEstimate`(`:1268`·`:1292`)가 dep·travel을 세트로 다루는 규칙도 그대로라 위 읽기 곳의 입력 레코드 모양은 변하지 않았다. 단 출발기준 추정 실패 레코드(dep 만 있고 travel nil)는 옛 판정·새 판정(`failedBlockAnchor`)이 갈리는 유일한 모양인데, 이 모양을 만드는 코드는 이 카드 이전부터 있었다 → 아래 경고 1·메모 1 참조.
 - **② 네 자리 단일 판정 — 확인**: 나열 `events(on:)`(ContentView `:88`, `isListed(on:)`) · 점 `recomputeDaysWithSchedule`(Store `:138~142`, `failedBlockAnchor`/`listedSpan`) · 블록 선택(`:509`, `failedBlockAnchor != nil`) · 세로 기하 `span(for:)` 실패 분기(`:564`)가 전부 Models의 계산 속성을 읹고, `isListed` 자체도 `failedBlockAnchor`→`listedSpan`→`Store.overlapsDay`→도착일 폴백 순으로 같은 판정을 내포한다. `failedBlockAnchor` 스며든 곳 grep 전수: ContentView 2곳(`:509`·`:564`) + Store 1곳(`:138`) + Models 정의 + GuardDriver — 네 자리 외 신규 침투 0건. 판정 사본(inline `arrivalDate > dep`류)은 `listedSpan`(Models `:220`, 출처)과 `conflicts`(Store `:801`)만 남는데 후자는 "실제 구간이 있어야 겹침 검사"라는 **다른 질문**의 판정이라 사본이 아니다.
 - **③ 실패 모양 넷의 경고 하나 — 코드 경로로 확인**: 경고 블록은 `failedBlockAnchor`(한 시각)가 non-nil인 레코드에만 서고, 나열은 `isListed`가 앵커의 날 하루만 참 → 자정 (다) 모양에서 D+1에 이중 경고가 설 경로가 없다(옛 도착 날 폴백은 `failedBlockAnchor != nil`이면 도달 불가). 그려지는 블록도 `span(for:)` 실패 분기 하나(`:564`)뿐이다. 드라이버 AH-010-12/13(`:4842~4848`)의 실측과 같은 결론.
-- **④ 이월 수리 2건 불변식 — 성립 확인**: (a) addLeg 같은 역할 재검사(Store `:497~503`)는 await **뒤**에 돌고 `deleteEvent`(`:1551`)는 제거 전 await 없음(동기 제거·save, 캘린더 Task는 제거 후) — 재검사와 삭제 사이 끼어듦 창이 없어 불변식 논증 성립. 드라이버 AH-009-01이 Task.yield 겹침으로 같은 결론 실측. (b) updateLeg/realignLegs의 `activityIfChanged` 재독기(`:388~394`, 호출 `:534`·`:601`)는 4필드(제목·시작·끝·장소)가 같으면 재쓰기를 하지 않고, 재쓰기는 같은 write 클로저/hint 재사용이라 새 네트워크 조회·달력 enqueue 중복을 만들지 않는다(enqueueCalendarUpload `:1094`는 `googleEventId == nil` && pending 플래그라 멱등). 두 write 사이 다른 갱신이 끼우는 창은 있으나(둘 다 MainActor, 사이에 await) 세 번째 경로의 쓰기도 같은 규칙으로 보상되므로 수렴 — 이중 쓰기가 경쟁을 만들지는 않는다.
+- **④ 이월 수리 2건 불변식 — 성립 확인**: (a) addLeg 같은 역할 재검사(Store `:497~503`)는 await **뒤**에 돌고 `deleteEvent`(`:1551`)는 제거 전 await 없음(동기 제거·save, 캘린더 Task는 제거 후) — 재검사와 삭제 사이 끼어듦 창이 없어 불변식 논증 성립. 드라이버 AH-009-01이 Task.yield 겹침으로 같은 결론 실측. (b) updateLeg/realignLegs의 `activityIfChanged` 재독기(`:388~394`, 호출 `:534`·`:601`)는 4필드(제목·시작·끝·장소)가 같으면 재쓰기를 하지 않고, 재쓰기의 달력 enqueue는 멱등이다(enqueueCalendarUpload `:1094`는 `googleEventId == nil` && pending 플래그). **[2026-10-05 정정, sync 1차 N5]** 원문은 재쓰기가 "같은 write 클로저/hint 재사용"이라 새 네트워크 조회를 만들지 않는다고 했으나 그 시점 뷰 경로의 hint는 항상 nil이어서 재쓰기도 재추정을 했다 — 참이 된 것은 t17-d(`6586cf7`)의 realignLegs 힌트 재사용부터다(재쓰기는 새 끝점 기준 재계산, §E.2 MD 절). 두 write 사이 다른 갱신이 끼우는 창은 있으나(둘 다 MainActor, 사이에 await) 세 번째 경로의 쓰기도 같은 규칙으로 보상되므로 수렴 — 이중 쓰기가 경쟁을 만들지는 않는다.
 - **⑤ 4대 위험 클래스 전수**: **H1** — 신규 `overlapColumns`/`overlapSlots`는 순수 함수, `columnEnds[free]`는 firstIndex 직후·경계 안전; `byID = Dictionary(uniqueKeysWithValues:)`는 id 충돌에 trap이지만 입력 id는 `a-`/`e-` 접두 UUID라 현 경로 중복 불가(메모 3). 이월 수리 자체가 H1 교정 패턴(await 뒤 재검사)이다. **H2** — diff에 신규 `Task { try? … }` 0건(deleteEvent 내 캘린더 Task는 옛것). **H3** — 새 경로가 알림을 늘리지 않는다: 이중 쓰기의 두 번째 apply*는 기존 notificationId를 먼저 취소한다(`:1270`·`:1295`); 무한 증가 신규 상태 없음. **H4** — 칸 산술 단일 출처 `overlapSlots`+`SlotRange.points`(렌더 `:738`·히트 `:760` 같은 호출), 나열 판정 단일 출처 ②와 같음. 단 한 곳 예외 — 아래 경고 2. **H5~H8·간결성** — 루프 내 save/네트워크 신규 없음(overlapSlots는 순수 계산); 강제 언랩 신규 0(`item.groupKey!`는 `isGrouped`가 키 존재를 함의); 죽은 코드 — 옛 `column/columns` 필드·사본 클러스터 코드는 diff에서 전부 제거됨, 폴백 `guard let dep = event.departureDate`(ContentView `:570`)는 travel nil을 만드는 곳이 dep도 같이 비우므로 사실상 도달 불가인 **방어 폴백**으로 주석 명시돼 있음(깨진 레코드 보호 — 제거 대상 아님).
 - **⑥ X6 픽스처 정정 — "원래 의도를 살린 것"으로 판정**: 옛 X절 자정 레코드는 `departureDate`만 있고 `travelSeconds`가 없었다. 옛 규칙(dep만 보고 양쪽 점)에서 이 레코드는 "계산된 자정 넘김"으로 취급됐으나 REQ-023 뒤로는 미계산 모양이 되어 **판정이 뒤집히는** 상태였다. 정정은 판정을 되돌리는 게 아니라 `travelSeconds = 6*3600`을 명시해 레코드를 원래 의미(계산된 구간 = 양쪽 점)로 확정한 것이고, 미계산 자정 모양은 AH 특성화(AH-010-12/13)가 별도 커버한다 — 즉 결함 은폐가 아니라 모호한 픽스처를 두 판정 각각의 명시적 사례로 분리한 것이다. 라벨·단언 문장이 그대로 유지됐다는 §E.2 기록과 일치.
 
@@ -568,6 +569,33 @@ E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르�
 | 카드 범위(AC-022, 기준 7980190) | 선언 목록·크게 고침 ≤ 3(Store 작게) | Models·ContentView·GuardDriver 크게(3) + Store 82줄(작게) · 새 파일 0 |
 | 누적 불변식(AC-019, 기준 b2c3987) | (1)(3)(4)(6) | 전부 통과 + 색 양성 대조 1 |
 | 하네스 | plan §4 MC 몫 | ui-design 결함 0·메모 2 / code-safety 결함 0·경고 2(**후속 감** — AI 목록 ⚠️태그 구식 판정 `AIAssistant.swift:2644`, `max(width,1)` 하한의 렌더·히트 비대칭 — 둘 다 이 카드 범위 밖) |
+
+### MD(t17-d) — sync 1차 차단 수리(B1·B2 + 권고 W1·W3)
+
+코드 커밋 **`6586cf7`**(2026-10-05, 4파일 +111/−20) · 이 문서 커밋(§E.2 기록). 배경: sync 1차 판정 FAIL(§E.4) — 판정문 `.moai/reports/t17/sync-verdict.md` §4(차단 재현)·§8(체크리스트) 그대로 수리했다. 구현은 swift-impl 전문가, 전 게이트·렌즈는 판정 레인(이 세션)이 직접 재실행했다.
+
+- **B1(REQ-011)**: `LegCardForm`에 `recurrenceEpisodeWithoutLegs` 깃발 — 시드 가드는 시드 때만 돌므로 시드가 깃발을 심고 전이(choose)가 본다. 장소를 골라도 토글 줄이 생기지 않는다. `Store.addLeg` 진입점 거절(신규 사유 `recurrenceEpisode`, 조건은 깃발과 동치: recurrenceId ≠ nil ∧ 명시 구간 없음 — `legs(of:)`의 nil-anchor→arrival 규칙으로 동치 성립). 폼·진입점 이중 방어: 한쪽만 고치면 다른 경로(AI 등)로 재발한다(판정문 §7 잔여 위험).
+- **B2(REQ-010)**: `realignLegs`가 끝점 불변 시 저장 `travelSeconds`를 힌트로 재사용(명시 힌트 인자 우선) — 힌트 없는 재추정은 실패 때(오프라인·할당량·경로 없음) applyEstimate가 알림을 취소하고 travelSeconds를 비우는 값 손실을 만들었다. `activityIfChanged` 재쓰기는 **새 끝점 기준**으로 힌트를 다시 계산한다(수리 diff code-safety 경고 W-a — 첫 쓰기의 endpointsSame을 그대로 쓰면 await 사이 바뀐 활동 장소 끝점에 옛 이동시간이 "조회됨"으로 굳는다. 잠재 위험을 깨운 diff가 같은 커밋에서 닫았고 렌즈 재판정 통과). 뷰(`ActivityDetailView.save()`)는 realign 결과 `travelKnown == false`를 저장 안내에 합친다 — 결과를 버리면 제목만 바꾼 저장에서 추정 실패가 조용히 사라진다.
+- **W1(REQ-008)**: `addLeg`의 캘린더 동의 기본 `nil` → `activity.wantsCalendarSync` 추종. 명시 인자(생성 카드 `addActivityWithTravel`)는 그대로 이기고, 호출부 전수에서 기본 `true`에 의존하는 곳은 없었다(드라이버 59곳 전부 명시적).
+- **W3**: 저장 순서를 제거 → 따라오기 → 수정·추가로 — realign이 곧 지울 구간을 다시 쓰며 추정·업로드 큐에 올리는 일을 막고, 제거가 빈자리를 내야 추가의 중복 검사가 그 빈자리를 본다(design §3). 제거 루프는 `.failed`만 계수(기존 집계와 동등, removeLeg는 비-Optional이라 패턴 매칭).
+- **단언 3개 신규**(GuardDriver, 기존 라벨 불변): AF-003-06(제목만 바꾼 힌트 없는 따라오기 뒤 두 구간 travelSeconds 1800 유지 — 수리 전에는 재추정으로 값이 바뀌거나 사라져 ✗가 되는 회귀선) · AF-009-06(반복 회차 addLeg → `.refused(.recurrenceEpisode)`·이벤트 수 불변) · AG-011-04(반복 회차 폼에서 장소 선택 뒤에도 구간 줄 0개).
+
+게이트(판정 레인 직접 실행):
+
+| 게이트 | 관측 |
+|---|---|
+| 드라이버(온라인) | **471/471** · ✗ 0 · 뺀 수 0(더한 라벨 3) · `471/471 통과` · 실제 데이터 대조 통과 · 샌드박스 잔여 없음 |
+| 접두별 하한 | AF 69(하한 66 — 003 6/5 · 009 6/5, 나머지 동일) · AG 10(하한 9 — 011 4/3) · AH 35(하한 28) — 전부 이상 |
+| 컴파일 경고 | 정규화 집합 기준 24줄과 `diff` 0(새 경고 0) |
+| 재현 repro-b1(재컴파일·재실행) | `addLeg → refused(.recurrenceEpisode)` · 명시 구간 0건 · 반복 전체 삭제 뒤 남은 구간 0건 — 매달린 링크 없음(판정문 §8.3 기대값) |
+| 재현 repro-b2(재컴파일·재실행) | 제목만 바꾼 저장 뒤 두 구간 `travel=Optional(1800.0)`·`dep=있음`·`failedBlockAnchor=nil`, realign 결과 `travelKnown: true` — **온라인·오프라인(sandbox-exec deny network) 동일**(판정문 §8.3 기대값). 하네스 마지막 "[뷰가 모으는 안내]" 줄은 옛 뷰를 흉내 낸 정적 출력이라 새 뷰를 대변하지 않는다 — 새 뷰의 안내는 realign 결과 플래그로 간다 |
+| iOS 빌드 | `BUILD SUCCEEDED` · 코드 경고 **0**(appintentsmetadataprocessor 도구 알림 제외) |
+| 렌즈(수리 diff) | code-safety: 차단 0 — W-a 같은 커밋 수리·재판정 통과, W-b(아래)는 설계 수용 갭 · ui-design: 결함 0 |
+
+후속 감(리드가 묶음을 결정 — 판정문 §5 Cross-Check 형식):
+- **W-b**(code-safety, 코드 읽기 확정): 명시적 구간이 하나만 있는 옛 반복 회차에서 반대 역할 토글을 켜면 `.add`가 Store 가드를 통과한다(명시 구간이 비어 있지 않으므로) — 기존 구간 자체가 이미 매달린 옛 데이터라 새 위험 부류는 아니고, 판정문 수리 방향이 "옛 데이터 편집 허용"을 명시했으므로 이 카드에서는 수용.
+- **반복 회차 각주 문구**(ui-design UX 소견): "반복 일정의 한 회차입니다" 각주는 이동을 못 만든다고 말하지 않는다 — 실기기에서 "장소를 골랐는데 왜 이동이 없지" 반응이 나오면 한 문장 보태는 것이 최소 대응.
+- **endpointsSame 술어 3곳**(code-safety H4 메모): 바이트 동일 검사·첫 쓰기·재쓰기 — 역할별 폴백식이 달라 합치면 인자가 늘어 지금은 둠.
 
 ## §E.3 Run-phase Audit-Ready Signal
 
