@@ -489,6 +489,33 @@ E1·E2의 실제 출력은 design §6.3의 손 계산과 **한 글자도 다르�
 2. 드라이버 실행: `/tmp/gd-mc1 > mc1-driver-run.log` → **exit 0 · ✓ 433 + 9 = 442 · ✗ 0** · P/T 원문 `442/442 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 기존 라벨(AF 67·AG 9)은 하나도 빼지 않았다.
 3. iOS 빌드: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` → **exit 0 · BUILD SUCCEEDED**(`mc1-ios-build.log`) · 툴체인 안내(`appintentsmetadataprocessor`)를 뺀 `warning:` = **0**(무경고 — ContentView를 고쳤으므로 필수 항목).
 
+### MC(t17-c) C2·C3 + 게이트
+
+카드 기준 `7980190`(C1과 같은 기준 — 카드 t17-c의 직렬 배달) · 커밋 **C2+C3 코드**(Shared/Models.swift·Shared/ContentView.swift + acceptance AC-016 (5) 이름 확정) · **Store 이월 수리**(Shared/Store.swift) · **드라이버·기록**(Tools/GuardDriver.swift + 이 문서). 최종 `git diff --name-only 7980190 HEAD -- . ':!.moai/specs/SPEC-UIKIT-009' ':!.moai/reports'` = `Shared/Models.swift`·`Shared/ContentView.swift`·`Shared/Store.swift`·`Tools/GuardDriver.swift` — 선언 목록과 같다. `--numstat 7980190 -- Shared Tools`(C1 몫 포함 실측): ContentView 64+72 · Models 194+0 · Store 63+19 · GuardDriver 371+0 — 100줄 이상 2파일(한도 4 이하), **Store는 82줄로 100줄 미만** · `--diff-filter=A -- Shared/` 무출력(새 파일 0).
+
+**C2 — 묶음을 아는 배치 + 칸 함수 하나(Models.swift)**:
+
+- `LayoutItem`에 `groupKey: String?`를 더했다(기본 nil — C1 드라이버 호출·`overlapColumns` 선언 불변). **칸 함수** `static func overlapSlots(_ input: [LayoutItem]) -> [SlotRange]`(`:395`) — design §6.2 안 A의 세 단계(안쪽 배치 → 바깥 배치 → 칸 합성 `lo = 바깥칸/바깥칸수 + (1/바깥칸수)×안쪽칸/안쪽칸수`, `hi = lo + (1/바깥칸수)/안쪽칸수`)를 그대로 구현했다. 내부적으로 `overlapColumns`(변경 없음)을 안쪽·바깥에 재사용한다 — 그래서 묶음 없는 입력에서 결과가 옛 (칸/칸수)와 정확히 같고 C1 특성화가 회귀선이 된다. 구성원이 그날 목록에 하나뿐인 묶음은 낱개로 본다. `@MX:ANCHOR`(렌더·히트·드라이버가 같은 [lo,hi]를 읽는 계약)·`@MX:NOTE`(안쪽 배치가 필요한 이유 — F10의 셋: 최소 높이 부풀림·실패 블록·끌어 들인 구간) 부착.
+- **`SlotRange`**(id·lo·hi·바깥칸수)의 `points(in:gap:)`가 점 환산의 단일 출처다 — 칸 경계(1/칸수 간격)마다 3pt를 빼고 묶음 안쪽 나눔에는 간격을 넣지 않는다. **간격의 히트 처리 결정(design §9·F9)**: 히트테스트는 렌더와 **같은 점 사각형**(points 결과) 그대로 본다 — 간격 3pt는 어느 블록도 아니므로 그 안의 탭은 빈 곳으로 양보된다(잘못된 블록이 열리는 것보다 낫고, 렌더=히트가 계약이므로). `block(atX:y:in:total:)`은 오버레이가 주는 정규화 x에 `geo.size.width`를 곱해 같은 사각형과 비교한다(호출 둘 다 GeometryReader 안).
+- ContentView: `positionedBlocks`가 `store.packingGroups(events:activities:)`로 묶음 키를 주입한다(활동 = 자기 id, 구간 = 대응 활동 id, 대응 없으면 nil — MC는 MA의 조회를 부르기만 한다). `PositionedBlock`은 (칸, 칸수) 대신 `SlotRange`를 통째로 들고, `columnFrame`은 `points`만 부른다. 열 산술·`columnEnds`는 뷰에서 사라졌다(AC-016 (1)(2)).
+
+**C3 — REQ-023 + 뷰·Store 연결**:
+
+- **Models**: `ScheduledEvent`에 계산 속성 셋(저장 필드 아님 — JSON 불변, REQ-019): `failedBlockAnchor`(travelSeconds != nil이면 nil, 아니면 출발 기준은 `departureDate ?? arrivalDate`, 그 밖은 `arrivalDate`) · `listedSpan`(앵커가 없고 출발이 있으며 도착 > 출발이면 [출발, 도착]) · `isListed(on:calendar:)`(앵커의 날 하루 → 나열 구간의 `Store.overlapsDay` → 도착일 폴백; overlapsDay를 읽으므로 @MainActor). 네 자리가 이것을 읽는다: `events(on:)`(본문이 isListed 호출 하나로 줄었다) · 블록 선택(`failedBlockAnchor != nil` → 경고 블록) · `span(for:on:)` 실패 분기(앵커 분에서 아래로 20pt÷56pt/시간×60 = 21.4분 반올림 21분, **날짜로 자르지 않는다**; 계산됐는데 출발이 없는 깨진 레코드의 옛 폴백 분기는 방어로 남겼다) · Store 달력 점. `failedEstimateBlockView`는 건드리지 않았다(기하는 span이 이미 앵커 분을 내고, `isDragging` 강조는 design §9 갭대로 더하지 않았다 — `:650`의 맥 전용 `.onTapGesture`·주석 불변).
+- **제목 숨김**: `travelBlockView`의 `showsTitle`이 `store.activity(forLeg: event) == nil`로 판정한다(AC-005 (3)) — 링크가 있어도 활동이 지워진 매달린 링크는 제목을 그린다.
+- **Store(작게 — 82줄)**: ① `recomputeDaysWithSchedule` 이벤트 절이 `failedBlockAnchor` → `listedSpan` → 도착일 순서로 키를 낸다(`:136`의 인라인 조건은 사라졌다, AC-010 (9)). ② **이월 경고 1 수리**: `addLeg`의 `await` 뒤(보상 검사 곁)에 같은 역할 재검사 — 방금 만든 구간 외에 같은 역할이 생겼으면 방금 것을 지우고 `refused(duplicateRole)`(재검사와 삭제 사이에 await가 없어 어느 끼어듦에서도 같은 역할이 둘 남지 않는다). ③ **이월 경고 2 수리**: `activityIfChanged(_:)` 헬퍼로 await 뒤 활동을 다시 읽어 바뀌었으면 현재값으로 `updateEvent`를 한 번 더 쓴다(updateLeg·realignLegs — 같은 저장 안의 재시도라 사이에 다른 갱신을 끼우지 않는다).
+
+**AH절 완성 — 신규 26라벨(전부 기대 ✓, 합 35 ≥ 하한 28)**: AC-010 `AH-010-05/06/07/08/11/12/13`(7) · AC-015 `AH-015-03/04/05/06/07/08/13`(7, (4)는 C1의 01/02) · AC-016 `AH-016-03/04`(2) · AC-017 `AH-017-10/11/12/13/14/15/16`(7) · AC-018 `AH-018-01/02`(2) · 이월 수리 관측 `AH-009-01`(1). 기대값은 design §6.3 표·§4 규칙 그대로였고 **드라이버 실측과 전부 일치했다**(E1~E9 손 계산과 어긋난 항목 0 — §6.3의 가설이 확정됐다). E8·E9의 실패 블록 높이는 드라이버가 `Int((20.0/56.0*60).rounded())` = **21분**로 직접 임분해 했다. AC-015 (13)은 반복 회차 레코드(메모리 구성)로 `packingGroups` → `overlapSlots`를 실제로 연결해 봤고, AC-010 (13)은 레코드를 하나씩 홀로 넣고 `store.daysWithSchedule`과 isListed 참인 날의 키 집합을 직접 대조했다. `AH-009-01`은 같은 역할 addLeg 둘을 `Task.yield()`로 겹쳐 돌린 뒤 같은 역할 구간이 정확히 하나인지(불변식 — 어느 끼어듦에서도 참)를 본다. **X6 픽스처 정정**: X절의 자정 이동 레코드가 `departureDate`만 있고 `travelSeconds`가 없어 "계산된" 모양이 아니었다(REQ-023 뒤로는 미계산으로 읽혀 앵커의 날 하루만 점이 켜진다) — 원래 의미(계산된 자정 넘김 = 양쪽 점)를 유지하려고 `travelSeconds = 6*3600`을 명시했다. 라벨·문장은 그대로 ✓(뺀 수 0 유지).
+
+**게이트(이 레인이 직접 실행)**:
+
+1. 드라이버: 컴파일 exit 0(`mc23-driver-compile.log`, 경고 24줄 — 정규화 집합이 기준 `mc1-driver-compile.log`와 `diff` exit 0, 새 경고 0) · 실행 exit 0(`mc23-driver-run.log`) · **✓ 468 · ✗ 0**(`442 + 26`, MC 하한 460 초과) · P/T 원문 `468/468 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · 샌드박스 잔여 없음 · 뺀 수 `diff <(mc1 ✓ 정렬) <(mc23 ✓ 정렬)> | grep -c '^<'` = **0**.
+2. iOS: `xcodebuild -scheme besir-iOS … build` → **exit 0 · `** BUILD SUCCEEDED **`(`mc23-ios-build.log:224`) · 툴체인 안내를 뺀 `warning:` = **0**(총 1) · `^SwiftCompile` 28**.
+3. grep(전부 이 레인이 실행, 원문 명령): AC-005 (3) `linkedActivityId == nil` ContentView = **0**(기준 1) · `activity(forLeg:` = **1**(≥1). AC-010 (9) `e.departureDate != nil` ContentView = **0** · `e.arrivalDate > dep` ContentView/Store = **0/0** · `git grep -c 'e.arrivalDate > dep' -- Shared/Store.swift` 무출력·exit 1 · events(on:) awk departureDate = **0** · recomputeDaysWithSchedule awk departureDate = **0** · `failedBlockAnchor` ContentView = **2**(≥2)·Store = **1**(≥1) · `isListed(on:` ContentView = **2**(≥1) · `listedSpan` Store = **2**(≥1). AC-015 (8) `overlapSlots` 선언 줄(Models `:395`)에 `ScheduledEvent\|ActivityBlock` = **0**. AC-016 (1) `gap \* CGFloat\|1 / CGFloat(p.columns)` ContentView = **0** · (2) `columnEnds` ContentView **0** / Models **8** · (5) 이름 확정 `overlapSlots` — ContentView **2** / Models **1**(정의), `struct SlotRange` Models **1**(acceptance (5) 명령을 같은 커밋에서 확정값으로 고쳤다 — 머리말 규칙). AC-019 (6) os 집합 `diff os-base.txt os-head.txt | grep -c '^<\|^>.*\(macOS\|AppKit\)'` = **0**(37줄 = 37줄), ContentView diff에서 `.onTapGesture`·`#if os` 줄에 닿은 헝크 0(현 `:627`·`:650`·`:685` 셋 불변).
+4. 이월 수리 관측: 경고 1은 `AH-009-01` ✓(위) · 경고 2는 재현이 비결정적이라(외부 간섭 원) 드라이버 단언 없이 코드 형태로만 수리했다 — **갭**으로 남긴다.
+
+**C2·C3의 갭(관측하지 않은 것)**: 경고 2의 await-뒤 재쓰기 경로(활동이 추정 await 사이 바뀌는 시나리오)는 실행으로 닿지 않았다 · 시뮬레이터 스크립트 14~22·20a·20b(AC-024 사람 몫) · 묶음 배치의 화면 모습(블록 폭·간격의 실제 렌더링) · F9 간격 결정(간격 3pt가 빈 띠)의 손끝 확인.
+
 ## §E.3 Run-phase Audit-Ready Signal
 
 _<pending run-phase>_

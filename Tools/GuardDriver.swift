@@ -1330,6 +1330,10 @@ struct Drv {
                                      arrivalDate: x1e, mode: .transit, bufferMinutes: 10,
                                      notifyLeadMinutes: 10, recurrenceId: nil, anchor: .arrival)
         x6Event.departureDate = x1s
+        // 이 레코드는 "이동시간이 계산된 자정 넘김"을 대표한다 — REQ-023 뒤로는 travelSeconds까지
+        // 있어야 그 모양이다(nil이면 미계산으로 앵커 시각의 날 하루만 점이 켜진다). 원래 의미를
+        // 유지하려고 계산됨 표시를 명시한다(2026-10-05 MC).
+        x6Event.travelSeconds = 6 * 3600
         store.events = [x6Event]
         aiV2.drvCheck("X6: 자정 넘는 이동(22:00 출발→익일 04:00 도착)도 두 날 모두 점이 켜진다",
                       store.daysWithSchedule == [Store.dayKey(sDay(2027, 3, 10, 0, 0), calendar: sCal),
@@ -4575,6 +4579,307 @@ struct Drv {
         let ahE5 = ahSlots([("P", 600, 660), ("Q", 630, 690), ("S", 690, 720)])
         ahAi.drvCheck("AH-017-07 E5 묶음 없음 — P·Q 반씩, S는 맞닿아 전폭",
                       ahDesc(ahE5) == "P(0,2) Q(1,2) S(0,1)", ahDesc(ahE5))
+
+        // ── AH(C2·C3). 묶음을 아는 배치(ScheduleLogic.overlapSlots)와 REQ-023의 앵커·나열·점.
+        //        묶음 배치의 기대값은 design §6.3 표, 앵커·나열의 기대값은 design §4 규칙이다.
+        //        순수 함수라 네트워크와 무관하게 결정적이다(묶음 없는 회귀선은 위 C1 단언이 지킨다).
+        func ahRanges(_ pairs: [(String, CGFloat, CGFloat, String?)]) -> [String: ScheduleLogic.SlotRange] {
+            var d: [String: ScheduleLogic.SlotRange] = [:]
+            for r in ScheduleLogic.overlapSlots(pairs.map { .init(id: $0.0, start: $0.1, end: $0.2, groupKey: $0.3) }) {
+                d[r.id] = r
+            }
+            return d
+        }
+        let ahNil: String? = nil
+        func ahEq(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 1e-9 }
+        func ahIs(_ r: ScheduleLogic.SlotRange?, _ lo: CGFloat, _ hi: CGFloat) -> Bool {
+            guard let r else { return false }
+            return ahEq(r.lo, lo) && ahEq(r.hi, hi)
+        }
+        func ahDescR(_ d: [String: ScheduleLogic.SlotRange]) -> String {
+            d.sorted { $0.key < $1.key }
+                .map { "\($0.key)[\(String(format: "%.4f", $0.value.lo)),\(String(format: "%.4f", $0.value.hi))]" }
+                .joined(separator: " ")
+        }
+
+        // AC-015 (1)·(2)·(3) — E1·E2 묶음 배치: 묶음원 세 셋이 한 칸을 나눠 쓰고 무관 블록이 반대 편.
+        let ahE1g = ahRanges([("O", 810, 840, "g"), ("A", 840, 900, "g"), ("U", 850, 890, ahNil), ("R", 900, 930, "g")])
+        ahAi.drvCheck("AH-015-03 E1 묶음 — O·A·R 모두 [0,.5], U [.5,1]",
+                      ahIs(ahE1g["O"], 0, 0.5) && ahIs(ahE1g["A"], 0, 0.5) && ahIs(ahE1g["R"], 0, 0.5)
+                          && ahIs(ahE1g["U"], 0.5, 1),
+                      ahDescR(ahE1g))
+        ahAi.drvCheck("AH-015-04 E1 — 묶음원 셋의 (칸,칸수)가 같다([lo,hi]가 전부 같은 값)",
+                      ahE1g["O"]!.lo == ahE1g["A"]!.lo && ahE1g["A"]!.lo == ahE1g["R"]!.lo
+                          && ahE1g["O"]!.hi == ahE1g["A"]!.hi && ahE1g["A"]!.hi == ahE1g["R"]!.hi,
+                      ahDescR(ahE1g))
+        let ahE2g = ahRanges([("O", 810, 840, "g"), ("A", 840, 900, "g"), ("U", 820, 830, ahNil), ("R", 900, 930, "g")])
+        ahAi.drvCheck("AH-015-05 E2(거울) — O·A·R 모두 [0,.5], U [.5,1]",
+                      ahIs(ahE2g["O"], 0, 0.5) && ahIs(ahE2g["A"], 0, 0.5) && ahIs(ahE2g["R"], 0, 0.5)
+                          && ahIs(ahE2g["U"], 0.5, 1),
+                      ahDescR(ahE2g))
+
+        // AC-015 (5) — E6 같은 역할 둘: 묶음 안쪽에서 반씩, 활동은 묶음 전체 폭.
+        let ahE6g = ahRanges([("O1", 810, 840, "g"), ("O2", 820, 840, "g"), ("A", 840, 900, "g")])
+        ahAi.drvCheck("AH-015-06 E6 같은 역할 둘 — O1 [0,.5]·O2 [.5,1]·A [0,1]",
+                      ahIs(ahE6g["O1"], 0, 0.5) && ahIs(ahE6g["O2"], 0.5, 1) && ahIs(ahE6g["A"], 0, 1),
+                      ahDescR(ahE6g))
+
+        // AC-015 (6) — 매달린 링크(가리키는 활동이 없음)는 조회가 키를 주지 않으므로 낱개로 배치된다.
+        var ahDangle = afInjectedLeg(title: "AH015 매달린", anchor: .arrival, arrival: Date().addingTimeInterval(3600),
+                                     departure: nil, origin: afHome, destination: afOffice, linked: UUID(), recurrence: nil)
+        ahDangle.notifyEnabled = false
+        let ahDangU = afInjectedLeg(title: "AH015 무관", anchor: .arrival, arrival: Date().addingTimeInterval(5400),
+                                    departure: Date().addingTimeInterval(3000), origin: afHome, destination: afOffice,
+                                    linked: nil, recurrence: nil)
+        store.events = [ahDangle, ahDangU]
+        let ahDangGroups = store.packingGroups(events: [ahDangle, ahDangU], activities: [])
+        let ahDangRanges = ahRanges([(ahDangle.id.uuidString, 600, 660, ahDangGroups[ahDangle.id].map { $0.uuidString }),
+                                     (ahDangU.id.uuidString, 630, 690, ahDangGroups[ahDangU.id].map { $0.uuidString })])
+        ahAi.drvCheck("AH-015-07 매달린 링크 구간은 조회에 키가 없고 낱개로 배치된다(S1 모양)",
+                      ahDangGroups.isEmpty
+                          && ahIs(ahDangRanges[ahDangle.id.uuidString], 0, 0.5)
+                          && ahIs(ahDangRanges[ahDangU.id.uuidString], 0.5, 1),
+                      "groups=\(ahDangGroups.count), \(ahDescR(ahDangRanges))")
+
+        // AC-015 (7) — 묶음 구성원이 그날 목록에 하나뿐이면(다른 구성원이 다른 날) 낱개로 본다.
+        let ahSolo = ahRanges([("X", 600, 660, "solo"), ("Y", 630, 690, ahNil)])
+        ahAi.drvCheck("AH-015-08 구성원이 하루에 하나뿐인 묶음은 낱개로 배치된다(S1 모양)",
+                      ahIs(ahSolo["X"], 0, 0.5) && ahIs(ahSolo["Y"], 0.5, 1), ahDescR(ahSolo))
+
+        // AC-016 (3)·(4) — 시각이 겹치는 쌍의 렌더 x 구간이 서로 겹치지 않고, 묶음 없는 날의 점
+        // 환산이 옛 공식과 같다. (묶음원끼리는 같은 x 밴드를 쓰지만 시각이 어긋난다 — 그래서
+        // "전 쌍"은 **시각이 겹치는** 쌍이다.)
+        func ahRectsDisjoint(_ pairs: [(String, CGFloat, CGFloat, String?)]) -> Bool {
+            let d = ahRanges(pairs)
+            for i in pairs.indices {
+                for j in pairs.indices where j > i {
+                    let a = pairs[i], b = pairs[j]
+                    guard a.2 > b.1, b.2 > a.1 else { continue }   // 시각이 겹치는 쌍만 본다
+                    let ra = d[a.0]!.points(in: 320, gap: 3), rb = d[b.0]!.points(in: 320, gap: 3)
+                    if ra.x < rb.x + rb.width && rb.x < ra.x + ra.width { return false }
+                }
+            }
+            return true
+        }
+        let ahE3bg = ahRanges([("A", 600, 620, "g"), ("R", 610, 640, "g"), ("U", 620, 650, ahNil)])
+        ahAi.drvCheck("AH-016-03 E1·E3b — 같은 시각에 겹치는 블록 쌍의 렌더 x 구간이 서로 겹치지 않는다",
+                      ahRectsDisjoint([("O", 810, 840, "g"), ("A", 840, 900, "g"), ("U", 850, 890, ahNil), ("R", 900, 930, "g")])
+                          && ahRectsDisjoint([("A", 600, 620, "g"), ("R", 610, 640, "g"), ("U", 620, 650, ahNil)]),
+                      "E1=\(ahDescR(ahE1g)) E3b=\(ahDescR(ahE3bg))")
+        func ahOldFormulaMatches(_ pairs: [(String, CGFloat, CGFloat)]) -> Bool {
+            let ranges = ahRanges(pairs.map { ($0.0, $0.1, $0.2, ahNil) })
+            let slots = ahSlots(pairs)
+            let total: CGFloat = 320, gap: CGFloat = 3
+            for (id, slot) in slots {
+                guard let r = ranges[id] else { return false }
+                let w = (total - gap * CGFloat(slot.columns - 1)) / CGFloat(slot.columns)
+                let oldX = CGFloat(slot.column) * (w + gap)
+                let f = r.points(in: total, gap: gap)
+                if !ahEq(f.x, oldX) || !ahEq(f.width, w) { return false }
+            }
+            return true
+        }
+        ahAi.drvCheck("AH-016-04 묶음 없는 입력(S1·S2·S6·E5)에서 새 칸 함수의 점 환산이 옛 공식과 같다(렌더=히트)",
+                      ahOldFormulaMatches([("A", 600, 660), ("B", 630, 690)])
+                          && ahOldFormulaMatches([("A", 600, 650), ("B", 620, 670), ("C", 660, 700)])
+                          && ahOldFormulaMatches([("A", 600, 700), ("B", 610, 690), ("C", 620, 680), ("D", 630, 670)])
+                          && ahOldFormulaMatches([("P", 600, 660), ("Q", 630, 690), ("S", 690, 720)]),
+                      "옛 공식과 어긋나는 시나리오가 있다")
+
+        // AC-017 (1)~(5)·(8)·(9) — 묶음 안 겹침·틈·자정·실패 블록·3열·재추정 실패.
+        let ahE3 = ahRanges([("A", 600, 620, "g"), ("R", 610, 640, "g")])
+        ahAi.drvCheck("AH-017-10 E3 안쪽 겹침 — A [0,.5]·R [.5,1](묶음 안에서 나란히)",
+                      ahIs(ahE3["A"], 0, 0.5) && ahIs(ahE3["R"], 0.5, 1), ahDescR(ahE3))
+        ahAi.drvCheck("AH-017-11 E3b — A [0,.25]·R [.25,.5]·U [.5,1](문서화된 비용 — 묶음이 더 넓은 칸을 쓴다)",
+                      ahIs(ahE3bg["A"], 0, 0.25) && ahIs(ahE3bg["R"], 0.25, 0.5) && ahIs(ahE3bg["U"], 0.5, 1),
+                      ahDescR(ahE3bg))
+        let ahE4 = ahRanges([("O", 810, 840, "g"), ("A", 840, 900, "g"), ("U", 960, 990, ahNil), ("R", 1020, 1050, "g")])
+        ahAi.drvCheck("AH-017-12 E4 틈 — O·A·R [0,.5], U [.5,1](틈이 묶음 안이라 무관 블록이 반폭)",
+                      ahIs(ahE4["O"], 0, 0.5) && ahIs(ahE4["A"], 0, 0.5) && ahIs(ahE4["R"], 0, 0.5)
+                          && ahIs(ahE4["U"], 0.5, 1),
+                      ahDescR(ahE4))
+        // E8의 실패 블록 높이(분)는 드라이버가 앵커 시각에서 직접 잰다 — 20pt ÷ 56pt/시간 × 60 = 21.4분 반올림.
+        let ahFailMin = Int((20.0 / 56.0 * 60.0).rounded())
+        let ahE8 = ahRanges([("O", 840, 840 + CGFloat(ahFailMin), "g"), ("A", 840, 900, "g")])
+        ahAi.drvCheck("AH-017-13 E8 실패 블록(\(ahFailMin)분) — O [0,.5]·A [.5,1]",
+                      ahFailMin == 21 && ahIs(ahE8["O"], 0, 0.5) && ahIs(ahE8["A"], 0.5, 1), ahDescR(ahE8))
+        let ahE7day = ahRanges([("A", 1380, 1410, "g"), ("R", 1410, 1440, "g"), ("U", 1400, 1420, ahNil)])
+        let ahE7next = ahRanges([("R", 0, 16, "g")])
+        ahAi.drvCheck("AH-017-14 E7 자정 — 그날 A·R [0,.5]·U [.5,1], 다음 날 R 홀로 전폭",
+                      ahIs(ahE7day["A"], 0, 0.5) && ahIs(ahE7day["R"], 0, 0.5) && ahIs(ahE7day["U"], 0.5, 1)
+                          && ahIs(ahE7next["R"], 0, 1),
+                      "그날=\(ahDescR(ahE7day)) 다음날=\(ahDescR(ahE7next))")
+        let ah3col = ahRanges([("O", 810, 840, "g"), ("A", 840, 900, "g"), ("B", 810, 900, ahNil), ("C", 815, 895, ahNil)])
+        ahAi.drvCheck("AH-017-15 3열 무리 — 묶음원 O·A의 바깥 칸이 같다(둘 다 [1/3, 2/3])",
+                      ah3col["O"]!.lo == ah3col["A"]!.lo && ah3col["O"]!.hi == ah3col["A"]!.hi
+                          && ahEq(ah3col["O"]!.lo, CGFloat(1) / 3) && ahEq(ah3col["O"]!.hi, CGFloat(2) / 3)
+                          && ahEq(ah3col["B"]!.lo, 0) && ahEq(ah3col["C"]!.lo, CGFloat(2) / 3),
+                      ahDescR(ah3col))
+        // E9 — 오는 편 경고 블록은 앵커(저장된 출발 1410분)에서 21.4분 반올림만큼 아래로.
+        let ahE9 = ahRanges([("A", 1350, 1410, "g"), ("R", 1410, 1410 + CGFloat(ahFailMin), "g"), ("U", 1400, 1420, ahNil)])
+        ahAi.drvCheck("AH-017-16 E9 자정 재추정 실패 — D일 A·R [0,.5]·U [.5,1](경고가 앵커에 맞닿아 묶음이 좁다)",
+                      ahIs(ahE9["A"], 0, 0.5) && ahIs(ahE9["R"], 0, 0.5) && ahIs(ahE9["U"], 0.5, 1),
+                      ahDescR(ahE9))
+
+        // AC-018 (4) — 묶음 없는 날의 탭 회귀: 순수 함수의 칸으로 찍은 점이 옛 알고리즘과 같은 블록을 가리킨다.
+        func ahTapMatches(_ pairs: [(String, CGFloat, CGFloat)]) -> Bool {
+            let ranges = ahRanges(pairs.map { ($0.0, $0.1, $0.2, ahNil) })
+            let slots = ahSlots(pairs)
+            for id in slots.keys {
+                guard let item = pairs.first(where: { $0.0 == id }), let r = ranges[id] else { return false }
+                let xFrac = (r.lo + r.hi) / 2
+                let midMinutes = (item.1 + item.2) / 2
+                // 옛 히트(칸 비율)와 새 히트([lo,hi] 비율)가 같은 블록을 고르는지.
+                let oldHit = slots.first { entry in
+                    guard let it = pairs.first(where: { $0.0 == entry.key }) else { return false }
+                    let s = entry.value
+                    return midMinutes >= it.1 && midMinutes <= it.2
+                        && xFrac >= CGFloat(s.column) / CGFloat(s.columns)
+                        && xFrac <= CGFloat(s.column + 1) / CGFloat(s.columns)
+                }
+                let newHit = pairs.first { p in
+                    guard let r = ranges[p.0] else { return false }
+                    return midMinutes >= p.1 && midMinutes <= p.2 && xFrac >= r.lo && xFrac <= r.hi
+                }
+                if oldHit?.key != id || newHit?.0 != id { return false }
+            }
+            return true
+        }
+        ahAi.drvCheck("AH-018-01 묶음 없는 S2(사슬) — 각 블록 중심점이 옛 알고리즘과 같은 블록을 가리킨다",
+                      ahTapMatches([("A", 600, 650), ("B", 620, 670), ("C", 660, 700)]), "어긋나는 블록이 있다")
+        ahAi.drvCheck("AH-018-02 묶음 없는 S6(네 열) — 각 블록 중심점이 옛 알고리즘과 같은 블록을 가리킨다",
+                      ahTapMatches([("A", 600, 700), ("B", 610, 690), ("C", 620, 680), ("D", 630, 670)]),
+                      "어긋나는 블록이 있다")
+
+        // AC-015 (13) — E1 시각의 반복 회차: 추정 묶음 키로 넣어도 (1)과 같은 칸이 나온다.
+        let ah13d = afCal.startOfDay(for: afDay).addingTimeInterval(20 * 86400)
+        var ah13A = ActivityBlock(title: "AH015 반복", location: afOffice,
+                                  startDate: ah13d.addingTimeInterval(14 * 3600),
+                                  endDate: ah13d.addingTimeInterval(15 * 3600))
+        let ah13rid = UUID()
+        ah13A.recurrenceId = ah13rid
+        let ah13O = afInjectedLeg(title: "AH013 가는편", anchor: .arrival, arrival: ah13d.addingTimeInterval(14 * 3600),
+                                  departure: nil, origin: afHome, destination: afOffice, linked: nil, recurrence: ah13rid)
+        let ah13R = afInjectedLeg(title: "AH013 오는편", anchor: .departure,
+                                  arrival: ah13d.addingTimeInterval(15 * 3600 + 1800),
+                                  departure: ah13d.addingTimeInterval(15 * 3600),
+                                  origin: afOffice, destination: afHome, linked: nil, recurrence: ah13rid)
+        let ah13U = afInjectedLeg(title: "AH013 무관", anchor: .arrival, arrival: ah13d.addingTimeInterval(14 * 3600 + 2900),
+                                  departure: ah13d.addingTimeInterval(14 * 3600 + 500),
+                                  origin: afHome, destination: afOffice, linked: nil, recurrence: nil)
+        store.events = [ah13O, ah13U, ah13R]
+        store.activities = [ah13A]
+        let ah13Groups = store.packingGroups(events: [ah13O, ah13U, ah13R], activities: [ah13A])
+        let ah13g = ahRanges([("O", 810, 840, ah13Groups[ah13O.id].map { $0.uuidString }),
+                              ("A", 840, 900, ah13A.id.uuidString),
+                              ("U", 850, 890, ah13Groups[ah13U.id].map { $0.uuidString }),
+                              ("R", 900, 930, ah13Groups[ah13R.id].map { $0.uuidString })])
+        ahAi.drvCheck("AH-015-13 E1 시각의 반복 회차 — 추정 묶음 키로도 (1)과 같은 칸(O·A·R [0,.5], U [.5,1])",
+                      ah13Groups[ah13O.id] == ah13A.id && ah13Groups[ah13R.id] == ah13A.id && ah13Groups[ah13U.id] == nil
+                          && ahIs(ah13g["O"], 0, 0.5) && ahIs(ah13g["A"], 0, 0.5) && ahIs(ah13g["R"], 0, 0.5)
+                          && ahIs(ah13g["U"], 0.5, 1),
+                      "groups=\(ah13Groups.count), \(ahDescR(ah13g))")
+
+        // AC-010 (5)~(8)·(11)~(13) — 이동시간 미계산의 네 모양 + 계산된 대조군(REQ-023).
+        // 레코드는 메모리에서 만든다(acceptance AC-010 Given — 링크 없이, 판정은 레코드 모양만 본다).
+        let ahD = afCal.startOfDay(for: afDay).addingTimeInterval(14 * 86400)
+        let ahD1 = ahD.addingTimeInterval(86400)
+        func ahLeg(_ anchor: ScheduleAnchor?, _ arrival: Date, _ departure: Date?, _ travel: TimeInterval?) -> ScheduledEvent {
+            var e = ScheduledEvent(title: "AH010", origin: afHome, destination: afOffice,
+                                   arrivalDate: arrival, mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0)
+            e.anchor = anchor
+            e.departureDate = departure
+            e.travelSeconds = travel
+            e.notifyEnabled = false
+            return e
+        }
+        // (5)의 힌트로 만든 가는 편·오는 편 — 앵커 쪽은 추정과 무관하므로 결정적이다.
+        let ah5Act = await afBareActivity("AH010 활동", afOffice, ahD.addingTimeInterval(18 * 3600), 3600)
+        _ = await store.addLeg(activityId: ah5Act, role: .arrival, outerPlace: afHome,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 900, syncToCalendar: false)
+        _ = await store.addLeg(activityId: ah5Act, role: .departure, outerPlace: afHome,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 900, syncToCalendar: false)
+        let ah5Legs = store.events.filter { $0.linkedActivityId == ah5Act }
+        let ahCtl = ahLeg(nil, ahD.addingTimeInterval(23 * 3600 + 1800), ahD.addingTimeInterval(23 * 3600 + 1800), 2400)
+        var ahCtl2 = ahCtl
+        ahCtl2.arrivalDate = ahD1.addingTimeInterval(10 * 60)
+        ahCtl2.departureDate = ahD.addingTimeInterval(23 * 3600 + 1800)
+        ahAi.drvCheck("AH-010-05 힌트로 만든 가는 편·오는 편과 계산된 대조군에서 미계산 판정이 거짓이다",
+                      ah5Legs.count == 2 && ah5Legs.allSatisfy { $0.travelSeconds != nil && $0.failedBlockAnchor == nil }
+                          && ahCtl2.failedBlockAnchor == nil,
+                      "legs=\(ah5Legs.count), 판정=\(ah5Legs.map { String(describing: $0.failedBlockAnchor == nil) })")
+        // (가)·(나)·(다)·(라)·옛 도착 모양·자정 판.
+        let ahGa = ahLeg(.arrival, ahD.addingTimeInterval(14 * 3600), nil, nil)
+        let ahOld = ahLeg(nil, ahD.addingTimeInterval(16 * 3600), nil, nil)
+        let ahNa = ahLeg(.departure, ahD.addingTimeInterval(15 * 3600), ahD.addingTimeInterval(15 * 3600), nil)
+        let ahDa = ahLeg(.departure, ahD.addingTimeInterval(15 * 3600 + 1800), ahD.addingTimeInterval(15 * 3600), nil)
+        let ahRa = ahLeg(.departure, ahD.addingTimeInterval(15 * 3600), nil, nil)
+        let ahDaMid = ahLeg(.departure, ahD1.addingTimeInterval(10 * 60), ahD.addingTimeInterval(23 * 3600 + 1800), nil)
+        let ahNaMid = ahLeg(.departure, ahD.addingTimeInterval(23 * 3600 + 50 * 60), ahD.addingTimeInterval(23 * 3600 + 50 * 60), nil)
+        let ahGaMid = ahLeg(.arrival, ahD1.addingTimeInterval(10 * 60), nil, nil)
+        ahAi.drvCheck("AH-010-06 모양 (가)와 anchor nil 옛 도착 모양에서 미계산 판정이 참이다(회귀선)",
+                      ahGa.failedBlockAnchor != nil && ahOld.failedBlockAnchor != nil,
+                      "가=\(String(describing: ahGa.failedBlockAnchor)), 옛=\(String(describing: ahOld.failedBlockAnchor))")
+        ahAi.drvCheck("AH-010-07 모양 (나)·(다)·(라)에서 미계산 판정이 참이다(REQ-023 수리)",
+                      ahNa.failedBlockAnchor != nil && ahDa.failedBlockAnchor != nil && ahRa.failedBlockAnchor != nil,
+                      "나=\(String(describing: ahNa.failedBlockAnchor)), 다=\(String(describing: ahDa.failedBlockAnchor)), 라=\(String(describing: ahRa.failedBlockAnchor))")
+        store.events = [ahGa, ahOld, ahNa, ahDa, ahRa, ahDaMid, ahNaMid, ahGaMid, ahCtl2]
+        ahAi.drvCheck("AH-010-08 그 시점 events 전부에서 departureDate == nil이면 미계산 판정이 참이다(옛 조건 포함)",
+                      store.events.filter { $0.departureDate == nil }.allSatisfy { $0.failedBlockAnchor != nil },
+                      "거짓인 레코드 \(store.events.filter { $0.departureDate == nil && $0.failedBlockAnchor == nil }.count)건")
+        ahAi.drvCheck("AH-010-11 앵커 시각 — (가)→arrivalDate · (나)→출발=도착 · (다)→departureDate(arrivalDate 아님) · (라)→arrivalDate · 옛 모양→arrivalDate · 대조군→nil",
+                      ahGa.failedBlockAnchor == ahD.addingTimeInterval(14 * 3600)
+                          && ahNa.failedBlockAnchor == ahD.addingTimeInterval(15 * 3600)
+                          && ahDa.failedBlockAnchor == ahD.addingTimeInterval(15 * 3600)
+                          && ahDa.failedBlockAnchor != ahDa.arrivalDate
+                          && ahRa.failedBlockAnchor == ahD.addingTimeInterval(15 * 3600)
+                          && ahOld.failedBlockAnchor == ahD.addingTimeInterval(16 * 3600)
+                          && ahCtl2.failedBlockAnchor == nil,
+                      "다=\(String(describing: ahDa.failedBlockAnchor)) vs 도착=\(ahDa.arrivalDate)")
+        ahAi.drvCheck("AH-010-12 나열할 날 — 자정 (다): D 참·D+1 거짓 / 자정 (나): D 참·D+1 거짓 / 자정 (가): D 거짓·D+1 참 / (라): D 참·D±1 거짓 / 대조군: D·D+1 모두 참",
+                      ahDaMid.isListed(on: ahD, calendar: afCal) && !ahDaMid.isListed(on: ahD1, calendar: afCal)
+                          && ahNaMid.isListed(on: ahD, calendar: afCal) && !ahNaMid.isListed(on: ahD1, calendar: afCal)
+                          && !ahGaMid.isListed(on: ahD, calendar: afCal) && ahGaMid.isListed(on: ahD1, calendar: afCal)
+                          && ahRa.isListed(on: ahD, calendar: afCal) && !ahRa.isListed(on: ahD.addingTimeInterval(-86400), calendar: afCal)
+                          && !ahRa.isListed(on: ahD1, calendar: afCal)
+                          && ahCtl2.isListed(on: ahD, calendar: afCal) && ahCtl2.isListed(on: ahD1, calendar: afCal),
+                      "다=\(ahDaMid.isListed(on: ahD, calendar: afCal))/\(ahDaMid.isListed(on: ahD1, calendar: afCal)), 나=\(ahNaMid.isListed(on: ahD, calendar: afCal))/\(ahNaMid.isListed(on: ahD1, calendar: afCal)), 가=\(ahGaMid.isListed(on: ahD, calendar: afCal))/\(ahGaMid.isListed(on: ahD1, calendar: afCal))")
+        // (13) 점과 나열이 같은 날을 내는지 — 레코드를 하나씩 홀로 넣고 달력 점 집합을 직접 읽는다.
+        store.activities = []
+        var ahDotsOK = true
+        var ahDotsDetail = ""
+        for rec in [ahDaMid, ahNaMid, ahGaMid, ahRa, ahCtl2] {
+            store.events = [rec]
+            let probeDays = (-1...2).compactMap { afCal.date(byAdding: .day, value: $0, to: ahD) }
+            let dotKeys = Set(probeDays.filter { rec.isListed(on: $0, calendar: afCal) }
+                .map { Store.dayKey($0, calendar: afCal) })
+            let dayKeys = store.daysWithSchedule.intersection(Set(probeDays.map { Store.dayKey($0, calendar: afCal) }))
+            if dotKeys != dayKeys {
+                ahDotsOK = false
+                ahDotsDetail += " [점 \(dotKeys.sorted()) != 나열 \(dayKeys.sorted())]"
+            }
+        }
+        ahAi.drvCheck("AH-010-13 (12)의 레코드를 홀로 넣었을 때 달력 점이 나열과 같은 날을 낸다(자정 (다) → {D} 하나)",
+                      ahDotsOK, "어긋난 레코드 있음:\(ahDotsDetail)")
+
+        // 이월 수리 관측(MA code-safety 경고 1) — 같은 역할 addLeg 둘이 겹쳐도 구간은 최대 하나다.
+        let ah9Act = await afBareActivity("AH009 경쟁", afOffice, ahD.addingTimeInterval(20 * 3600), 3600)
+        _ = await store.addLeg(activityId: ah9Act, role: .departure, outerPlace: afHome,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 600, syncToCalendar: false)
+        let ah9Task = Task { await store.addLeg(activityId: ah9Act, role: .departure, outerPlace: afHome,
+                                                mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                                                notifyEnabled: false, travelSecondsHint: 600, syncToCalendar: false) }
+        await Task.yield()
+        _ = await store.addLeg(activityId: ah9Act, role: .departure, outerPlace: afHome,
+                               mode: .transit, bufferMinutes: 0, notifyLeadMinutes: 0,
+                               notifyEnabled: false, travelSecondsHint: 600, syncToCalendar: false)
+        _ = await ah9Task.value
+        let ah9SameRole = store.events.filter { $0.linkedActivityId == ah9Act && ($0.anchor ?? .arrival) == .departure }
+        ahAi.drvCheck("AH-009-01 같은 역할 addLeg가 겹쳐도(await 재검사) 같은 역할 구간은 정확히 하나다",
+                      ah9SameRole.count == 1, "count=\(ah9SameRole.count)")
 
         store.events = []
         store.activities = []
