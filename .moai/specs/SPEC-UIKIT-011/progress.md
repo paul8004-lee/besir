@@ -203,7 +203,25 @@
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+**2026-10-06 run 레인**(직렬 — §F). 구현은 swift-impl 전문가 3회 위임(RED → GREEN → M6·M7), 게이트 실행·대조·커밋은 레인이 직접했다. 드라이버 명령은 전 단계 같은 꼴(`cat Shared/EditCard.swift Shared/AIAssistant.swift Tools/GuardDriver.swift > /tmp/gd-*.swift && swiftc … -parse-as-library && 실행`)이고 swiftc의 macOS 26 deprecation 경고는 알려진 도구 체인 잡음으로 친다(hns-besir-app-verify 필터와 같은 취급).
+
+| 단계(커밋) | 관측된 출력(원문 줄) | exit | 로그(`.moai/reports/t47/`) | 실행 주체 |
+|---|---|---|---|---|
+| M1 기준(aa15bcc) | `492/492 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` | 0 | `gate-m1-baseline.log` | 레인 |
+| M1 RED(1fb19e3) | `494/507 통과` · ✗ 13 = AI-2·4·5(반전)·14·15·16·18(a)(b)(c)·19(a)(b)·21(a)·22(a) — plan §1 괄호 목록(11건)이 AI-15·19(b)를 빠뜨린 것이고 §E.1 Gaps 예측(13건)·plan §5 AI-15 행과 일치 | 1 | `gate-m1-red.log` | 에이전트 — 레인이 ✗ 줄 전수·`drvCheck(` 계수·diff 범위 대조 |
+| GREEN M2~M5(4d48736) | `507/507 통과` · 실데이터 대조 · ✗ 0 | 0 | `gate-m2m5-green.log` | 에이전트 — 레인이 로그·변경 파일 단독·`@MX:WARN` 1줄 위치 대조 |
+| M6·M7(61458e1) | `492/492 통과` · 실데이터 대조 · ✗ 0 · ✓ 492 | 0 | `gate-m6m7-final.log` | 에이전트 — 레인이 이름 소멸 grep 3종 재실행(무매치) 대조 |
+| M8 마감(HEAD 61458e1) | `492/492 통과` · 실데이터 대조 | 0 | `gate-m8-final.log` | **레인 직접 재실행** |
+
+- **iOS 무경고 빌드(M8, 레인 실행)**: `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build` → exit 0 · `BUILD SUCCEEDED` · `grep "warning:" build-ios.log \| grep -v appintentsmetadataprocessor \| sort -u` → **빈 출력**(Swift 소스 경고 0). 워크트리에 `besir.xcodeproj`가 있어 xcodegen 불필요 — 서명 팀 리셋 없음.
+- **REQ-014 이름 소멸**(레인 grep 재실행, 무매치 확인): `suffixStrippedRetryQuery|mergedPlaceResults|searchTopClearlyMatches|normalizedPlaceWord|drvTopMatches|drvRetryQuery|drvMerged` · `resolveDestination` · `resolveOrigin[^A]`(`resolveOriginAdoption` 제외) — 두 파일 모두 0매치.
+- **C-2(WARN 위치)**: `@MX:WARN` 파일 전체 1줄(`:2268`) < 첫 `store.addRecurringEvents(`(`:2285`) — 레인 grep으로 대조.
+- **범위**: 코드 변경은 두 소스 파일뿐. `git diff --stat 4987e2d..HEAD -- proxy project.yml Shared/EditCardView.swift Shared/PlaceSearch.swift` → 빈 출력(day-close 커밋 포함 전 구간 기준). 앱 변경 실측: GREEN +196/−100 · M6·M7 −150/0(plan §3 어림 삭제 130·추가 90·고침 30과 같은 차수 — 어림이 −81(6함수 정의)을 GREEN 뒤로 미뤄 실측과 순서가 다를 뿐).
+- **알려진 마이크로빚**: `placeAdoptionDecision`의 `query` 매개변수가 판정에서 쓰이지 않게 됐다 — 호출처가 값을 주므로 REQ-014(“남는 호출처가 값設定 안 하는 매개변수”) 위반은 아니고, 서명 정리는 후속 몫으로 남긴다.
+- **Gaps(미검증 — 증거 없음 ≠ 통과)**: 시뮬레이터 S-1~S-12(AC-012·013 — 실제 카카오 목록·카드 화면·카드 장수·확인 뒤 모델 발화는 운영자 실행 대기) · proxy `npm test`(이 카드가 proxy를 고치지 않아 diff 무변경으로 확인 — 배포 없음) · 실기기. drvPark는 "첫 실행이 저장한 뒤 보류하면 이중 생성"을 못 잰다(plan §5 명시 한계 — 구조 대조 `:2268`<`:2285`와 시뮬레이터 S-8이 담당).
+- **잔여 위험**: plan §7 목록 그대로 — 카드 장수 증가(단발 두 장·반복+점심 최대 세 장) · 조회 2단계 · t32 증상 빈도 상승 · 원래 질의 재언급 시 재질의(운영자 확정 동작) · 조회 문구(`조회하지`·`기준 장소`)는 원문 밖 파생(착수 시 고지함).
+
+🗿 MoAI
 
 ## §E.3 Run-phase Audit-Ready Signal
 

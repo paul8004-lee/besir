@@ -2,7 +2,7 @@
 id: SPEC-UIKIT-011
 title: "장소 채택 항상-선택 — 검색에서 온 장소는 사용자가 고를 때만 확정 · 재시도 병합 삭제 · 쓰기 경로(수정 새 장소·반복 점심)와 조회 경로(식사 추천 기준·이동시간 조회) 선택 카드 · 드라이버 AI절 재설계와 R-5"
 version: "0.2.0"
-status: draft
+status: in-progress
 created: "2026-10-06"
 updated: "2026-10-06"
 author: "manager-spec"
