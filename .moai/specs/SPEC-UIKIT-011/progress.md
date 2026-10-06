@@ -225,7 +225,13 @@
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+- **게이트(전부 이번 실행·이 트리에서 관측)**: 드라이버 `492/492 통과`·✗ 0·exit 0·실데이터 대조(레인 직접 재실행 — `gate-m8-final.log`) · iOS 빌드 exit 0·`BUILD SUCCEEDED`·소스 경고 0(`build-ios.log` + appintentsmetadataprocessor 필터) · REQ-014 이름 소멸 grep 0매치 · 코드 diff 두 소스 파일(보호 경로 무변경) · code-safety 심사 **결함 0건**(4렌즈·SPEC 불변식 — `.moai/reports/t47/code-safety-run.md`, HEAD 61458e1 기준).
+- **운영자 몫(미완)**: 시뮬레이터 S-1~S-12(AC-012·013). 새 빌드는 부팅된 iPhone 17 Pro 시뮬레이터에 설치 완료(2026-10-06).
+- **런 커밋**: b519c21(§F) · 1fb19e3(RED) · 4d48736(GREEN M2~M5) · 61458e1(M6·M7) · c8b20b4(§E·2) · 본 커밋(§E.3).
+- run_complete_at: 2026-10-06T21:32:10+09:00
+- run_status: audit-ready
+
+🗿 MoAI
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
