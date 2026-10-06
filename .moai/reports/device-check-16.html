@@ -1,0 +1,417 @@
+<title>시뮬레이터 확인 런북</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@400;600&display=swap">
+<style>
+/* 레이아웃 개념: 스티키 진행 바 + 4묶음 탭 + 단계 카드 리스트. 검증 문서라 정보가 앞서고, 색은 상태(같음/다름)에만 쓴다. */
+:root {
+  --bg: #f4f5f7; --card: #ffffff; --fg: #20242c; --muted: #6b7280;
+  --line: #e3e6eb; --soft: #eef1f5;
+  --accent: #3556c8; --accent-soft: #e8edfb;
+  --ok: #22794b; --ok-soft: #e4f3ea;
+  --warn: #b04a17; --warn-soft: #f9ece2;
+  --skip: #8a9099;
+  --mono: 'IBM Plex Mono', ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #171a1f; --card: #21252c; --fg: #e7eaf0; --muted: #9aa2ae;
+    --line: #343b46; --soft: #293040;
+    --accent: #97b0ff; --accent-soft: #2a3050;
+    --ok: #63c78f; --ok-soft: #1d3a2b;
+    --warn: #e8955c; --warn-soft: #3f2c1c;
+    --skip: #79808a;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #171a1f; --card: #21252c; --fg: #e7eaf0; --muted: #9aa2ae;
+  --line: #343b46; --soft: #293040;
+  --accent: #97b0ff; --accent-soft: #2a3050;
+  --ok: #63c78f; --ok-soft: #1d3a2b;
+  --warn: #e8955c; --warn-soft: #3f2c1c;
+  --skip: #79808a;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg);
+  font-family: 'Noto Sans KR', system-ui, sans-serif; font-size: 15px; line-height: 1.65; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 20px 16px 96px; }
+
+header.top { padding: 8px 0 14px; }
+h1 { font-size: 22px; margin: 0 0 4px; letter-spacing: -0.01em; }
+.sub { color: var(--muted); font-size: 13px; }
+
+.stickybar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20;
+  background: var(--card); border-top: 1px solid var(--line);
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px)); }
+.stickybar .inner { max-width: 860px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.meter { flex: 1 1 200px; min-width: 0; }
+.meter .row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.meter .row b { font-variant-numeric: tabular-nums; }
+.bar { height: 8px; border-radius: 4px; background: var(--soft); overflow: hidden; display: flex; }
+.bar .f-ok { background: var(--ok); height: 100%; }
+.bar .f-warn { background: var(--warn); height: 100%; }
+.btn { font: inherit; font-size: 13px; font-weight: 500; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+:root[data-theme="dark"] .btn.primary { color: #12151c; }
+
+section.prep { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  padding: 16px 18px; margin: 14px 0 6px; }
+section.prep h2 { font-size: 15px; margin: 0 0 8px; }
+section.prep ul { margin: 0; padding-left: 20px; }
+section.prep li { margin: 3px 0; font-size: 14px; }
+section.prep .done { color: var(--ok); font-weight: 500; }
+
+nav.tabs { display: flex; gap: 6px; margin: 18px 0 14px; position: sticky; top: env(safe-area-inset-top, 0px);
+  background: var(--bg); padding: 6px 0; z-index: 10; overflow-x: auto; }
+nav.tabs button { flex: 1 1 auto; white-space: nowrap; font: inherit; font-size: 13px; font-weight: 500;
+  border: 1px solid var(--line); background: var(--card); color: var(--fg);
+  border-radius: 999px; padding: 7px 12px; cursor: pointer; }
+nav.tabs button .n { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+nav.tabs button[aria-selected="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+.group-head { margin: 4px 0 12px; }
+.group-head h2 { font-size: 17px; margin: 0; }
+.group-head p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+
+.reset-banner { display: flex; gap: 10px; align-items: flex-start;
+  border: 1px dashed var(--warn); background: var(--warn-soft); color: var(--fg);
+  border-radius: 10px; padding: 10px 14px; margin: 14px 0 10px; font-size: 14px; }
+.reset-banner .ic { flex: none; }
+.reset-banner b { color: var(--warn); }
+
+article.step { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--skip);
+  border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+article.step[data-st="ok"] { border-left-color: var(--ok); }
+article.step[data-st="diff"] { border-left-color: var(--warn); }
+.step-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+.step-no { font-family: var(--mono); font-weight: 600; font-size: 14px; color: var(--accent); }
+.step-title { font-weight: 700; font-size: 15px; }
+.chip { font-size: 11.5px; font-weight: 500; border-radius: 999px; padding: 1.5px 8px;
+  border: 1px solid var(--line); color: var(--muted); }
+.chip.need { border-color: var(--accent); color: var(--accent); }
+.chip.net { border-color: var(--warn); color: var(--warn); }
+
+.copyline { display: flex; align-items: stretch; gap: 8px; margin: 8px 0; }
+.copyline .txt { flex: 1 1 auto; min-width: 0; font-family: var(--mono); font-size: 13px;
+  background: var(--soft); border-radius: 8px; padding: 9px 11px; word-break: break-all; }
+.copyline .cp { flex: none; font: inherit; font-size: 12px; border: 1px solid var(--line);
+  background: var(--card); color: var(--fg); border-radius: 8px; padding: 0 10px; cursor: pointer; }
+.copyline .cp:hover { border-color: var(--accent); }
+
+.ops { margin: 6px 0 2px; padding-left: 20px; }
+.ops li { margin: 3px 0; font-size: 14px; }
+.expect { background: var(--soft); border-radius: 8px; padding: 10px 13px; margin: 8px 0 2px; }
+.expect .lab, .watch .lab { display: block; font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 3px; }
+.expect ul { margin: 0; padding-left: 18px; }
+.expect li { margin: 3px 0; font-size: 14px; }
+.watch { border-left: 3px solid var(--line); padding: 6px 12px; margin: 8px 0 2px; font-size: 13.5px; color: var(--muted); }
+.q { color: var(--fg); }
+
+.checkrow { display: flex; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; border: none; background: var(--card); color: var(--muted);
+  padding: 6px 12px; cursor: pointer; border-left: 1px solid var(--line); }
+.seg button:first-child { border-left: none; }
+.seg button[aria-pressed="true"] { font-weight: 700; color: #fff; }
+.seg button.s-ok[aria-pressed="true"] { background: var(--ok); }
+.seg button.s-diff[aria-pressed="true"] { background: var(--warn); }
+.seg button.s-skip[aria-pressed="true"] { background: var(--skip); }
+:root[data-theme="dark"] .seg button[aria-pressed="true"] { color: #12151c; }
+
+.memo { width: 100%; font: inherit; font-size: 13.5px; color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 8px; resize: vertical; min-height: 56px; }
+.memo:focus { outline: 2px solid var(--accent); outline-offset: 0; border-color: transparent; }
+
+.toast { position: fixed; left: 50%; bottom: 88px; transform: translateX(-50%); z-index: 30;
+  background: var(--fg); color: var(--bg); font-size: 13px; font-weight: 500;
+  border-radius: 999px; padding: 8px 16px; opacity: 0; pointer-events: none; transition: opacity .2s; }
+.toast.show { opacity: 1; }
+.note-src { margin-top: 26px; padding-top: 12px; border-top: 1px solid var(--line);
+  color: var(--muted); font-size: 12.5px; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+</style>
+
+<div class="wrap">
+<header class="top">
+  <h1>실기기 확인 체크북 — UI통일 Day 16항목</h1>
+  <p class="sub">besir 실기기 빌드 <b>315701c</b>(Day 닫기, 2026-10-06) · iPhone 15 · 편하게 시간 낼 때 순서대로 — 체크 상태는 이 브라우저에 저장돼요</p>
+</header>
+
+<section class="prep">
+  <h2>시작 전 — 딱 한 번</h2>
+  <ul>
+    <li><b>개발자 프로파일 신뢰</b>: 설정 → 일반 → VPN 및 기기 관리 → 개발자 앱(본인 Apple ID) → '<b>신뢰</b>' (설치는 이미 끝났어요)</li>
+    <li>즐겨찾기 ⭐에 <b>집</b>·<b>회사</b>가 다른 좌표로 등록돼 있어야 해요</li>
+    <li>네트워크 켬 (오프라인 계열 3~5은 그때그때 비행기 모드)</li>
+    <li>알림·위치 권한은 요청이 뜨는 대로 허용</li>
+  </ul>
+</section>
+
+<nav class="tabs" id="tabs" role="tablist"></nav>
+<div id="groups"></div>
+
+<p class="note-src">원문 출처 — 묶음 1·2: SPEC-UIKIT-008 acceptance.md §시뮬레이터 스크립트(AC-014·015) · 묶음 3·4: SPEC-UIKIT-009 acceptance.md §시뮬레이터 스크립트(AC-023·024). 초기화는 설정 → 테스트 → "일정 모두 삭제" → 모두 삭제.</p>
+</div>
+
+<div class="stickybar"><div class="inner">
+  <div class="meter">
+    <div class="row"><span>진행 <b id="m-done">0</b> / <span id="m-total">16</span></span><span><span id="m-diff" style="color:var(--warn);font-weight:700">다름 0</span></span></div>
+    <div class="bar"><div class="f-ok" id="b-ok" style="width:0%"></div><div class="f-warn" id="b-warn" style="width:0%"></div></div>
+  </div>
+  <button class="btn primary" id="copyReport">결과 보고 복사</button>
+  <button class="btn" id="resetAll">초기화</button>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const GROUPS = [
+{ id:"N", name:"알림·예약", full:"알림 실수신·재예약 (1·2·16)", desc:"알림 센터가 실기기에서만 살아있어요." },
+{ id:"O", name:"오프라인 계열", full:"오프라인 경고 블록 (3·4·5·6)", desc:"비행기 모드 — 시뮬레이터가 MapKit 데몬을 못 막아 실기기 전용이에요." },
+{ id:"P", name:"검색·연동", full:"검색·캘린더 연동 (7·8)", desc:"실목록·실계정이 필요한 것들." },
+{ id:"Q", name:"화면·접근성", full:"화면·접근성·감각 (9~15)", desc:"눈과 손으로만 판정되는 것들 — 시간 낼 때 순서대로." }
+];
+
+const S = [
+{g:"N", n:"1", t:"출발 알림 실제 수신",
+ ops:["지금부터 20분 뒤 도착하는 일정을 출발 5분 전 알림으로 만든다","앱을 백그라운드로 보내고 기기를 잠근다"],
+ expect:["잠금 화면에 출발 알림 배너가 뜬다"],
+ watch:"실패 모양: 알림이 오지 않거나 두 번 온다"},
+{g:"N", n:"2", t:"지난 출발 — 알림 문구",
+ ops:["5분 뒤 시작하는 오늘 활동 '임박'(장소 '회사' · 가는 이동 출발지 '집')을 만든다 — 이동시간이 5분보다 길어야 함","가는 이동 상세의 알림 문구 확인"],
+ expect:["문구가 '지난 시각이라 예약되지 않음'의 뜻을 말한다"],
+ watch:"실패: '예약됨'으로 나온다 (AC-024 20a)"},
+{g:"O", n:"3", t:"오프라인 가는 이동 — 안내+경고 블록",
+ ops:["비행기 모드 켜기","활동 상세에서 가는 이동을 추가하고 저장"],
+ expect:["'이동시간을 계산하지 못했어요' 안내 + 시트가 열린 채 남는다","시간표에 활동 시작 자리에서 아래로 삼각형 경고 블록"],
+ watch:"실패: 안내 없이 닫히거나 일반 이동 블록으로 그려진다 (AC-023 13a)"},
+{g:"O", n:"4", t:"오프라인 오는 이동 — 경고 블록",
+ ops:["비행기 모드로 오는 이동 추가·저장"],
+ expect:["같은 안내 + 활동 끝 자리에서 아래로 경고 블록"],
+ watch:"실패: 16분짜리 일반 블록(수단 아이콘) — REQ-023이 고친 결함의 실물 (AC-024 20)"},
+{g:"O", n:"5", t:"재추정 실패 전환",
+ ops:["이동시간이 계산된 오는 이동이 2시간 안에 출발할 때 비행기 모드","앱을 다시 활성화(백그라운드 → foreground)"],
+ expect:["경고 블록 하나가 활동 끝 자리에, 옛 자리에는 아무것도 없다"],
+ watch:"실패: 블록 둘 또는 일반 블록 (AC-024 20b)"},
+{g:"O", n:"6", t:"자정 넘기는 오는 이동",
+ ops:["밤 11시 30분에 끝나는 활동에 40분 이상 걸리는 오는 이동을 붙인다","당일·다음 날 시간표와 월간·주간 점 확인"],
+ expect:["당일과 다음 날 양쪽에 잘린 블록, 월간·주간 점도 이틀 다"],
+ watch:"실패: 한쪽 날에만 보이거나 잘린 반쪽의 위치·높이가 어긋난다 (AC-024 21)"},
+{g:"P", n:"7", t:"t42 후보 카드 실물 모습",
+ input:"내일 오후 5시까지 스타벅스 홍대점 가야 해, 스타벅스 강남점에서 출발, 대중교통, 여유 10분, 10분 전 알림",
+ ops:["카드의 출발지·목적지 줄 확인"],
+ expect:["두 줄에 후보 칩이 여럿, 캡션 \"검색 결과가 말씀하신 지점인지 확실하지 않아요…\"","칩이 잘리지 않고 줄바꿈된다"],
+ watch:"실패: 후보 하나뿐이거나 조용히 확정 (t42 관측 보강)"},
+{g:"P", n:"8", t:"구글 캘린더 앱에서의 모습",
+ ops:["연결 상태로 일정 1건 등록","'캘린더에 올리지 마'로 1건 등록","기기 캘린더 앱·다른 기기 확인"],
+ expect:["첫 건만 캘린더 앱에 보이고 reminders 알림이 붙지 않는다","다른 기기에도 보인다","besir 상세 표시가 '올리는 중'→'등록됨'으로 바뀐다"],
+ watch:"실패: 두 건 다 보이거나 캘린더 앱 알림이 함께 울린다"},
+{g:"Q", n:"9", t:"다크 모드 노선 이름·색",
+ ops:["다크 모드에서 대중교통 일정 상세의 환승 단계를 연다"],
+ expect:["노선 이름이 배경과 구분되어 읽힌다"],
+ watch:"실패: 글자가 배경에 묻힌다"},
+{g:"Q", n:"10", t:"VoiceOver 낭독",
+ ops:["줄 이름+사유 결합 · 토글 칩 선택 발표 · 재계산 버튼 이름 · 배너 통째 · 이동 줄(AC-024 22)을 VoiceOver로 읽는다"],
+ expect:["각 컨트롤이 이름과 상태를 한 번에 읽는다"],
+ watch:"실패: '버튼'만 읽거나 침묵"},
+{g:"Q", n:"11", t:"큰 글자(Dynamic Type)",
+ ops:["설정에서 가장 큰 글자 → AI 카드(반복 일정 일곱 줄)·편집 카드"],
+ expect:["칩이 줄바꿈되고 줄이 숨지 않는다"],
+ watch:"실패: 칩·버튼이 잘리거나 겹친다"},
+{g:"Q", n:"12", t:"제스처 감각",
+ ops:["꾹 눌러 드래그(0.35초) · 스와이프 · 직접입력(여유·알림 분)을 써 본다"],
+ expect:["불편 없이 조작된다"],
+ watch:"체감 메모를 남겨 주세요 — t43 드래그 재설계 판단 재료"},
+{g:"Q", n:"13", t:"대중교통 단계 시각 표기",
+ ops:["대중교통 일정 상세의 단계 시각 확인"],
+ expect:["'오후 3:05' 꼴(분 0 채움) — shortTimeFmt"],
+ watch:"시뮬레이터에서 경로 계산이 안 돼 미확인 상태"},
+{g:"Q", n:"14", t:"AI 할당량 소진 안내문",
+ ops:["(기회 되면) 일일 할당량 소진 시 안내문 확인"],
+ expect:["백엔드 이름·초기화 시각 없는 안내"],
+ watch:"실제 쿼터 소진이 필요해 기회 되면"},
+{g:"Q", n:"15", t:"카드 크롬 실제 질감",
+ ops:["카드(raised+스트로크)를 기기 화면에서 본다"],
+ expect:["질감이 자연스럽다"],
+ watch:"렌더 질감은 기기 화면으로만"},
+{g:"N", n:"16", t:"편집 뒤 알림 재예약·캘린더 반영",
+ ops:["일정 편집 뒤 출발 알림이 재예약되는지","구글 캘린더 항목에 편집이 반영되는지 확인"],
+ expect:["편집한 값으로 알림·캘린더 둘 다 따라온다"],
+ watch:"맥 편집 시트는 iOS 전용 방침으로 보류"}
+];
+
+const LS_KEY = "besir-device-check-v1";
+let state = {};
+try { state = JSON.parse(localStorage.getItem(LS_KEY) || "{}") || {}; } catch (e) { state = {}; }
+let tab = state.tab || "A";
+
+const $ = s => document.querySelector(s);
+const el = (tag, attrs, ...kids) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== null && v !== undefined) n.setAttribute(k, v);
+  }
+  for (const k of kids) if (k != null) n.append(k);
+  return n;
+};
+const stepKey = s => s.g + "-" + s.n;
+
+function save() {
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ ...state, tab })); } catch (e) { /* 사유창 등에서는 저장 실패해도 무시 */ }
+}
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+function copyText(txt, okMsg) {
+  const done = () => toast(okMsg);
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done, () => fallbackCopy(txt, done));
+  } else fallbackCopy(txt, done);
+}
+function fallbackCopy(txt, done) {
+  const ta = el("textarea", { readonly: "" }); ta.value = txt;
+  document.body.append(ta); ta.select();
+  try { document.execCommand("copy"); done(); } catch (e) { toast("복사 실패 — 직접 선택해 주세요"); }
+  ta.remove();
+}
+
+function buildTabs() {
+  const nav = $("#tabs");
+  nav.textContent = "";
+  for (const g of GROUPS) {
+    const total = S.filter(s => s.g === g.id).length;
+    const done = S.filter(s => s.g === g.id && state[stepKey(s)] && state[stepKey(s)].st).length;
+    const b = el("button", { role: "tab", "aria-selected": String(tab === g.id), type: "button",
+      onclick: () => { tab = g.id; save(); render(); window.scrollTo({ top: nav.offsetTop - 4 }); } },
+      g.name + " ", el("span", { class: "n" }, done + "/" + total));
+    nav.append(b);
+  }
+}
+
+function renderGroup() {
+  const host = $("#groups");
+  host.textContent = "";
+  const g = GROUPS.find(x => x.id === tab);
+  host.append(el("div", { class: "group-head" }, el("h2", {}, g.full), el("p", {}, g.desc)));
+  for (const s of S.filter(x => x.g === tab)) {
+    if (s.reset) {
+      host.append(el("div", { class: "reset-banner" },
+        el("span", { class: "ic" }, "🧹"),
+        el("span", {}, el("b", {}, "초기화"), " — 설정 → 테스트 → '일정 모두 삭제' → 모두 삭제. 이 단계를 먼저 하고 시작하세요.")));
+    }
+    host.append(renderStep(s));
+  }
+}
+
+function renderStep(s) {
+  const key = stepKey(s);
+  const st = state[key] || {};
+  const art = el("article", { class: "step", "data-st": st.st === "ok" ? "ok" : st.st === "diff" ? "diff" : "" });
+
+  const head = el("div", { class: "step-head" },
+    el("span", { class: "step-no" }, s.n),
+    el("span", { class: "step-title" }, s.t));
+  if (s.transcript) head.append(el("span", { class: "chip need" }, "📋 전사"));
+  if (s.net) head.append(el("span", { class: "chip net" }, "⚠ 네트워크 조작"));
+  art.append(head);
+
+  if (s.input) {
+    art.append(el("div", { class: "copyline" },
+      el("div", { class: "txt" }, s.input),
+      el("button", { class: "cp", type: "button", onclick: () => copyText(s.input, "입력 문구 복사됨") }, "복사")));
+  }
+  if (s.ops && s.ops.length) {
+    const ol = el("ol", { class: "ops" });
+    for (const o of s.ops) {
+      const li = el("li");
+      li.innerHTML = o;
+      ol.append(li);
+    }
+    art.append(ol);
+  }
+  if (s.expect) {
+    const box = el("div", { class: "expect" }, el("span", { class: "lab" }, "기대"));
+    const ul = el("ul");
+    for (const e of s.expect) { const li = el("li"); li.innerHTML = e; ul.append(li); }
+    box.append(ul);
+    art.append(box);
+  }
+  if (s.watch) {
+    const w = el("div", { class: "watch" }, el("span", { class: "lab" }, "볼 것 · 기록"));
+    const p = el("div"); p.innerHTML = s.watch; w.append(p);
+    art.append(w);
+  }
+
+  const seg = el("div", { class: "seg", role: "group", "aria-label": s.n + "단계 결과" },
+    segBtn(s, "ok", "기대와 같음"), segBtn(s, "diff", "다름"), segBtn(s, "skip", "건너뜀"));
+  art.append(el("div", { class: "checkrow" }, seg,
+    el("button", { class: "btn", type: "button", style: "margin-left:auto",
+      onclick: () => { delete state[key]; save(); render(); } }, "이 단계 지우기")));
+  const memo = el("textarea", { class: "memo", id: "memo-" + key,
+    placeholder: st.st === "diff" ? "다름 — 단계 번호와 관찰(화면 문구·등록 결과)을 적어 주세요" : "관찰 메모(선택) — 문구 그대로 적으면 보고에 실려요" });
+  memo.value = st.memo || "";
+  memo.addEventListener("input", () => { state[key] = state[key] || {}; state[key].memo = memo.value; save(); });
+  art.append(memo);
+  return art;
+}
+function segBtn(s, val, label) {
+  const key = stepKey(s);
+  const cur = (state[key] || {}).st;
+  return el("button", { type: "button", class: "s-" + val, "aria-pressed": String(cur === val),
+    onclick: () => {
+      state[key] = state[key] || {};
+      state[key].st = (state[key].st === val) ? null : val;
+      if (!state[key].st && !state[key].memo) delete state[key];
+      save(); render();
+    } }, label);
+}
+
+function renderMeter() {
+  const done = S.filter(s => (state[stepKey(s)] || {}).st).length;
+  const okc = S.filter(s => (state[stepKey(s)] || {}).st === "ok").length;
+  const diff = S.filter(s => (state[stepKey(s)] || {}).st === "diff").length;
+  $("#m-done").textContent = done;
+  $("#m-diff").textContent = "다름 " + diff;
+  $("#b-ok").style.width = (okc / S.length * 100) + "%";
+  $("#b-warn").style.width = (diff / S.length * 100) + "%";
+}
+
+$("#copyReport").addEventListener("click", () => {
+  const lines = [];
+  const okc = S.filter(s => (state[stepKey(s)] || {}).st === "ok").length;
+  const diff = S.filter(s => (state[stepKey(s)] || {}).st === "diff").length;
+  const skip = S.filter(s => (state[stepKey(s)] || {}).st === "skip").length;
+  lines.push("시뮬레이터 확인 결과 (빌드 cc3d921, " + new Date().toLocaleString("ko-KR") + ")");
+  lines.push("전체 " + S.length + "단계 — 같음 " + okc + " · 다름 " + diff + " · 건너뜀 " + skip + " · 미실행 " + (S.length - okc - diff - skip));
+  for (const g of GROUPS) {
+    const gs = S.filter(s => s.g === g.id);
+    const gd = gs.filter(s => (state[stepKey(s)] || {}).st).length;
+    lines.push("");
+    lines.push("[" + g.full + "] " + gd + "/" + gs.length);
+    for (const s of gs) {
+      const st = state[stepKey(s)] || {};
+      if (!st.st && !st.memo) continue;
+      const mark = st.st === "ok" ? "✓" : st.st === "diff" ? "✗" : st.st === "skip" ? "–" : "·";
+      let l = "  " + mark + " " + s.n + " " + s.t;
+      if (st.memo) l += " — " + st.memo.replace(/\s+/g, " ").trim();
+      lines.push(l);
+    }
+  }
+  copyText(lines.join("\n"), "결과 보고 복사됨 — 리드에게 붙여 넣어 주세요");
+});
+$("#resetAll").addEventListener("click", () => {
+  state = {}; save(); render();
+  toast("체크 상태를 초기화했습니다");
+});
+
+function render() { buildTabs(); renderGroup(); renderMeter(); }
+render();
+</script>
