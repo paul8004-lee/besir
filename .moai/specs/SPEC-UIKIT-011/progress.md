@@ -212,3 +212,13 @@ _<pending run-phase>_
 ## §E.4 Sync-phase Audit-Ready Signal
 
 _<pending sync-phase>_
+
+## §F Phase 4 Mode Selection
+
+- **입력**: Tier M · 크게 고치는 파일 2(`Shared/AIAssistant.swift`·`Tools/GuardDriver.swift`) · 도메인 1(Swift/AI 실행부) · 언어 Swift · 병행 이득 낮음(코드 작업 + 컴파일 결합 — plan §1: 드라이버는 앱 파일과 함께 컴파일되고 `resolveDestination`·`resolveOrigin` 삭제는 M4·M5 선행) · Agent Teams 요청 없음.
+- **평가**: direct ✗(복잡도 상) · **serial ✅ 선택** · fanout ✗(단일 도메인, 쓰기 충돌) · sweep ✗(30파일 미만·비기계적) · agent-team ✗(요청 없음).
+- **Decision: serial** — 마일스톤마다 전문가 한 명씩 순차 호출(RED 드라이버 → 앱 M2~M5 → 정리·마감 M6~M7), 쓰기 에이전트 동시 1명. 코딩 작업 병렬화 주의(Anthropic coding-task parallelism caveat)와 컴파일 결합이 근거.
+- **게이트 배경**: Implementation Kickoff Approval(착수 승인)은 2026-10-06 운영자 확정으로 이미 통과(D-1~D-6, `decisions.md`). Phase 1 재감사는 돌리지 않았다 — 감사 3회 한도 소진 + 3회차 조건부 PASS(0.92)의 조건("결정에 기대는 절만 고쳐 쓰고 차이 대조")이 0.2.0에서 이행된 기록이 §E.1에 있다.
+- `ac_converge` 골은 arm하지 않았다 — 운영자가 세션 앞에 있고 마일스톤마다 확인하는 흐름이라 per-turn 자율이 필요 없다.
+
+🗿 MoAI
