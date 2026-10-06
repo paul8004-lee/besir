@@ -3055,28 +3055,6 @@ final class AIAssistant: ObservableObject {
         return "'\(query)' 위치를 찾지 못했어요. 더 정확한 장소명을 알려주세요.\(hint)"
     }
 
-    /// 출발지 해석: ① 카드에서 고른 "현재 위치" ② 즐겨찾기 이름과 일치 ③ 검색.
-    ///
-    /// **등록 경로에서는 여기까지 와서 빈 값일 수 없다** — 카드가 먼저 묻기 때문이다. 예전엔
-    /// origin_query가 비면 조용히 즐겨찾기 "집"이나 등록 시점 현재 위치로 떨어졌고, 그래서
-    /// "회사에서 출발"이라고 말했는데 집→집인 0분짜리 일정이 만들어진 적이 있다. 그 폴백은
-    /// `orDefault`로 가뒀다 — 지금 켜는 곳은 check_travel_time 하나뿐이고, 그건 등록이 아니라
-    /// 조회라 되묻을 이유가 없다(시스템 프롬프트 규칙 3의 예외와 같은 자리).
-    /// 매개변수에 기본값을 두지 않는다 — 등록 경로 세 호출처가 resolveOriginAdoption으로
-    /// 옮긴 뒤로 기본값 `false` 갈래엔 부르는 곳이 없었다. 조용히 false로 빠지는 길을 없애
-    /// 두면, 이 래퍼가 나중에 다시 조용한 폴백의 입구가 되는 일도 없다.
-    /// **t47 뒤로 앱 호출처가 없다** — 조회(check_travel_time)도 삼태를 직접 받아 unclear를
-    /// 카드로 물으므로(D-1 (b)) 이 평탄화 래퍼는 가드 드라이버만 부른다. 다음 마일스톤에서
-    /// 함수째로 지운다(REQ-014).
-    private func resolveOrigin(_ query: String?, orDefault: Bool) async -> Place? {
-        switch await resolveOriginAdoption(query, orDefault: orDefault) {
-        case .resolved(let p): return p
-        case .notFound: return nil
-        // resolveDestination와 같은 이유 — 조회 경로는 첫 결과를 그대로 쓴다.
-        case .unclear(let candidates): return candidates.first
-        }
-    }
-
     /// 등록 경로의 출발지 삼태 해석 — adoptPlace 사다리에 "현재 위치" 토큰과 조회 전용
     /// 폴백(orDefault)이 앞뒤로 붙은 형태다.
     private func resolveOriginAdoption(_ query: String?, orDefault: Bool = false) async -> PlaceAdoption {
@@ -3221,51 +3199,6 @@ final class AIAssistant: ObservableObject {
         return Self.placeAdoptionDecision(query: query, results: results)
     }
 
-    /// 장소 낱말 정규화의 단일 출처(계약 5): 띄어쓰기를 지우고, 끝이 '점'·'역'이며 뗀 뒤
-    /// 2글자 이상 남으면 한 글자 뗀다. 뗀 자리가 빈 토큰이면 모든 이름에 맞아버리므로
-    /// 2글자 하한을 둔다. t47이 채택 판정에서 낱말 비교를 걷어냈다(searchTopClearlyMatches
-    /// 참조) — 지금은 재시도 쿼리 조립(suffixStrippedRetryQuery)만 이 규칙을 쓰며, 둘 다
-    /// 가드 드라이버 전용 잔존이다(REQ-014, 다음 마일스톤 삭제).
-    private static func normalizedPlaceWord(_ word: String) -> String {
-        var t = word.replacingOccurrences(of: " ", with: "")
-        if t.count > 2, t.hasSuffix("점") || t.hasSuffix("역") { t.removeLast() }
-        return t
-    }
-
-    /// 검색 첫 결과가 사용자가 말한 이름과 **모순되지 않는지** — 질의의 낱말이 전부 결과 이름에
-    /// 들어 있으면 참이다. '스타벅스 홍대점'→'스타벅스 대학로점'(홍대 없음), '강남'→
-    /// '서울선릉과정릉'(강남 없음)이 물어볼 자리다. 띄어쓰기는 양쪽 다 지운다(결과 이름이
-    /// 붙여 쓰는 경우가 많다). 판정이 주소를 안 보는 건 주소 낱말이 가짜 답을 만들었기
-    /// 때문이다 — '강남'으로 말한 자리에서 주소의 '강남구'가 낱말을 만족시켜
-    /// '서울선릉과정릉'이 조용히 채택됐다(2026-09-24 관측). 주소로 말한 질의는 후보 카드에서
-    /// 한 번 더 고른다.
-    /// **이 술어는 지점을 좁혔는지 모른다** — '스타벅스 강남점'의 낱말이 '케이스퀘어강남점'에도
-    /// '강남역점'에도 들어 가서 둘 다 참이 되지만 그 둘은 다른 지점이다. 지점을 좁혔는지(결과가
-    /// 여러 지점으로 갈리는가)를 보는 층위는 placeAdoptionDecision이다(t42 ①, 2026-10-05 —
-    /// '강남'을 품은 지점이 여럿인데 첫 결과가 조용히 확정됐다). AA-1의 라벨 '같은 지점으로
-    /// 본다'는 이 술어의 낱말 단위 판정(홍대역→홍대입구역)을 가리키는 것이지, 여러 지점이
-    /// 섞였을 때의 채택 판정과는 다른 층위다.
-    private static func searchTopClearlyMatches(query: String, result: Place) -> Bool {
-        let haystack = result.name.replacingOccurrences(of: " ", with: "")
-        let tokens = query.split(separator: " ").map { normalizedPlaceWord(String($0)) }.filter { !$0.isEmpty }
-        guard !tokens.isEmpty else { return true }
-        return tokens.allSatisfy { haystack.contains($0) }
-    }
-
-    /// 풀네임 검색이 카카오에서 빗나갔을 때의 재시도 쿼리 — 마지막 낱말에만 정규화를 걸어
-    /// '점'·'역'이 벗겨지면 재조립해 돌려준다. '스타벅스 홍대점' 풀네임은 카카오가 엉뚱한
-    /// 목록(첫 결과 대학로점, 후보 1개)을 주지만 '점'을 뗀 '스타벅스 홍대'는 홍대 지점 목록을
-    /// 낸다(t42 ②, 2026-10-05 운영자 관찰). 연쇄 재시도는 하지 않는다 — 한 번 벗겨도 안
-    /// 나오는 질의는 접미어 문제가 아니다.
-    private static func suffixStrippedRetryQuery(_ query: String) -> String? {
-        var words = query.split(separator: " ").map(String.init)
-        guard let last = words.last else { return nil }
-        let stripped = normalizedPlaceWord(last)
-        guard stripped != last, !stripped.isEmpty else { return nil }
-        words[words.count - 1] = stripped
-        return words.joined(separator: " ")
-    }
-
     /// 채택 삼태를 재료만으로 정하는 순수 판정(네트워크 없음 — 검색 결과 목록을 그대로 받는다).
     /// @MX:NOTE "검색 결과가 있으면 언제나 묻는다"는 운영자 원칙(①·④)의 자리 — 결과가 하나뿐이고
     /// 이름이 질의와 같아도 unclear다. 완전 중복(이름+정확 좌표가 같은 항목)만 하나로 접고,
@@ -3281,30 +3214,6 @@ final class AIAssistant: ObservableObject {
             seen.insert("\($0.name)|\($0.latitude)|\($0.longitude)").inserted
         }
         return .unclear(Array(candidates.prefix(maxPlaceSuggestions)))
-    }
-
-    /// 재시도 결과와 원본 결과의 병합 — 재시도(정규화한 질의에 가까운 목록)를 앞에 두고,
-    /// 이름+위도+경도가 같은 항목의 중복을 뺀다. 판정(placeAdoptionDecision)은 첫 결과를
-    /// 기준으로 갈리므로 순서가 곧 채택이다 — 원본을 앞에 두면 재시도가 있어도 빗나간 원본
-    /// 첫 결과를 그대로 지킨다.
-    private static func mergedPlaceResults(retry: [Place], original: [Place]) -> [Place] {
-        var seen = Set<String>()
-        return (retry + original).filter {
-            seen.insert("\($0.name)|\($0.latitude)|\($0.longitude)").inserted
-        }
-    }
-
-    /// 목적지 해석: 즐겨찾기 이름과 일치하면 그 좌표를 우선 사용, 아니면 검색(카카오 → MapKit 폴백).
-    /// - Parameter creation: 등록 경로에서 쓴다(일반명사 가드).
-    /// **t47 뒤로 앱 호출처가 없다** — 수정·점심·조회가 전부 삼태를 직접 받아 unclear를 카드로
-    /// 물으므로(운영자 ③·D-1 (b)) 이 평탄화 래퍼는 가드 드라이버만 부른다. 다음 마일스톤에서
-    /// 함수째로 지운다(REQ-014).
-    private func resolveDestination(_ query: String, creation: Bool = false) async -> Place? {
-        switch await adoptPlace(query, creation: creation) {
-        case .resolved(let p): return p
-        case .notFound: return nil
-        case .unclear(let candidates): return candidates.first
-        }
     }
 
     // MARK: - 유틸
