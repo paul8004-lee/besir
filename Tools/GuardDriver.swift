@@ -4962,13 +4962,12 @@ struct Drv {
         aiT42.drvCheck("AI-1: '스타벅스 강남점'에 강남 지점 셋이면 첫 결과를 확정하지 않고 물어본다",
                      ai1 == "unclear:스타벅스 케이스퀘어강남점,스타벅스 강남역점,스타벅스 강남대로점",
                      ai1)
-        // AI-2: 만족 결과가 하나뿐이면 확정 — 후보가 여럿인 경우와 같은 질의로 갈린다.
-        aiT42.drvCheck("AI-2: 만족 결과가 하나뿐이면 그대로 확정한다",
-                     AIAssistant.drvAdoption("스타벅스 강남점",
-                                             [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285)])
-                     == "resolved:스타벅스 케이스퀘어강남점",
-                     AIAssistant.drvAdoption("스타벅스 강남점",
-                                             [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285)]))
+        // AI-2 (t47 반전): 어떤 단일 결과도 조용히 확정하지 않는다 — 만족 결과가 하나뿐이어도
+        // 묻는다. drvAdoption을 두 번 부르던 잔여(R-5)도 let 하나로 묶는다.
+        let ai2 = AIAssistant.drvAdoption("스타벅스 강남점",
+                                          [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285)])
+        aiT42.drvCheck("AI-2: 만족 결과가 하나뿐이어도 확정하지 않고 묻는다",
+                     ai2 == "unclear:스타벅스 케이스퀘어강남점", ai2)
         // AI-3: 카카오가 같은 지점을 중복 주는 모양 — 후보에는 한 번만 나온다.
         let ai3 = AIAssistant.drvAdoption("스타벅스 강남점",
             [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
@@ -4978,24 +4977,20 @@ struct Drv {
                      ai3.hasPrefix("unclear:"), ai3)
         aiT42.drvCheck("AI-3: 후보에서 같은 지점 중복은 하나만 보인다",
                      ai3 == "unclear:스타벅스 케이스퀘어강남점,스타벅스 강남역점", ai3)
-        // AI-4: 첫 결과 이름을 다른 만족 결과가 품으면 같은 지점 한 덩어리다(역 안 상점).
-        aiT42.drvCheck("AI-4: '홍대역'→'홍대입구역'은 역 안 상점('스타벅스 홍대입구역점')이 만족해도 확정한다",
-                     AIAssistant.drvAdoption("홍대역",
-                                             [aiPl("홍대입구역", 37.5573, 126.9238),
-                                              aiPl("스타벅스 홍대입구역점", 37.5573, 126.9238)])
-                     == "resolved:홍대입구역",
-                     AIAssistant.drvAdoption("홍대역",
-                                             [aiPl("홍대입구역", 37.5573, 126.9238),
-                                              aiPl("스타벅스 홍대입구역점", 37.5573, 126.9238)]))
-        // AI-5: 이름을 통째로 말한 질의 — 상가 동이 같은 낱말을 품어도 확정한다.
-        aiT42.drvCheck("AI-5: '휴먼시아7단지아파트' 전체 이름은 상가 동이 있어도 확정한다",
-                     AIAssistant.drvAdoption("휴먼시아7단지아파트",
-                                             [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346),
-                                              aiPl("휴먼시아7단지아파트상가", 37.6536, 126.8346)])
-                     == "resolved:휴먼시아7단지아파트",
-                     AIAssistant.drvAdoption("휴먼시아7단지아파트",
-                                             [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346),
-                                              aiPl("휴먼시아7단지아파트상가", 37.6536, 126.8346)]))
+        // AI-4 (t47 반전): 좌표가 같아도 이름이 다르면 앱이 같은 지점이라 단정할 근거가 없다 —
+        // 역과 역 안 상점은 둘 다 후보로 남긴다.
+        let ai4 = AIAssistant.drvAdoption("홍대역",
+                                          [aiPl("홍대입구역", 37.5573, 126.9238),
+                                           aiPl("스타벅스 홍대입구역점", 37.5573, 126.9238)])
+        aiT42.drvCheck("AI-4: 역과 역 안 상점은 둘 다 후보로 묻는다",
+                     ai4 == "unclear:홍대입구역,스타벅스 홍대입구역점", ai4)
+        // AI-5 (t47 반전): 이름을 통째로 말해도 확정하지 않는다 — 질의와 글자가 같은 첫 결과도
+        // 사용자가 확인하기 전에는 확정이 아니다.
+        let ai5 = AIAssistant.drvAdoption("휴먼시아7단지아파트",
+                                          [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346),
+                                           aiPl("휴먼시아7단지아파트상가", 37.6536, 126.8346)])
+        aiT42.drvCheck("AI-5: 이름을 통째로 말해도 묻는다",
+                     ai5 == "unclear:휴먼시아7단지아파트,휴먼시아7단지아파트상가", ai5)
         // AI-6 (② 병합 모양): 재시도(홍대 목록)를 앞에 두고 원본(대학로점)을 뒤에 붙인다.
         let aiHd1 = aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244)
         let ai6Merged = AIAssistant.drvMerged([aiHd1, aiPl("스타벅스 홍대가좌점", 37.5569, 126.9226)],
@@ -5009,13 +5004,12 @@ struct Drv {
         // AI-7: 빈 결과는 실패다 — 기본 출발지로 조용히 떨어지지 않는다.
         aiT42.drvCheck("AI-7: 결과가 비면 notFound다",
                      AIAssistant.drvAdoption("스타벅스 홍대점", []) == "notFound")
-        // AI-8: U-4 행동 보존 — 낱말조차 맞지 않는 단독 결과는 물어본다.
+        // AI-8: U-4 행동 보존 — 낱말조차 맞지 않는 단독 결과는 물어본다. 기대는 이미 '묻는다'라
+        // t47 반전 대상이 아니고(R-5 문단의 어긋남), 호출 두 번을 let 하나로 묶는 정리만 한다.
+        let ai8 = AIAssistant.drvAdoption("스타벅스 홍대점",
+                                          [aiPl("스타벅스 대학로점", 37.5735, 127.0057)])
         aiT42.drvCheck("AI-8: '스타벅스 홍대점'→대학로점 단독은 여전히 물어본다(U-4 보존)",
-                     AIAssistant.drvAdoption("스타벅스 홍대점",
-                                             [aiPl("스타벅스 대학로점", 37.5735, 127.0057)])
-                     == "unclear:스타벅스 대학로점",
-                     AIAssistant.drvAdoption("스타벅스 홍대점",
-                                             [aiPl("스타벅스 대학로점", 37.5735, 127.0057)]))
+                     ai8 == "unclear:스타벅스 대학로점", ai8)
         // AI-9~12: 재시도 쿼리 — 마지막 낱말의 '점'·'역'만 한 번 벗긴다.
         aiT42.drvCheck("AI-9: '스타벅스 홍대점'의 재시도 쿼리는 '스타벅스 홍대'다",
                      AIAssistant.drvRetryQuery("스타벅스 홍대점") == "스타벅스 홍대",
@@ -5052,6 +5046,241 @@ struct Drv {
                         "fields=\(ai13Ask?.fields.map { "\($0.key):\(AIAssistant.drvLookup($0.lookup)) startsOpen=\($0.startsOpen)" } ?? [])")
         aiCard.drvCheck("AI-13: 답장 문구가 두 질의를 모두 언급한다",
                         ai13Msg.contains("스타벅스 강남점") && ai13Msg.contains("스타벅스 홍대점"), ai13Msg)
+        // ── t47(SPEC-UIKIT-011 M1). 판정 '항상-선택'과 네 경로(수정·반복 점심·조회 둘)의 보류 재료.
+        //        판정 단언(AI-14~17)은 drvAdoption이 정적이라 결정적이고, 경로 단언(AI-18~22)은
+        //        drvPark으로 보류 상태를 직접 만들고 choose + drvResolvePendingAsk로 실제 확인
+        //        경로(parkForUnclearPlaces → resolvePendingAsk → runToolCalls)를 탄다. 단언은 전부
+        //        **바라는 동작**이다 — 지금 트리에서 ✗가 찍히는 것이 재현이고(REQ-013), ✓은 회귀선이다.
+        // AI-14: 정확 일치 단일 결과도 묻는다 — '질의와 같은 이름'은 확정 근거가 아니다(운영자 ④).
+        let ai14 = AIAssistant.drvAdoption("휴먼시아7단지아파트",
+                                          [aiPl("휴먼시아7단지아파트", 37.6536, 126.8346)])
+        aiCard.drvCheck("AI-14: 정확 일치 단일 결과도 묻는다",
+                      ai14 == "unclear:휴먼시아7단지아파트", ai14)
+        // AI-15: 같은 이름 다른 좌표는 둘 다 후보로 남는다(운영자 ②). 픽스처는 루트 plan.md 후속 32의
+        // 재현 모양 — '스타벅스 홍대점' 검색이 같은 상호의 다른 지점을 섞어 준다.
+        let ai15 = AIAssistant.drvAdoption("스타벅스 홍대점",
+            [aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244),
+             aiPl("스타벅스 홍대가좌점", 37.5569, 126.9226),
+             aiPl("스타벅스 홍대입구역점", 37.5551, 126.9236)])
+        aiCard.drvCheck("AI-15: 같은 이름 다른 좌표는 둘 다 후보로 남는다",
+                      ai15 == "unclear:스타벅스 홍대입구역점,스타벅스 홍대가좌점,스타벅스 홍대입구역점", ai15)
+        // AI-16: 후보 순서는 제공자 순서 그대로다(D-2 (a)) — 앱이 순서를 다시 매기지 않는다.
+        let ai16 = AIAssistant.drvAdoption("스타벅스 홍대점",
+            [aiPl("스타벅스 대학로점", 37.5735, 127.0057),
+             aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244)])
+        aiCard.drvCheck("AI-16: 후보 순서는 제공자 순서 그대로다",
+                      ai16 == "unclear:스타벅스 대학로점,스타벅스 홍대입구역점", ai16)
+        // AI-17: 상한 회귀선 — 후보가 5건을 넘으면 maxPlaceSuggestions에서 자른다(양성 대조).
+        let ai17 = AIAssistant.drvAdoption("강남 카페",
+            [aiPl("강남 카페 역삼점", 37.5010, 127.0370),
+             aiPl("강남 카페 논현점", 37.5040, 127.0210),
+             aiPl("강남 카페 선릉점", 37.5040, 127.0490),
+             aiPl("강남 카페 삼성점", 37.5090, 127.0550),
+             aiPl("강남 카페 대치점", 37.4940, 127.0640),
+             aiPl("강남 카페 개포점", 37.4880, 127.0660),
+             aiPl("강남 카페 양재점", 37.4840, 127.0340)])
+        aiCard.drvCheck("AI-17: 서로 다른 7건이면 후보 5건 상한을 유지한다",
+                      ai17 == "unclear:강남 카페 역삼점,강남 카페 논현점,강남 카페 선릉점,강남 카페 삼성점,강남 카페 대치점",
+                      ai17)
+
+        // AI-18 (운영자 ③): 수정 도구의 장소 보류 — 줄 키·이름·문안·맥락 줄·확인 뒤 대상 반영.
+        //        대상 일정 둘(고침 대상 + 방해받지 않아야 할 다른 기록)을 직접 심는다.
+        let ai18Target = ScheduledEvent(title: "AI-고침", origin: aiPl("집", 37.500, 127.000),
+                                        destination: aiPl("옛 목적지", 37.520, 127.020),
+                                        arrivalDate: Date().addingTimeInterval(3600), mode: .transit,
+                                        bufferMinutes: 10, notifyLeadMinutes: 10,
+                                        recurrenceId: nil, anchor: .arrival)
+        let ai18Other = ScheduledEvent(title: "AI-다른기록", origin: aiPl("집", 37.500, 127.000),
+                                       destination: aiPl("다른 목적지", 37.530, 127.030),
+                                       arrivalDate: Date().addingTimeInterval(7200), mode: .transit,
+                                       bufferMinutes: 10, notifyLeadMinutes: 10,
+                                       recurrenceId: nil, anchor: .arrival)
+        store.events = [ai18Target, ai18Other]
+        let ai18 = fresh()
+        let ai18Cands = [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+                         aiPl("스타벅스 강남역점", 37.4980, 127.0286)]
+        let ai18Msg = ai18.drvPark("update_schedule",
+            ["title_query": "AI-고침", "new_place_query": "스타벅스 강남점"],
+            [(key: "new_place_query", query: "스타벅스 강남점", candidates: ai18Cands)])
+        let ai18Ask = ai18.drvLiveAsk()
+        let ai18Row = ai18Ask?.fields.first { $0.kind == .place }
+        var ai18Loaded = false
+        if let f = ai18Row, case .results(let p) = f.lookup, p.count == 2, f.startsOpen { ai18Loaded = true }
+        ai18.drvCheck("AI-18 (a): 줄 키 new_place_query·이름 '바꿀 장소'·후보 2·열림·'아직 고치지' 문구",
+                      ai18Row?.key == "new_place_query" && ai18Row?.label == "바꿀 장소"
+                        && ai18Loaded && ai18Msg.hasPrefix("아직 고치지 않았어요"),
+                      "key=\(ai18Row?.key ?? "nil") label=\(ai18Row?.label ?? "nil") loaded=\(ai18Loaded) msg=\(ai18Msg)")
+        ai18.drvCheck("AI-18 (b): 수정 카드에 '고칠 일정' 맥락 줄이 뜬다",
+                      ai18Ask?.stated.contains { $0.contains("고칠 일정 'AI-고침'") } == true,
+                      "stated=\(ai18Ask?.stated ?? [])")
+        if let f = ai18Row { ai18.choose(field: f.id, place: ai18Cands[1]) }
+        _ = await ai18.drvResolvePendingAsk()
+        let ai18After = store.events.first { $0.id == ai18Target.id }
+        ai18.drvCheck("AI-18 (c): 둘째 후보로 확인하면 대상 일정 목적지만 그 장소로 바뀐다",
+                      ai18After?.destination.name == ai18Cands[1].name
+                        && ai18After?.destination.latitude == ai18Cands[1].latitude
+                        && ai18After?.destination.longitude == ai18Cands[1].longitude
+                        && store.events.first { $0.id == ai18Other.id }?.destination.name == "다른 목적지",
+                      "dest=\(ai18After?.destination.name ?? "nil") other=\(store.events.first { $0.id == ai18Other.id }?.destination.name ?? "nil")")
+        ai18.drvCheck("AI-18 (d): 확인 뒤 열린 카드가 없다", ai18.drvLiveAsk() == nil, "ask=\(String(describing: ai18.drvLiveAsk() != nil))")
+        store.events = []
+        store.activities = []
+
+        // AI-19 (운영자 ③·D-4): 반복 점심의 보류 — 카드의 줄은 점심 하나뿐이고 확인 뒤 점심 구간이
+        //        고른 장소로 생긴다. 즐겨찾기(집·회사)를 심는 건 확인 재실행이 검색 없이 결정적으로
+        //        풀리게 하려는 것이고, 수단·여유·알림 값까지 넣는 건 머무르지 않는 반복으로 만들어
+        //        askFields가 그 줄들을 같은 카드에 붙이지 못하게 하는 것이다(감사 1회차 A-7).
+        let ai19FavBackup = store.favorites
+        store.favorites = [FavoritePlace(label: "집", place: aiPl("집", 37.500, 127.000)),
+                           FavoritePlace(label: "회사", place: aiPl("회사", 37.510, 127.010))]
+        let ai19Args: [String: Any] = ["title": "AI-점심보류", "destination_query": "회사", "origin_query": "집",
+                                       "weekdays": ["mon"], "arrival_time": "09:00", "return_time": "18:00",
+                                       "lunch_place_query": "맘스터치 강남점", "lunch_start": "12:30",
+                                       "lunch_end": "13:30", "start_date": "2027-03-01", "weeks": 4,
+                                       "mode_this_time": "transit", "buffer_minutes": 10,
+                                       "notify_lead_minutes": 10]
+        let ai19Cands = [aiPl("맘스터치 강남점", 37.4970, 127.0290),
+                         aiPl("청년백차 강남점", 37.5001, 127.0305)]
+        // 기준: 같은 요청을 점심 장소를 미리 확정해 한 번에 만들었을 때의 구간·활동 수.
+        let ai19Ctl = fresh()
+        ai19Ctl.drvConfirmPlace(ai19Cands[1].name, ai19Cands[1])
+        var ai19CtlArgs = ai19Args
+        ai19CtlArgs["lunch_place_query"] = ai19Cands[1].name
+        _ = await ai19Ctl.drvCreateRecurring(ai19CtlArgs)
+        let ai19CtlEvents = store.events.count
+        let ai19CtlActivities = store.activities.count
+        store.events = []
+        store.activities = []
+        let ai19 = fresh()
+        _ = ai19.drvPark("create_recurring_schedule", ai19Args,
+                         [(key: "lunch_place_query", query: "맘스터치 강남점", candidates: ai19Cands)])
+        let ai19Ask = ai19.drvLiveAsk()
+        ai19.drvCheck("AI-19 (a): 점심 보류 카드의 줄은 키 lunch_place_query·이름 '점심 장소' 하나뿐이다",
+                      ai19Ask?.fields.count == 1
+                        && ai19Ask?.fields.first?.key == "lunch_place_query"
+                        && ai19Ask?.fields.first?.label == "점심 장소",
+                      "fields=\(ai19Ask?.fields.map { "\($0.key)(\($0.label))" } ?? [])")
+        if let f = ai19Ask?.fields.first(where: { $0.kind == .place }) {
+            ai19.choose(field: f.id, place: ai19Cands[1])
+        }
+        _ = await ai19.drvResolvePendingAsk()
+        let ai19LunchLegs = store.events.filter { $0.title.contains("점심 이동") }
+        ai19.drvCheck("AI-19 (b): 확인 뒤 점심 이동 도착지가 고른 장소고 구간·활동 수는 한 번 만든 수와 같다",
+                      !ai19LunchLegs.isEmpty
+                        && ai19LunchLegs.allSatisfy { $0.destination.name == ai19Cands[1].name
+                            && $0.destination.latitude == ai19Cands[1].latitude
+                            && $0.destination.longitude == ai19Cands[1].longitude }
+                        && store.events.count == ai19CtlEvents
+                        && store.activities.count == ai19CtlActivities,
+                      "lunchLegs=\(ai19LunchLegs.count) events=\(store.events.count)/\(ai19CtlEvents) activities=\(store.activities.count)/\(ai19CtlActivities)")
+        store.events = []
+        store.activities = []
+        store.favorites = ai19FavBackup
+
+        // AI-20 (조사 (다)): 같은 검색어가 출발지·목적지에 함께 올 때 — 두 줄에서 같은 상호의 다른
+        //        지점을 각자 고르면 각 줄의 좌표가 각자 실린다(confirmedPlaceKey 회귀선).
+        let ai20 = fresh()
+        let ai20Cands = [aiPl("스타벅스 강남점", 37.5010, 127.0370),
+                         aiPl("스타벅스 강남점", 37.4970, 127.0280)]
+        _ = ai20.drvPark("create_schedule",
+            ["title": "AI-같은이름", "origin_query": "스타벅스", "destination_query": "스타벅스",
+             "arrival_iso": "2027-03-20T15:00:00", "mode_this_time": "transit",
+             "buffer_minutes": 10, "notify_lead_minutes": 10],
+            [(key: "origin_query", query: "스타벅스", candidates: ai20Cands),
+             (key: "destination_query", query: "스타벅스", candidates: ai20Cands)])
+        if let ai20Ask = ai20.drvLiveAsk() {
+            // 출발지는 첫 후보, 목적지는 둘째 후보 — 같은 이름이라 열쇠가 좌표로 갈린다.
+            if let fo = ai20Ask.fields.first(where: { $0.key == "origin_query" }) {
+                ai20.choose(field: fo.id, place: ai20Cands[0])
+            }
+            if let fd = ai20Ask.fields.first(where: { $0.key == "destination_query" }) {
+                ai20.choose(field: fd.id, place: ai20Cands[1])
+            }
+        }
+        _ = await ai20.drvResolvePendingAsk()
+        let ai20Event = store.events.first { $0.title == "AI-같은이름" }
+        ai20.drvCheck("AI-20: 같은 이름 두 줄에서 각자 고른 좌표가 출발·도착에 각각 실린다",
+                      ai20Event?.origin?.latitude == ai20Cands[0].latitude
+                        && ai20Event?.origin?.longitude == ai20Cands[0].longitude
+                        && ai20Event?.destination.latitude == ai20Cands[1].latitude
+                        && ai20Event?.destination.longitude == ai20Cands[1].longitude,
+                      "origin=\(ai20Event?.origin?.name ?? "nil")@\(ai20Event?.origin?.latitude ?? 0) dest=\(ai20Event?.destination.name ?? "nil")@\(ai20Event?.destination.latitude ?? 0)")
+        store.events = []
+        store.activities = []
+
+        // AI-21 (D-1 (b)): 이동시간 조회의 보류·확인 — 조회도 카드를 거친다. (b)는 확인 경로가 조회
+        //        도구를 실제로 실행하는 첫 관측이라 결과 문구의 앞머리만 본다(성공·실패 어느 쪽이든
+        //        같은 꼴로 시작한다 — 경로 계산은 MapKit이라 결정적이지 않다).
+        let ai21 = fresh()
+        let ai21OriginCands = [aiPl("스타벅스 케이스퀘어강남점", 37.4979, 127.0285),
+                               aiPl("스타벅스 강남역점", 37.4980, 127.0286)]
+        let ai21DestCands = [aiPl("스타벅스 홍대입구역점", 37.5573, 126.9244),
+                             aiPl("스타벅스 홍대가좌점", 37.5569, 126.9226)]
+        let ai21Msg = ai21.drvPark("check_travel_time",
+            ["origin_query": "스타벅스 강남점", "destination_query": "스타벅스 홍대점"],
+            [(key: "origin_query", query: "스타벅스 강남점", candidates: ai21OriginCands),
+             (key: "destination_query", query: "스타벅스 홍대점", candidates: ai21DestCands)])
+        let ai21Ask = ai21.drvLiveAsk()
+        ai21.drvCheck("AI-21 (a): 조회 카드의 두 줄이 출발지·목적지 키와 이름으로 뜨고 '아직 조회하지' 문구가 두 질의를 담는다",
+                      ai21Ask?.fields.count == 2
+                        && ai21Ask?.fields.first { $0.key == "origin_query" }?.label == "출발지"
+                        && ai21Ask?.fields.first { $0.key == "destination_query" }?.label == "목적지"
+                        && ["origin_query", "destination_query"].allSatisfy { k in
+                            guard let f = ai21Ask?.fields.first(where: { $0.key == k }) else { return false }
+                            if case .results(let p) = f.lookup, p.count == 2, f.startsOpen { return true }
+                            return false
+                        }
+                        && ai21Msg.hasPrefix("아직 조회하지 않았어요")
+                        && ai21Msg.contains("스타벅스 강남점") && ai21Msg.contains("스타벅스 홍대점"),
+                      "fields=\(ai21Ask?.fields.map { "\($0.key)(\($0.label))" } ?? []) msg=\(ai21Msg)")
+        if let ai21Ask {
+            if let fo = ai21Ask.fields.first(where: { $0.key == "origin_query" }) {
+                ai21.choose(field: fo.id, place: ai21OriginCands[1])
+            }
+            if let fd = ai21Ask.fields.first(where: { $0.key == "destination_query" }) {
+                ai21.choose(field: fd.id, place: ai21DestCands[1])
+            }
+        }
+        let ai21EventsBefore = store.events.count
+        let ai21ActivitiesBefore = store.activities.count
+        let ai21Reply = await ai21.drvResolvePendingAsk() ?? ""
+        ai21.drvCheck("AI-21 (b): 두 줄에서 고르고 확인하면 '<출발지>' → '<목적지>'로 답하고 레코드·카드는 그대로다",
+                      ai21Reply.hasPrefix("'\(ai21OriginCands[1].name)' → '\(ai21DestCands[1].name)'")
+                        && store.events.count == ai21EventsBefore
+                        && store.activities.count == ai21ActivitiesBefore
+                        && ai21.drvLiveAsk() == nil,
+                      "reply=\(ai21Reply) events=\(store.events.count) activities=\(store.activities.count)")
+
+        // AI-22 (D-1 (b)): 식사 추천의 보류·확인 — 줄 이름은 '기준 장소'(활동 장소가 아니고 현재
+        //        위치 칩도 없다). (b)는 프록시가 비어 nearbyPlaces가 빈 목록을 내도 앞머리가 같은
+        //        꼴이라 결정적이다.
+        let ai22 = fresh()
+        let ai22Cands = [aiPl("스타벅스 강남역점B1", 37.4980, 127.0286),
+                         aiPl("스타벅스 강남역점2호", 37.4975, 127.0278)]
+        let ai22Msg = ai22.drvPark("recommend_meal",
+            ["keyword": "일식", "place_query": "강남역"],
+            [(key: "place_query", query: "강남역", candidates: ai22Cands)])
+        let ai22Ask = ai22.drvLiveAsk()
+        let ai22Row = ai22Ask?.fields.first { $0.kind == .place }
+        var ai22Loaded = false
+        if let f = ai22Row, case .results(let p) = f.lookup, p.count == 2, f.startsOpen { ai22Loaded = true }
+        ai22.drvCheck("AI-22 (a): 식사 추천 카드의 줄은 키 place_query·이름 '기준 장소'·후보 2·'현재 위치' 칩 없음·'아직 조회하지' 문구",
+                      ai22Row?.key == "place_query" && ai22Row?.label == "기준 장소"
+                        && ai22Loaded
+                        && (ai22Row?.options.contains { $0.label == "현재 위치" } ?? true) == false
+                        && ai22Msg.hasPrefix("아직 조회하지 않았어요"),
+                      "key=\(ai22Row?.key ?? "nil") label=\(ai22Row?.label ?? "nil") loaded=\(ai22Loaded) msg=\(ai22Msg)")
+        if let f = ai22Row { ai22.choose(field: f.id, place: ai22Cands[1]) }
+        let ai22EventsBefore = store.events.count
+        let ai22ActivitiesBefore = store.activities.count
+        let ai22Reply = await ai22.drvResolvePendingAsk() ?? ""
+        ai22.drvCheck("AI-22 (b): 후보를 골라 확인하면 '<고른 후보 이름>' 주변으로 답하고 레코드·카드는 그대로다",
+                      ai22Reply.hasPrefix("'\(ai22Cands[1].name)' 주변")
+                        && store.events.count == ai22EventsBefore
+                        && store.activities.count == ai22ActivitiesBefore
+                        && ai22.drvLiveAsk() == nil,
+                      "reply=\(ai22Reply) events=\(store.events.count) activities=\(store.activities.count)")
+
         drvAssertGlobalInvariants(aiCard, "AI절")
 
         // 마지막 절이 불변식을 깨고 끝나면 그 뒤에 아무 방어선도 없다 — 여기서 한 번 더 잰다.
