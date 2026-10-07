@@ -904,7 +904,7 @@ final class AIAssistant: ObservableObject {
             // 생성 도구 세 개의 맥락 줄만 모은다 — 같은 함수(filledValueLabels)가 후보 카드 경로도
             // 담당하므로 여기가 실행 전 카드의 단일 출처다(REQ-007, 계약 5).
             let name = call["name"] as? String ?? ""
-            guard ["create_schedule", "create_activity", "create_recurring_schedule"].contains(name) else { continue }
+            guard Self.creatingTools.contains(name) else { continue }
             stated += filledValueLabels(tool: name,
                                         args: call["args"] as? [String: Any] ?? [:],
                                         fields: fields)
@@ -968,10 +968,18 @@ final class AIAssistant: ObservableObject {
         pendingActionWords(for: tool).button
     }
 
+    /// 실행 전 카드의 줄을 만드는 생성 도구 셋. 혼합 턴의 카드는 한 턴의 호출을 전부 담는데
+    /// 줄은 이 도구에서만 생기므로 버튼 문구도 이 셋을 먼저 본다(Q16 후속 ①). 문맥 줄 수집과
+    /// toolName이 각자 리터럴을 두면 어긋나는 날이 온다(계약 5).
+    private static let creatingTools: Set<String> = ["create_schedule", "create_activity", "create_recurring_schedule"]
+
     /// 카드를 만든 도구 이름 — 버튼 문구·버린 카드 말풍선·중복 가드가 "열린 카드의 도구"를
     /// 따르는 근원(Q16). 수동 편집 화면의 카드는 functionCall이 없어 빈 값을 돌려준다.
     static func toolName(of card: EditCard) -> String {
-        card.parts.compactMap { $0["functionCall"] as? [String: Any] }.first?["name"] as? String ?? ""
+        // 혼합 턴의 실행 전 카드는 호출 여럿을 담는데 줄은 생성 도구에서만 생긴다 — 버튼은 그
+        // 도구를 따른다(Q16 후속 ①). 생성 도구가 없으면(조회만·후보 카드) 첫 호출을 쓴다.
+        let names = card.parts.compactMap { ($0["functionCall"] as? [String: Any])?["name"] as? String }
+        return names.first(where: { Self.creatingTools.contains($0) }) ?? names.first ?? ""
     }
 
     /// 검색으로 찾은 장소는 늘 고른다 — 등록·수정·점심·조회 실행부가 결과가 있으면 멈추고
@@ -1379,7 +1387,7 @@ final class AIAssistant: ObservableObject {
                     && !followUpFields.contains(where: { $0.key == line.key })
             }
             followUpFields.append(contentsOf: fresh)
-            guard ["create_schedule", "create_activity", "create_recurring_schedule"].contains(name) else { continue }
+            guard Self.creatingTools.contains(name) else { continue }
             followUpStated += filledValueLabels(tool: name, args: args, fields: fresh)
         }
         if !followUpFields.isEmpty {
