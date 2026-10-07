@@ -879,9 +879,9 @@ final class AIAssistant: ObservableObject {
         "같은 이름('\(query)')이 다른 줄에도 있어요. 이 줄에 맞는 지점을 골라 주세요."
     }
 
-    /// 검색 결과를 보여주고 고르게 하는 줄의 캡션(t47, 채택 문안 원문). "확실하지 않다"는
-    /// 옛 판정(정확·유일 일치)의 이유였다 — 지금은 결과가 있으면 언제나 묻으므로 사실대로
-    /// 검색 결과임만을 적는다.
+    /// 검색 결과를 보여주고 고르게 하는 줄의 캡션(t47, 채택 문안 원문). 옛 캡션은 결과를 가릴
+    /// 수 없다는 이유를 적었지만, 지금 판정은 결과가 있으면 언제나 묻는다 — 그 이유가 거짓이
+    /// 되므로 사실대로 검색 결과임만을 적는다.
     private static func unclearPlaceNote(_ query: String) -> String {
         "'\(query)' 검색 결과예요. 맞는 곳을 고르거나, 없으면 다른 이름으로 검색해 주세요."
     }
@@ -948,15 +948,30 @@ final class AIAssistant: ObservableObject {
         return out
     }
 
-    /// 보류 문구의 도구별 동사 — 등록 세 도구는 '등록', 수정은 '고치', 조회는 '조회'. 도구마다
-    /// 인라인으로 두 벌을 두면 한쪽만 고쳐지는 날 문구끼리 어긋난다(계약 5). '않았어요'와
-    /// 이어 붙인 꼴로 돌려준다.
-    private static func pendingActionVerb(for tool: String) -> String {
+    /// 보류 문구·확인 버튼의 도구별 낱말 — 등록 세 도구·수정·조회가 한 스위치에서 갈린다(t47
+    /// Q16). 도구마다 인라인으로 두 벌을 두면 한쪽만 고쳐지는 날 문구끼리 어긋난다(계약 5).
+    private static func pendingActionWords(for tool: String) -> (verb: String, button: String) {
         switch tool {
-        case "update_schedule": return "고치지"
-        case "check_travel_time", "recommend_meal": return "조회하지"
-        default: return "등록하지"
+        case "update_schedule": return ("고치지", "고치기")
+        case "check_travel_time", "recommend_meal": return ("조회하지", "조회하기")
+        default: return ("등록하지", "등록하기")
         }
+    }
+
+    /// '않았어요'와 이어 붙이는 동사 꼴.
+    private static func pendingActionVerb(for tool: String) -> String {
+        pendingActionWords(for: tool).verb
+    }
+
+    /// 카드 확인 버튼 문구(Q16 운영자 확정 — 등록하기·고치기·조회하기). 뷰가 부르므로 내부 공개다.
+    static func pendingConfirmTitle(for tool: String) -> String {
+        pendingActionWords(for: tool).button
+    }
+
+    /// 카드를 만든 도구 이름 — 버튼 문구·버린 카드 말풍선·중복 가드가 "열린 카드의 도구"를
+    /// 따르는 근원(Q16). 수동 편집 화면의 카드는 functionCall이 없어 빈 값을 돌려준다.
+    static func toolName(of card: EditCard) -> String {
+        card.parts.compactMap { $0["functionCall"] as? [String: Any] }.first?["name"] as? String ?? ""
     }
 
     /// 검색으로 찾은 장소는 늘 고른다 — 등록·수정·점심·조회 실행부가 결과가 있으면 멈추고
@@ -970,10 +985,12 @@ final class AIAssistant: ObservableObject {
                                       unclear: UnclearPlaceList) -> String {
         // 모델이 안내를 읽지 않고 같은 호출을 되풀이해도 카드를 두 장 열지 않는다. 다만 "자동으로
         // 진행돼요"라고 답하면 이 호출이 등록됐다는 거짓 안내가 된다(H-2 재현) — 사실대로 아직
-        // 일은 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)). 수정·조회는
-        // "그 카드의 일만" 진행된다 — 등록 문구의 "그 등록만"이 도구마다 다른 말이 된다.
-        guard !bubbles.contains(where: { $0.ask != nil }) else {
-            let verb = Self.pendingActionVerb(for: tool)
+        // 일은 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)). 동사는 **열린
+        // 카드의** 도구를 따른다(Q16) — 들어온 호출의 도구로 말하면 수정 카드 앞의 조회 호출이
+        // 조회를 말하는 식으로 열려 있는 일과 어긋난다. 수정·조회는 "그 카드의 일만" 진행된다 —
+        // 등록 문구의 "그 등록만"이 도구마다 다른 말이 된다.
+        if let openCard = bubbles.first(where: { $0.ask != nil })?.ask {
+            let verb = Self.pendingActionVerb(for: Self.toolName(of: openCard))
             if verb == "등록하지" {
                 return "등록하지 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 등록만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해."
             }
@@ -1007,7 +1024,7 @@ final class AIAssistant: ObservableObject {
                              fields: fields)
         bubbles.append(.init(role: .assistant, text: "", ask: ask))
         let names = unclear.map { "'\($0.query)'" }.joined(separator: ", ")
-        // 옛 문구는 "좁혀지지 않아요(이름이 다른 곳이나…)"라 이유를 말했는데, 정확 일치 단일
+        // 옛 문구는 결과가 질의와 맞는지 확신할 수 없다는 취지로 이유를 말했는데, 정확 일치 단일
         // 결과까지 물어보는 지금 판정에서는 그 이유가 거짓이 된다 — 문구는 이유를 대지 않고
         // 사실(검색 결과를 직접 골라야 확정)만 적는다(D-3 (a) 확정 원문). 동사는 도구를 따른다.
         let verb = Self.pendingActionVerb(for: tool)
@@ -1420,11 +1437,15 @@ final class AIAssistant: ObservableObject {
     }
 
     /// 답을 못 받은 카드를 접는다. 보류한 모델 턴은 히스토리에 넣은 적이 없으므로 버려도
-    /// 남는 흔적이 없다 — 등록되지 않았다는 사실만 사용자에게 남긴다.
+    /// 남는 흔적이 없다 — 진행되지 않았다는 사실만 사용자에게 남긴다.
     private func cancelPendingAsk() {
         cancelPlaceSearches()
-        for i in bubbles.indices where bubbles[i].ask != nil {
-            bubbles[i] = .init(role: .assistant, text: "물어본 값을 받지 못해서 그 등록은 진행하지 않았어요.")
+        for i in bubbles.indices {
+            guard let card = bubbles[i].ask else { continue }
+            // 말풍선의 동사도 열린 카드의 도구를 따른다(Q16) — 조회 카드를 접고 "그 등록은
+            // 진행하지 않았다"고 하면 거짓이 된다.
+            let verb = Self.pendingActionVerb(for: Self.toolName(of: card))
+            bubbles[i] = .init(role: .assistant, text: "물어본 값을 받지 못해서 \(verb) 않았어요.")
         }
     }
 
