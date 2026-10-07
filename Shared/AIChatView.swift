@@ -107,7 +107,11 @@ struct AIChatView: View {
     private func bubbleView(_ bubble: AIAssistant.Bubble) -> some View {
         if let ask = bubble.ask {
             // 카드는 말풍선이 아니라 한 장짜리 폼이다 — 줄이 다섯을 넘길 수 있어서 폭을 다 쓴다.
-            EditCardView(card: ask, busy: assistant.isThinking, actions: editCardActions)
+            // 확인 버튼 문구는 카드를 만든 도구를 따른다(Q16) — 조회 카드가 "등록하기"라고
+            // 말하게 두면 거짓 버튼이 된다.
+            EditCardView(card: ask, busy: assistant.isThinking, actions: editCardActions,
+                         chrome: EditCardChrome(header: "몇 가지만 알려주세요",
+                                                confirmTitle: AIAssistant.pendingConfirmTitle(for: AIAssistant.toolName(of: ask))))
         } else {
             HStack {
                 if bubble.role == .user { Spacer(minLength: 40) }

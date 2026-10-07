@@ -31,8 +31,9 @@ final class AIAssistant: ObservableObject {
     typealias AskField = EditField
     typealias PendingAsk = EditCard
 
-    /// 후보 되묻기 카드가 넘기는 모호 장소 목록 — 실행부 셋과 후보 카드, 드라이버(drvPark)가
-    /// 같은 모양을 본다. 튜플을 자리마다 풀어 적으면 한 자리만 고치고 나머지가 어긋나므로
+    /// 후보 되묻기 카드가 넘기는 모호 장소 목록 — 보류 실행부(등록 세 도구·수정·반복 점심·
+    /// 조회 둘)와 후보 카드, 드라이버(drvPark)가 같은 모양을 본다. 튜플을 자리마다 풀어 적으면
+    /// 한 자리만 고치고 나머지가 어긋나므로
     /// 별칭으로 하나로 둔다.
     typealias UnclearPlaceList = [(key: String, query: String, candidates: [Place])]
 
@@ -516,7 +517,7 @@ final class AIAssistant: ObservableObject {
             for key in ["destination_query", "origin_query"] {
                 if let q = repeatedSearchQuery(key, among: ["destination_query", "origin_query"], in: args),
                    !fields.contains(where: { $0.key == key }) {
-                    var f = placeRow(key: key)
+                    var f = placeRow(key: key, tool: tool)
                     f.note = Self.sameNamePlaceNote(q)
                     fields.append(f)
                 }
@@ -577,7 +578,7 @@ final class AIAssistant: ObservableObject {
                 for key in activityPlaceKeys {
                     if let q = repeatedSearchQuery(key, among: activityPlaceKeys, in: args),
                        !fields.contains(where: { $0.key == key }) {
-                        var f = placeRow(key: key)
+                        var f = placeRow(key: key, tool: tool)
                         f.note = Self.sameNamePlaceNote(q)
                         fields.append(f)
                     }
@@ -637,7 +638,7 @@ final class AIAssistant: ObservableObject {
         return fields
     }
 
-    /// 출발지 줄. 즐겨찾기 + 현재 위치 + 직접입력이고, 고른 값은 resolveOrigin이 그대로 읽는다.
+    /// 출발지 줄. 즐겨찾기 + 현재 위치 + 직접입력이고, 고른 값은 resolveOriginAdoption이 그대로 읽는다.
     /// `unknown`이 오면 사용자가 말한 낱말을 앱이 풀지 못해 뜬 줄이다 — 줄 이름은 그대로 두고
     /// 이유만 캡션으로 붙인다(줄 이름은 실행부 안내·확정 요약과 같은 문구라 상황마다 바꾸면
     /// 세 자리가 서로 다른 말을 하게 된다).
@@ -740,13 +741,43 @@ final class AIAssistant: ObservableObject {
               allowsCustom: true)
     }
 
+    /// 수정 카드의 '바꿀 장소' 줄. 목적지 줄과 같은 재료(즐겨찾기 + 직접입력, 현재 위치 칩 없음)에
+    /// 키와 이름만 바꾼다 — 선언 설명의 "바꿀 장소"와 같은 말이다(D-3 (a)).
+    private func newPlaceRow() -> AskField {
+        .init(key: "new_place_query", kind: .place, label: "바꿀 장소",
+              options: store.favorites.map { .init(label: $0.label, value: $0.label) },
+              allowsCustom: true)
+    }
+
+    /// 반복 점심 카드의 '점심 장소' 줄. 목적지 줄과 같은 이유로 "현재 위치" 칩이 없다.
+    private func lunchPlaceRow() -> AskField {
+        .init(key: "lunch_place_query", kind: .place, label: "점심 장소",
+              options: store.favorites.map { .init(label: $0.label, value: $0.label) },
+              allowsCustom: true)
+    }
+
+    /// 식사 추천 카드의 '기준 장소' 줄. 선언 설명의 "기준 장소 직접 지정"과 같은 말이다(D-3 (a)).
+    /// "현재 위치" 칩을 두지 않는다 — 현재 위치 기준은 place_query를 비우는 기존 갈래가 맡고,
+    /// 토큰이 place_query에 실리면 그 글자가 검색 질의가 된다(REQ-009).
+    private func basisPlaceRow() -> AskField {
+        .init(key: "place_query", kind: .place, label: "기준 장소",
+              options: store.favorites.map { .init(label: $0.label, value: $0.label) },
+              allowsCustom: true)
+    }
+
     /// 장소 줄 키 → 그 줄의 기본 재료. 되묻기 카드가 줄을 새로 만들 때 부르는 단일 출처다 —
     /// 키마다 재료가 달라(출발지에만 "현재 위치" 칩, 가는 편에만 "가는 편 없음" 칩) 여기저기
-    /// 인라인으로 두면 어긋난다(계약 5).
-    private func placeRow(key: String) -> AskField {
+    /// 인라인으로 두면 어긋난다(계약 5). `place_query`는 도구에 따라 갈린다 — 활동 등록이면
+    /// 활동 장소 줄, 식사 추천이면 기준 장소 줄. 키가 같아도 줄 이름이 다르면 고른 값이
+    /// 보류 키에 실리지 않는다(주입은 clearedKeys의 키와 줄 키가 같은 줄에만 붙는다).
+    /// @MX:NOTE 새 키(new_place_query·lunch_place_query)와 식사 추천 place_query는
+    /// 보류 키와 같은 키의 줄이어야 확인 주입(resolvePendingAsk)이 고른 값을 싣는다.
+    private func placeRow(key: String, tool: String) -> AskField {
         switch key {
         case "origin_query": return originField()
-        case "place_query": return activityPlaceField()
+        case "new_place_query": return newPlaceRow()
+        case "lunch_place_query": return lunchPlaceRow()
+        case "place_query": return tool == "recommend_meal" ? basisPlaceRow() : activityPlaceField()
         case "travel_from_query": return outboundOriginField()
         case "return_to_query": return returnPlaceField()
         default: return destinationField()
@@ -848,9 +879,11 @@ final class AIAssistant: ObservableObject {
         "같은 이름('\(query)')이 다른 줄에도 있어요. 이 줄에 맞는 지점을 골라 주세요."
     }
 
-    /// 검색 첫 결과가 말한 지점인지 확실하지 않아 되묻는 줄의 캡션(U-4, 채택 문안 원문).
+    /// 검색 결과를 보여주고 고르게 하는 줄의 캡션(t47, 채택 문안 원문). 옛 캡션은 결과를 가릴
+    /// 수 없다는 이유를 적었지만, 지금 판정은 결과가 있으면 언제나 묻는다 — 그 이유가 거짓이
+    /// 되므로 사실대로 검색 결과임만을 적는다.
     private static func unclearPlaceNote(_ query: String) -> String {
-        "'\(query)' 검색 결과가 말씀하신 지점인지 확실하지 않아요. 아래 후보에서 맞는 곳을 골라 주세요."
+        "'\(query)' 검색 결과예요. 맞는 곳을 고르거나, 없으면 다른 이름으로 검색해 주세요."
     }
 
     /// 이 턴의 모든 호출에서 비어 있는 인자를 모아 카드 **한 장**을 만든다. 한 턴에 호출이
@@ -871,7 +904,7 @@ final class AIAssistant: ObservableObject {
             // 생성 도구 세 개의 맥락 줄만 모은다 — 같은 함수(filledValueLabels)가 후보 카드 경로도
             // 담당하므로 여기가 실행 전 카드의 단일 출처다(REQ-007, 계약 5).
             let name = call["name"] as? String ?? ""
-            guard ["create_schedule", "create_activity", "create_recurring_schedule"].contains(name) else { continue }
+            guard Self.creatingTools.contains(name) else { continue }
             stated += filledValueLabels(tool: name,
                                         args: call["args"] as? [String: Any] ?? [:],
                                         fields: fields)
@@ -904,24 +937,72 @@ final class AIAssistant: ObservableObject {
             add("활동 장소", "place_query")
             add("가는 편 출발지", "travel_from_query")
             add("오는 편 도착지", "return_to_query")
+        case "update_schedule":
+            // 수정 카드의 맥락 줄(D-3 (a)) — 무엇을 고치는지 적지 않은 카드는 H-6과 같은 모양이
+            // 된다. 조회 도구에는 두지 않는다: 카드 바로 위에 방금 한 질문이 있고 줄 캡션이
+            // 질의를 적는다.
+            add("고칠 일정", "title_query")
+            add("날짜", "date")
         default: break
         }
         return out
     }
 
-    /// 검색 첫 결과가 이름과 맞지 않아 등록을 멈추고 후보를 고르게 하는 카드(U-4). runLoop이
-    /// 카드를 만드는 창(모델 턴이 히스토리에 들어가기 전)은 이미 닫혔다 — 실행이 시작된 뒤라
-    /// 여기서 직접 보류 카드를 만든다. 재료는 runLoop 경로와 같은 것을 쓴다(줄 공장 askFields·
-    /// placeRow·stated — 계약 5). 모호한 질의는 보류 인자에서 **비운다** — 그 빈 값이 카드가 비운
-    /// 키의 기록이고(D-3 (a)), 확인 때 resolvePendingAsk가 그 키에 고른 값을 실는다. 값을 남겨
+    /// 보류 문구·확인 버튼의 도구별 낱말 — 등록 세 도구·수정·조회가 한 스위치에서 갈린다(t47
+    /// Q16). 도구마다 인라인으로 두 벌을 두면 한쪽만 고쳐지는 날 문구끼리 어긋난다(계약 5).
+    private static func pendingActionWords(for tool: String) -> (verb: String, button: String) {
+        switch tool {
+        case "update_schedule": return ("고치지", "고치기")
+        case "check_travel_time", "recommend_meal": return ("조회하지", "조회하기")
+        default: return ("등록하지", "등록하기")
+        }
+    }
+
+    /// '않았어요'와 이어 붙이는 동사 꼴.
+    private static func pendingActionVerb(for tool: String) -> String {
+        pendingActionWords(for: tool).verb
+    }
+
+    /// 카드 확인 버튼 문구(Q16 운영자 확정 — 등록하기·고치기·조회하기). 뷰가 부르므로 내부 공개다.
+    static func pendingConfirmTitle(for tool: String) -> String {
+        pendingActionWords(for: tool).button
+    }
+
+    /// 실행 전 카드의 줄을 만드는 생성 도구 셋. 혼합 턴의 카드는 한 턴의 호출을 전부 담는데
+    /// 줄은 이 도구에서만 생기므로 버튼 문구도 이 셋을 먼저 본다(Q16 후속 ①). 문맥 줄 수집과
+    /// toolName이 각자 리터럴을 두면 어긋나는 날이 온다(계약 5).
+    private static let creatingTools: Set<String> = ["create_schedule", "create_activity", "create_recurring_schedule"]
+
+    /// 카드를 만든 도구 이름 — 버튼 문구·버린 카드 말풍선·중복 가드가 "열린 카드의 도구"를
+    /// 따르는 근원(Q16). 수동 편집 화면의 카드는 functionCall이 없어 빈 값을 돌려준다.
+    static func toolName(of card: EditCard) -> String {
+        // 혼합 턴의 실행 전 카드는 호출 여럿을 담는데 줄은 생성 도구에서만 생긴다 — 버튼은 그
+        // 도구를 따른다(Q16 후속 ①). 생성 도구가 없으면(조회만·후보 카드) 첫 호출을 쓴다.
+        let names = card.parts.compactMap { ($0["functionCall"] as? [String: Any])?["name"] as? String }
+        return names.first(where: { Self.creatingTools.contains($0) }) ?? names.first ?? ""
+    }
+
+    /// 검색으로 찾은 장소는 늘 고른다 — 등록·수정·점심·조회 실행부가 결과가 있으면 멈추고
+    /// 후보를 고르게 하는 카드(t47, U-4를 조회까지 확장). runLoop이 카드를 만드는 창(모델 턴이
+    /// 히스토리에 들어가기 전)은 이미 닫혔다 — 실행이 시작된 뒤라 여기서 직접 보류 카드를 만든다.
+    /// 재료는 runLoop 경로와 같은 것을 쓴다(줄 공장 askFields·placeRow·stated — 계약 5).
+    /// 모호한 질의는 보류 인자에서 **비운다** — 그 빈 값이 카드가 비운 키의 기록이고(D-3 (a)),
+    /// 확인 때 resolvePendingAsk가 그 키에 고른 값을 실는다. 값을 남겨
     /// 두면 원래 질의가 그대로 실행부에 흘러 사용자가 고른 지점 대신 그 질의가 다시 검색된다.
     private func parkForUnclearPlaces(tool: String, input: [String: Any],
                                       unclear: UnclearPlaceList) -> String {
         // 모델이 안내를 읽지 않고 같은 호출을 되풀이해도 카드를 두 장 열지 않는다. 다만 "자동으로
-        // 진행돼요"라고 답하면 이 호출이 등록됐다는 거짓 안내가 된다(H-2 재현) — 사실대로 등록은
-        // 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)).
-        guard !bubbles.contains(where: { $0.ask != nil }) else {
-            return "등록하지 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 등록만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해."
+        // 진행돼요"라고 답하면 이 호출이 등록됐다는 거짓 안내가 된다(H-2 재현) — 사실대로 아직
+        // 일은 안 됐고 카드가 끝난 뒤에 다시 호출해야 한다고만 돌려준다(D-4 (a)). 동사는 **열린
+        // 카드의** 도구를 따른다(Q16) — 들어온 호출의 도구로 말하면 수정 카드 앞의 조회 호출이
+        // 조회를 말하는 식으로 열려 있는 일과 어긋난다. 수정·조회는 "그 카드의 일만" 진행된다 —
+        // 등록 문구의 "그 등록만"이 도구마다 다른 말이 된다.
+        if let openCard = bubbles.first(where: { $0.ask != nil })?.ask {
+            let verb = Self.pendingActionVerb(for: Self.toolName(of: openCard))
+            if verb == "등록하지" {
+                return "등록하지 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 등록만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해."
+            }
+            return "\(verb) 않았어요 — 이미 같은 질문의 카드가 열려 있어요. 사용자가 그 카드에서 고르면 그 카드의 일만 진행돼요. 이 호출은 카드가 끝난 뒤에 인자를 바꾸지 말고 다시 호출해."
         }
         var parked = input
         // 줄은 **비우기 전 인자**로 물을 줄과 같은 공장(askFields)에서 만든다. 비워진 인자로 만들면
@@ -931,7 +1012,7 @@ final class AIAssistant: ObservableObject {
         var fields = askFields(tool: tool, args: input)
         for item in unclear {
             parked[item.key] = ""
-            var f = placeRow(key: item.key)
+            var f = placeRow(key: item.key, tool: tool)
             f.note = Self.unclearPlaceNote(item.query)
             // 후보를 줄에 미리 얹는다 — 물어보는 김에 사용자가 직접 검색하게 하는 건 또 한 번의
             // 왕복이다. 갖고 온 후보가 전부 아니면 직접입력으로 좁히면 된다. 줄의 편집기도 함께
@@ -951,10 +1032,11 @@ final class AIAssistant: ObservableObject {
                              fields: fields)
         bubbles.append(.init(role: .assistant, text: "", ask: ask))
         let names = unclear.map { "'\($0.query)'" }.joined(separator: ", ")
-        // unclear 사유는 둘이다 — 이름이 아예 다른 곳(U-4)과 낱말은 맞지만 같은 이름의 지점이
-        // 여럿이라 갈리는 것(t42 ①). 뒤쪽에서 "이름이 다른 곳"만 말하면 새 사유에는 거짓
-        // 설명이 되므로 문구는 둘을 다 덮는다.
-        return "아직 등록하지 않았어요 — \(names)의 검색 결과가 사용자가 말한 지점으로 좁혀지지 않아요(이름이 다른 곳이나 같은 이름의 여러 지점으로 보여요). 앱이 후보를 고르는 카드를 열었으니 사용자가 고르면 그 값으로 자동 진행돼요. 인자를 바꿔 다시 호출하지 말고 기다려."
+        // 옛 문구는 결과가 질의와 맞는지 확신할 수 없다는 취지로 이유를 말했는데, 정확 일치 단일
+        // 결과까지 물어보는 지금 판정에서는 그 이유가 거짓이 된다 — 문구는 이유를 대지 않고
+        // 사실(검색 결과를 직접 골라야 확정)만 적는다(D-3 (a) 확정 원문). 동사는 도구를 따른다.
+        let verb = Self.pendingActionVerb(for: tool)
+        return "아직 \(verb) 않았어요 — 검색으로 찾은 장소는 사용자가 후보에서 직접 골라야 확정돼요(\(names)). 앱이 후보 카드를 열었으니 사용자가 고르면 그 값으로 자동 진행돼요. 인자를 바꿔 다시 호출하지 말고 기다려."
     }
 
     /// 모델 턴의 도구 호출 인자에서 **선언에 없는 키**를 뺀다. SPEC-ASK-001의 전제는 "선언에서
@@ -1305,7 +1387,7 @@ final class AIAssistant: ObservableObject {
                     && !followUpFields.contains(where: { $0.key == line.key })
             }
             followUpFields.append(contentsOf: fresh)
-            guard ["create_schedule", "create_activity", "create_recurring_schedule"].contains(name) else { continue }
+            guard Self.creatingTools.contains(name) else { continue }
             followUpStated += filledValueLabels(tool: name, args: args, fields: fresh)
         }
         if !followUpFields.isEmpty {
@@ -1363,11 +1445,15 @@ final class AIAssistant: ObservableObject {
     }
 
     /// 답을 못 받은 카드를 접는다. 보류한 모델 턴은 히스토리에 넣은 적이 없으므로 버려도
-    /// 남는 흔적이 없다 — 등록되지 않았다는 사실만 사용자에게 남긴다.
+    /// 남는 흔적이 없다 — 진행되지 않았다는 사실만 사용자에게 남긴다.
     private func cancelPendingAsk() {
         cancelPlaceSearches()
-        for i in bubbles.indices where bubbles[i].ask != nil {
-            bubbles[i] = .init(role: .assistant, text: "물어본 값을 받지 못해서 그 등록은 진행하지 않았어요.")
+        for i in bubbles.indices {
+            guard let card = bubbles[i].ask else { continue }
+            // 말풍선의 동사도 열린 카드의 도구를 따른다(Q16) — 조회 카드를 접고 "그 등록은
+            // 진행하지 않았다"고 하면 거짓이 된다.
+            let verb = Self.pendingActionVerb(for: Self.toolName(of: card))
+            bubbles[i] = .init(role: .assistant, text: "물어본 값을 받지 못해서 \(verb) 않았어요.")
         }
     }
 
@@ -1742,8 +1828,8 @@ final class AIAssistant: ObservableObject {
         let buffer = anchor == .departure ? 0 : Store.clampBuffer(intValue(input["buffer_minutes"]) ?? 0)
         let notify = Store.clampNotifyLead(intValue(input["notify_lead_minutes"]) ?? 0)
 
-        // 채택 삼태(U-4): 첫 결과가 이름과 맞지 않으면 등록을 멈추고 후보를 고르는 카드를 연다.
-        // notFound는 옛 안내 문구로, unclear는 되묻기 카드로 갈린다.
+        // 채택 삼태(U-4 → t47): 검색 결과가 있으면 등록을 멈추고 후보를 고르는 카드를 연다 —
+        // 결과가 하나뿐이고 이름이 맞아도 묻는다. notFound는 옛 안내 문구로 갈린다.
         var unclear: UnclearPlaceList = []
         let origin: Place?
         switch await resolveOriginAdoption(input["origin_query"] as? String) {
@@ -2198,6 +2284,32 @@ final class AIAssistant: ObservableObject {
                                                startDate: startDate, weeks: weeks)
         }
 
+        // 점심 장소 해석 — **첫 저장 앞**으로 옮겼다(D-4 (a), t47). 예전 자리(아래 3) 안에서)
+        //    카드를 세우면 확인이 도구 전체를 다시 실행해 통근·복귀·체류 묶음이
+        //    한 벌 더 생긴다 — 아무것도 저장하기 전에 물어야 확인 뒤 전체가 한 번에 만들어진다.
+        //    활동 블록은 항상 추가하고, 왕복 이동 구간은 lunch_place_query가 있고 해석에
+        //    성공했을 때만 붙인다. 머무는 반복은 위 두 갈래가 미리 돌아가므로 점심을 검색하지
+        //    않는다(쓰이지 않을 카드가 뜨지 않게 — REQ-008). **장소를 근무지와 비교하지는 않는다** — 같은 장소를 적어도
+        //    이동 구간이 생긴다(`isSamePlace`는 create_schedule의 0분 거절·활동 50 m 절·반복의
+        //    makeStayingRecurrence 갈래·확정 열쇠(confirmedPlaceKey)·카드 확인의 토큰 교체
+        //    (stayingTokenForColocatedPick) 다섯 곳에서 쓰이며, 이 점심 갈래에는 쓰이지 않는다).
+        //    예전 주석이 "장소가 다르면 추가"라고 잘못 적혀 있었고, SPEC REQ-021이 그걸 옮겨 적었다.
+        // @MX:WARN 점심 해석은 반드시 첫 store.addRecurringEvents( 앞에 있어야 한다 — 이 자리가
+        // 저장 뒤로 물러나면 보류 카드의 확인 재실행이 통근 묶음을 이중으로 만든다(AC-008).
+        var lunchPlace: Place? = nil
+        if let lsStr = input["lunch_start"] as? String, parseTime(lsStr) != nil,
+           let leStr = input["lunch_end"] as? String, parseTime(leStr) != nil,
+           let q = (input["lunch_place_query"] as? String)?.trimmingCharacters(in: .whitespaces),
+           !q.isEmpty {
+            switch await adoptPlace(q, creation: true) {
+            case .resolved(let p): lunchPlace = p
+            case .notFound: lunchPlace = nil
+            case .unclear(let c):
+                return parkForUnclearPlaces(tool: "create_recurring_schedule", input: input,
+                                            unclear: [(key: "lunch_place_query", query: q, candidates: c)])
+            }
+        }
+
         // 1) 등원/출근(도착) 구간.
         let leg1 = await store.addRecurringEvents(title: title, origin: origin, destination: dest,
                                                    rule: rule, anchor: .arrival(hour: hour, minute: minute),
@@ -2233,21 +2345,12 @@ final class AIAssistant: ObservableObject {
             activityCount += activityLeg
         }
 
-        // 3) 점심시간 — 활동 블록은 항상 추가하고, 왕복 이동 구간은 `lunch_place_query`가 있고
-        //    검색에 성공했을 때만 붙인다. **장소를 근무지와 비교하지는 않는다** — 같은 장소를 적어도
-        //    이동 구간이 생긴다(`isSamePlace`는 create_schedule의 0분 거절·활동 50 m 절·반복의
-        //    makeStayingRecurrence 갈래·확정 열쇠(confirmedPlaceKey)·카드 확인의 토큰 교체
-        //    (stayingTokenForColocatedPick) 다섯 곳에서 쓰이며, 이 점심 갈래에는 쓰이지 않는다).
-        //    예전 주석이 "장소가 다르면 추가"라고 잘못 적혀 있었고, SPEC REQ-021이 그걸 옮겨 적었다.
+        // 3) 점심시간 — 장소 해석은 위(첫 저장 앞)에서 끝났다. 여기는 해석된 값을 소비하는 자리다.
         if let lsStr = input["lunch_start"] as? String, let (lsH, lsM) = parseTime(lsStr),
            let leStr = input["lunch_end"] as? String, let (leH, leM) = parseTime(leStr) {
-            let lunchQuery = (input["lunch_place_query"] as? String)?.trimmingCharacters(in: .whitespaces)
-            var lunchPlace: Place? = nil
-            if let q = lunchQuery, !q.isEmpty {
-                // 점심 장소는 되묻기 카드를 열지 않는다(경계) — 실패·틀린 지점 모두 결과 문구에
-                // 이름으로 드러나고(아래 else·parts), 통근 전체를 멈춰 물을 자리가 아니다. unclear가
-                // 와도 첫 결과를 쓰는 평탄화가 그대로다.
-                lunchPlace = await resolveDestination(q, creation: true)
+            if let q = (input["lunch_place_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty {
+                // 점심 장소 해석 실패(notFound)는 통근을 멈추지 않는다 — 통근은 만들고 점심
+                // 이동은 빼며 결과 문구에 이름으로 드러낸다(아래 else·parts).
                 if let lunchPlace {
                     let leg3 = await store.addRecurringEvents(title: "\(title) - 점심 이동", origin: dest, destination: lunchPlace,
                                                                rule: rule, anchor: .arrival(hour: lsH, minute: lsM),
@@ -2298,7 +2401,7 @@ final class AIAssistant: ObservableObject {
     /// 0은 오류가 아니라 "해당 없음"으로 읽는다. 이 모델은 선언된 선택 인자를 비워두지 못하고 전부
     /// 채워 보낸다 — 같은 호출에 lunch_start·lunch_end·return_time이 빈 문자열로 같이 왔다. 문자열은
     /// 빈 값으로 "없음"을 말할 수 있지만 INTEGER에는 그 자리가 0뿐이다. 빈 문자열을 resolvedMode·
-    /// resolveOrigin이 조용히 흘려보내는 것과 같은 처리를 숫자 쪽에도 해준다.
+    /// resolveOriginAdoption이 조용히 흘려보내는 것과 같은 처리를 숫자 쪽에도 해준다.
     /// 툴 선언과 시스템 프롬프트에도 "매월이 아니면 0"이라고 적어 뒀다 — 앱만 알고 모델은 모르면,
     /// 되돌려 보낼 때 모델이 쓸 수 있는 탈출로가 없어 선언에 적힌 1~4·-1 중 하나를 다시 고른다.
     ///
@@ -2700,8 +2803,20 @@ final class AIAssistant: ObservableObject {
         var basis: Place?
         var basisNote = ""
         if let q = (input["place_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty {
-            basis = await resolveDestination(q)
-            basisNote = basis.map { "'\($0.name)' 주변" } ?? ""
+            // 기준 장소도 채택 삼태를 탄다(D-1 (b)) — 검색 결과가 있으면 추천하지 않고 카드로
+            // 물어본다. notFound는 기준 정하기의 다음 단(at_iso·현재 위치)으로 그대로 넘어간다.
+            // @MX:NOTE 보류는 nearbyPlaces보다 앞이어야 한다 — 기준이 정해지기 전에 검색하면
+            // 사용자가 고르지 않은 지점 주변을 조회하게 된다.
+            switch await adoptPlace(q, creation: false) {
+            case .resolved(let p):
+                basis = p
+                basisNote = "'\(p.name)' 주변"
+            case .notFound:
+                break
+            case .unclear(let c):
+                return parkForUnclearPlaces(tool: "recommend_meal", input: input,
+                                            unclear: [(key: "place_query", query: q, candidates: c)])
+            }
         }
         if basis == nil, let at = (input["at_iso"] as? String).flatMap(parseDate) {
             if let (place, label) = placeAt(at) {
@@ -2759,10 +2874,32 @@ final class AIAssistant: ObservableObject {
     private func executeCheckTravelTime(_ input: [String: Any]) async -> String {
         guard let destQuery = (input["destination_query"] as? String)?.trimmingCharacters(in: .whitespaces),
               !destQuery.isEmpty else { return "어디까지 가는지 알려주세요." }
-        guard let origin = await resolveOrigin(input["origin_query"] as? String, orDefault: true) else {
+        // 출발지·목적지 둘 다 채택 삼태를 탄다(D-1 (b)) — unclear를 모아 카드 한 장으로 연다
+        // (등록 세 도구와 같은 모양). notFound는 지금 안내문을 그대로 돌려준다.
+        // @MX:NOTE 보류는 travelEstimates보다 앞이어야 한다 — 고르지 않은 지점으로 경로를
+        // 계산하는 일이 없게 한다. 조회는 저장이 없어 이중 생성 위험은 없다.
+        var unclear: UnclearPlaceList = []
+        let originQuery = (input["origin_query"] as? String)?.trimmingCharacters(in: .whitespaces)
+        let origin: Place?
+        switch await resolveOriginAdoption(input["origin_query"] as? String, orDefault: true) {
+        case .resolved(let p):
+            origin = p
+        case .notFound:
             return "출발지를 확인하지 못했어요. 어디서 출발하는지 알려주세요."
+        case .unclear(let c):
+            unclear.append((key: "origin_query", query: originQuery ?? "", candidates: c))
+            origin = nil
         }
-        guard let dest = await resolveDestination(destQuery) else { return placeNotFound(destQuery) }
+        let dest: Place?
+        switch await adoptPlace(destQuery, creation: false) {
+        case .resolved(let p): dest = p
+        case .notFound: return placeNotFound(destQuery)
+        case .unclear(let c):
+            unclear.append((key: "destination_query", query: destQuery, candidates: c))
+            dest = nil
+        }
+        if !unclear.isEmpty { return parkForUnclearPlaces(tool: "check_travel_time", input: input, unclear: unclear) }
+        guard let origin, let dest else { return placeNotFound("장소") }
         let estimates = await store.travelEstimates(from: origin, to: dest)
         let depart = (input["depart_iso"] as? String).flatMap(parseDate) ?? Date()
         let lines = TransportMode.allCases.compactMap { m -> String? in
@@ -2810,8 +2947,15 @@ final class AIAssistant: ObservableObject {
 
         var newPlace: Place?
         if let q = (input["new_place_query"] as? String)?.trimmingCharacters(in: .whitespaces), !q.isEmpty {
-            newPlace = await resolveDestination(q)
-            if newPlace == nil { return placeNotFound(q) }
+            // 새 장소도 채택 삼태를 탄다(운영자 ③) — 대상 찾기는 검색 앞에서 끝났고 저장은 뒤라,
+            // unclear면 아무것도 바뀌지 않은 채 카드가 선다. 확인은 같은 인자로 다시 실행한다.
+            switch await adoptPlace(q, creation: false) {
+            case .resolved(let p): newPlace = p
+            case .notFound: return placeNotFound(q)
+            case .unclear(let c):
+                return parkForUnclearPlaces(tool: "update_schedule", input: input,
+                                            unclear: [(key: "new_place_query", query: q, candidates: c)])
+            }
         }
         let newTitle = (input["new_title"] as? String)?.trimmingCharacters(in: .whitespaces)
 
@@ -2940,27 +3084,8 @@ final class AIAssistant: ObservableObject {
         return "'\(query)' 위치를 찾지 못했어요. 더 정확한 장소명을 알려주세요.\(hint)"
     }
 
-    /// 출발지 해석: ① 카드에서 고른 "현재 위치" ② 즐겨찾기 이름과 일치 ③ 검색.
-    ///
-    /// **등록 경로에서는 여기까지 와서 빈 값일 수 없다** — 카드가 먼저 묻기 때문이다. 예전엔
-    /// origin_query가 비면 조용히 즐겨찾기 "집"이나 등록 시점 현재 위치로 떨어졌고, 그래서
-    /// "회사에서 출발"이라고 말했는데 집→집인 0분짜리 일정이 만들어진 적이 있다. 그 폴백은
-    /// `orDefault`로 가뒀다 — 지금 켜는 곳은 check_travel_time 하나뿐이고, 그건 등록이 아니라
-    /// 조회라 되묻을 이유가 없다(시스템 프롬프트 규칙 3의 예외와 같은 자리).
-    /// 매개변수에 기본값을 두지 않는다 — 등록 경로 세 호출처가 resolveOriginAdoption으로
-    /// 옮긴 뒤로 기본값 `false` 갈래엔 부르는 곳이 없었다. 조용히 false로 빠지는 길을 없애
-    /// 두면, 이 래퍼가 나중에 다시 조용한 폴백의 입구가 되는 일도 없다.
-    private func resolveOrigin(_ query: String?, orDefault: Bool) async -> Place? {
-        switch await resolveOriginAdoption(query, orDefault: orDefault) {
-        case .resolved(let p): return p
-        case .notFound: return nil
-        // resolveDestination와 같은 이유 — 조회 경로는 첫 결과를 그대로 쓴다.
-        case .unclear(let candidates): return candidates.first
-        }
-    }
-
-    /// 등록 경로의 출발지 삼태 해석 — resolveOrigin과 같은 사다리(adoptPlace)에 "현재 위치"
-    /// 토큰과 조회 전용 폴백(orDefault)이 앞뒤로 붙은 형태다.
+    /// 등록 경로의 출발지 삼태 해석 — adoptPlace 사다리에 "현재 위치" 토큰과 조회 전용
+    /// 폴백(orDefault)이 앞뒤로 붙은 형태다.
     private func resolveOriginAdoption(_ query: String?, orDefault: Bool = false) async -> PlaceAdoption {
         let trimmed = query?.trimmingCharacters(in: .whitespaces)
         if trimmed == Self.currentLocationToken {
@@ -3043,7 +3168,7 @@ final class AIAssistant: ObservableObject {
     private static let genericPlaceWords: Set<String> = ["집", "회사", "학교", "사무실", "우리집"]
 
     /// 생성 경로에서 **앱 혼자 풀 수 없는** 장소 질의인지 — 일반명사인데 같은 이름의 즐겨찾기가 없다.
-    /// 카드(askFields)와 해석부(resolveDestination·resolveOrigin)가 같은 술어를 봐야 한다: 두 벌로
+    /// 카드(askFields)와 해석부(adoptPlace의 creation 게이트)가 같은 술어를 봐야 한다: 두 벌로
     /// 적으면 카드가 묻지 않은 값을 해석부가 거절하거나 그 반대가 된다(계약 5). 네트워크를 쓰지
     /// 않으므로 카드를 그리는 동기 경로에서 그대로 부를 수 있다.
     private func unresolvedGenericPlace(_ raw: Any?) -> Bool {
@@ -3062,11 +3187,12 @@ final class AIAssistant: ObservableObject {
         "besir가 '\(query)' 위치를 몰라요. 고르면 이번 일정에 쓰고, ⭐에 추가해 두면 다음부터 이름만으로 돼요."
     }
 
-    /// 등록 경로의 장소 해석 삼태. `unclear`는 검색이 결과를 내긴 했지만 확정할 지점이 하나로
-    /// 좁혀지지 않았다는 뜻이다 — 조용히 첫 결과를 채택하면 '스타벅스 홍대점'이 대학로점으로,
-    /// '강남'이 서울선릉과정릉으로 등록되고(U-4, 2026-09-23·24 관측 두 건), 낱말은 맞아도
-    /// '스타벅스 강남점'의 첫 결과 '케이스퀘어강남점'이 강남역점과 갈리는 지점에서 조용히
-    /// 확정된다(t42 ①, 2026-10-05). 후보를 들고 카드로 되묻는다(parkForUnclearPlaces).
+    /// 등록 경로의 장소 해석 삼태. `unclear`는 검색이 결과를 냈다는 뜻이다 — 검색에서 온
+    /// 장소는 사용자가 후보에서 고를 때만 확정된다(t47, 운영자 원칙). 조용히 첫 결과를
+    /// 채택하면 '스타벅스 홍대점'이 대학로점으로, '강남'이 서울선릉과정릉으로 등록되고
+    /// (U-4, 2026-09-23·24 관측 두 건), 낱말은 맞아도 '스타벅스 강남점'의 첫 결과
+    /// '케이스퀘어강남점'이 강남역점과 갈리는 지점에서 조용히 확정됐다(t42 ①, 2026-10-05).
+    /// 후보를 들고 카드로 되묻는다(parkForUnclearPlaces).
     private enum PlaceAdoption {
         case resolved(Place)
         case notFound
@@ -3078,6 +3204,8 @@ final class AIAssistant: ObservableObject {
     /// 자리라 별도 헬퍼(locallyResolvedPlace)로 뽑아 두었고, 이 함수가 그 헬퍼로 시작한다 —
     /// 확인 경로의 50 m 판정이 같은 두 단을 봐야 하는데 둘이 어긋나면 카드가 확정한 좌표와
     /// 실행부의 좌표가 갈라진다.
+    /// @MX:ANCHOR 사다리의 단일 진입점 — 등록 세 도구·수정·반복 점심·조회 둘의 장소 해석이
+    /// 전부 이 함수를 지난다.
     private func adoptPlace(_ query: String, creation: Bool) async -> PlaceAdoption {
         // 즐겨찾기(오래 사는 설정)가 확정 장소(이번 대화의 값)보다 앞선다 — 이름이 겹치면
         // 오래 사는 쪽이 이겨야 "집이라고 했는데 어제 고른 카페로 잡히는" 일이 안 생긴다.
@@ -3090,125 +3218,31 @@ final class AIAssistant: ObservableObject {
         // 등록된 뒤에야 사용자가 알았다(2026-09-16 실측). 부분 문자열 판정은 이 사례를 못 잡는다
         // ('화조원' 이름이 '회사'를 포함한다) — 낱말이 통째로 일반명사인지만 본다.
         if creation, unresolvedGenericPlace(query) { return .notFound }
-        let firstResults = await store.placeSearch.search(query, near: location.currentLocation)
-        // 풀네임 질의가 카카오에서 빗나갔으면(결과가 비었거나 첫 결과가 낱말조차 맞지 않으면)
-        // '점'·'역'을 뗀 재시도 쿼리로 한 번 더 검색해 병합한다(t42 ②). 재시도 결과를 앞에
-        // 두는 이유는 mergedPlaceResults 참고. 첫 결과가 이미 낱말을 만족하면 재시도하지
-        // 않는다 — 목록이 잘 나온 질의를 다시 흔들 이유가 없다.
-        var results = firstResults
-        if firstResults.isEmpty
-            || !Self.searchTopClearlyMatches(query: query, result: firstResults[0]),
-           let retryQuery = Self.suffixStrippedRetryQuery(query) {
-            let retryResults = await store.placeSearch.search(retryQuery, near: location.currentLocation)
-            results = Self.mergedPlaceResults(retry: retryResults, original: firstResults)
-        }
+        // 질의당 검색은 이 한 번뿐이다(운영자 ⑤, t47) — 접미를 뗀 재시도·병합은 카카오맵의
+        // 개선과 충돌해 엉뚱한 결과를 낼 수 있어 지웠다. 질의를 고치는 몫은 사용자가 카드의
+        // 장소 검색으로 직접 넘겨받는다(카카오맵과 같다).
+        let results = await store.placeSearch.search(query, near: location.currentLocation)
         // 채택 판정은 별도의 순수 함수에 맡긴다 — 이 자리에서 인라인으로 판단하던 시절 낱말
         // 포함만으로 참을 내보내 '강남'을 품은 다른 지점이 여럿인데도 첫 결과가 조용히
-        // 확정됐다(t42 ①, 2026-10-05). 결과가 비었을 때의 notFound 처리도 판정 함수 안으로
-        // 흡수됐다.
+        // 확정됐다(t42 ①, 2026-10-05). 결과가 비었을 때의 notFound 처리도 판정 함수 안에 있다.
         return Self.placeAdoptionDecision(query: query, results: results)
     }
 
-    /// 장소 낱말 정규화의 단일 출처(계약 5): 띄어쓰기를 지우고, 끝이 '점'·'역'이며 뗀 뒤
-    /// 2글자 이상 남으면 한 글자 뗀다. 뗀 자리가 빈 토큰이면 모든 이름에 맞아버리므로
-    /// 2글자 하한을 둔다. 채택 판정(searchTopClearlyMatches·placeAdoptionDecision)과
-    /// 재시도 쿼리 조립(suffixStrippedRetryQuery)이 같은 규칙을 봐야 한다 — 두 벌로 적으면
-    /// 판정은 접미어를 떼는데 재시도 쿼리는 붙인 채로 나가는 어긋남이 생긴다.
-    private static func normalizedPlaceWord(_ word: String) -> String {
-        var t = word.replacingOccurrences(of: " ", with: "")
-        if t.count > 2, t.hasSuffix("점") || t.hasSuffix("역") { t.removeLast() }
-        return t
-    }
-
-    /// 검색 첫 결과가 사용자가 말한 이름과 **모순되지 않는지** — 질의의 낱말이 전부 결과 이름에
-    /// 들어 있으면 참이다. '스타벅스 홍대점'→'스타벅스 대학로점'(홍대 없음), '강남'→
-    /// '서울선릉과정릉'(강남 없음)이 물어볼 자리다. 띄어쓰기는 양쪽 다 지운다(결과 이름이
-    /// 붙여 쓰는 경우가 많다). 판정이 주소를 안 보는 건 주소 낱말이 가짜 답을 만들었기
-    /// 때문이다 — '강남'으로 말한 자리에서 주소의 '강남구'가 낱말을 만족시켜
-    /// '서울선릉과정릉'이 조용히 채택됐다(2026-09-24 관측). 주소로 말한 질의는 후보 카드에서
-    /// 한 번 더 고른다.
-    /// **이 술어는 지점을 좁혔는지 모른다** — '스타벅스 강남점'의 낱말이 '케이스퀘어강남점'에도
-    /// '강남역점'에도 들어 가서 둘 다 참이 되지만 그 둘은 다른 지점이다. 지점을 좁혔는지(결과가
-    /// 여러 지점으로 갈리는가)를 보는 층위는 placeAdoptionDecision이다(t42 ①, 2026-10-05 —
-    /// '강남'을 품은 지점이 여럿인데 첫 결과가 조용히 확정됐다). AA-1의 라벨 '같은 지점으로
-    /// 본다'는 이 술어의 낱말 단위 판정(홍대역→홍대입구역)을 가리키는 것이지, 여러 지점이
-    /// 섞였을 때의 채택 판정과는 다른 층위다.
-    private static func searchTopClearlyMatches(query: String, result: Place) -> Bool {
-        let haystack = result.name.replacingOccurrences(of: " ", with: "")
-        let tokens = query.split(separator: " ").map { normalizedPlaceWord(String($0)) }.filter { !$0.isEmpty }
-        guard !tokens.isEmpty else { return true }
-        return tokens.allSatisfy { haystack.contains($0) }
-    }
-
-    /// 풀네임 검색이 카카오에서 빗나갔을 때의 재시도 쿼리 — 마지막 낱말에만 정규화를 걸어
-    /// '점'·'역'이 벗겨지면 재조립해 돌려준다. '스타벅스 홍대점' 풀네임은 카카오가 엉뚱한
-    /// 목록(첫 결과 대학로점, 후보 1개)을 주지만 '점'을 뗀 '스타벅스 홍대'는 홍대 지점 목록을
-    /// 낸다(t42 ②, 2026-10-05 운영자 관찰). 연쇄 재시도는 하지 않는다 — 한 번 벗겨도 안
-    /// 나오는 질의는 접미어 문제가 아니다.
-    private static func suffixStrippedRetryQuery(_ query: String) -> String? {
-        var words = query.split(separator: " ").map(String.init)
-        guard let last = words.last else { return nil }
-        let stripped = normalizedPlaceWord(last)
-        guard stripped != last, !stripped.isEmpty else { return nil }
-        words[words.count - 1] = stripped
-        return words.joined(separator: " ")
-    }
-
-    /// 채택 삼태를 재료만으로 정하는 순수 판정(네트워크 없음 — 재시도 검색까지 끝낸 결과 목록을
-    /// 받는다). 세 갈래다:
-    /// - **정확 일치**: 정규화한 질의와 정규화한 첫 결과 이름이 같으면 확정한다. 이름을 통째로
-    ///   말한 질의('휴먼시아7단지아파트')는 다른 결과가 같은 낱말을 품어도 첫 결과가 그 이름
-    ///   자체다.
-    /// - **유일 일치**: 첫 결과가 searchTopClearlyMatches를 만족하고, 만족하는 나머지 결과의
-    ///   이름이 전부 첫 결과 이름을 품고 있으면 확정한다. '홍대역'의 결과가 '홍대입구역'과
-    ///   '스타벅스 홍대입구역점'(역 안의 상점)이면 첫 결과를 품는 한 덩어리 — 같은 지점이다.
-    ///   반대로 '스타벅스 홍대점'의 만족 결과가 '홍대입구역점'과 '홍대가좌점'이면 서로를 품지
-    ///   않는다 — 다른 지점 둘이다.
-    /// - 그 외엔 unclear — 결과가 질의의 낱말을 품고 있어도 지점이 여럿이면 첫 결과를 조용히
-    ///   확정하지 않고 후보 카드로 넘긴다(t42 ①, 2026-10-05). 후보는 만족하는 결과 → 나머지
-    ///   순서로 maxPlaceSuggestions개까지, 같은 이름 중복은 하나만 보인다.
+    /// 채택 삼태를 재료만으로 정하는 순수 판정(네트워크 없음 — 검색 결과 목록을 그대로 받는다).
+    /// @MX:NOTE "검색 결과가 있으면 언제나 묻는다"는 운영자 원칙(①·④)의 자리 — 결과가 하나뿐이고
+    /// 이름이 질의와 같아도 unclear다. 완전 중복(이름+정확 좌표가 같은 항목)만 하나로 접고,
+    /// 순서는 제공자 순서 그대로며(D-2 (a)) 상한은 maxPlaceSuggestions다. 같은 이름 다른
+    /// 좌표는 각자 후보로 남는다(②). 좌표 근접·이름 포함으로 두 결과를 한 지점으로 보는
+    /// 갈래는 만들지 않는다(t45 반려).
     /// 결과가 비면 notFound — 검색이 빈손이면 실패다. 여기서 기본 출발지로 떨어지면 사용자가
     /// 말한 곳과 다른 데서 출발하는 일정이 "성공"으로 등록된다.
     private static func placeAdoptionDecision(query: String, results: [Place]) -> PlaceAdoption {
-        guard let first = results.first else { return .notFound }
-        let q = normalizedPlaceWord(query)
-        let firstNorm = normalizedPlaceWord(first.name)
-        if !q.isEmpty, firstNorm == q { return .resolved(first) }
-        let satisfying = results.filter { searchTopClearlyMatches(query: query, result: $0) }
-        // 유일 판정은 **첫 결과가 만족할 때만** 건다 — 첫 결과가 어긋나는데 만족하는 둘째 결과가
-        // 단독이어도 그걸 확정하면 검색 순위를 무시하는 셈이 된다(재시도 병합이 앞에 둔 목록의
-        // 순서를 되살린다).
-        if searchTopClearlyMatches(query: query, result: first),
-           satisfying.dropFirst().allSatisfy({ normalizedPlaceWord($0.name).contains(firstNorm) }) {
-            return .resolved(first)
-        }
+        guard !results.isEmpty else { return .notFound }
         var seen = Set<String>()
-        let rest = results.filter { !satisfying.contains($0) }
-        let candidates = (satisfying + rest).filter { seen.insert(normalizedPlaceWord($0.name)).inserted }
-        return .unclear(Array(candidates.prefix(maxPlaceSuggestions)))
-    }
-
-    /// 재시도 결과와 원본 결과의 병합 — 재시도(정규화한 질의에 가까운 목록)를 앞에 두고,
-    /// 이름+위도+경도가 같은 항목의 중복을 뺀다. 판정(placeAdoptionDecision)은 첫 결과를
-    /// 기준으로 갈리므로 순서가 곧 채택이다 — 원본을 앞에 두면 재시도가 있어도 빗나간 원본
-    /// 첫 결과를 그대로 지킨다.
-    private static func mergedPlaceResults(retry: [Place], original: [Place]) -> [Place] {
-        var seen = Set<String>()
-        return (retry + original).filter {
+        let candidates = results.filter {
             seen.insert("\($0.name)|\($0.latitude)|\($0.longitude)").inserted
         }
-    }
-
-    /// 목적지 해석: 즐겨찾기 이름과 일치하면 그 좌표를 우선 사용, 아니면 검색(카카오 → MapKit 폴백).
-    /// - Parameter creation: 등록 경로에서 쓴다(일반명사 가드). 조회 경로(check_travel_time·
-    ///   recommend_meal·수정)는 되묻을 자리가 없어 unclear가 와도 옛 동작대로 첫 결과를 쓴다 —
-    ///   되묻기 카드는 등록 경로의 실행부에서만 연다.
-    private func resolveDestination(_ query: String, creation: Bool = false) async -> Place? {
-        switch await adoptPlace(query, creation: creation) {
-        case .resolved(let p): return p
-        case .notFound: return nil
-        case .unclear(let candidates): return candidates.first
-        }
+        return .unclear(Array(candidates.prefix(maxPlaceSuggestions)))
     }
 
     // MARK: - 유틸
