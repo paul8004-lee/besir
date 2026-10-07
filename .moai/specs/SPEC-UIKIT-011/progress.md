@@ -235,7 +235,18 @@
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
-_<pending sync-phase>_
+### sync 1차 (2026-10-07, 트리 `83ac07f`) — PASS 권고 · 최종 판정은 리드
+
+- 판정문 `.moai/reports/t47/sync-verdict.md`. 기계 게이트는 이 레인이 직접 돌려 통과했다(로그 `.moai/state/verify/t47-sync/`) — 드라이버 **492/492**(새 컴파일 · ✗ 0 · exit 0 · 실데이터 대조 통과 · 신설 AI-14~22 ✓ 15 · 지운 단언 15가 HEAD에 0건이고 기준 시대 로그에는 6·2·7건 · 런 레인 로그와 ✓ 라벨 집합 동일) · iOS 새 DerivedData `BUILD SUCCEEDED`·`SwiftCompile` 42·소스 경고 0 · proxy 7/7 · 범위 소스 2파일·선언 구간 헝크 0 · 샌드박스 잔여 없음.
+- **AC-001~011 ✅.** 구조 대조(AC-002·003·008·010·011)는 기준 트리에서 acceptance.md 기준값 그대로 실패하고 HEAD에서 통과한다(`g2-base.log`·`g2-head.log`). **AC-009는 글자 기준 3건이 불일치**: `이름이 다른 곳이나`·`유일 일치`는 이력을 적은 주석 줄(`Shared/AIAssistant.swift:1010`·`:883`), `고칠 일정 '`는 `"\(label) '\(v)'"` 조립이라 글자로 없다(`:929`·`:944`, 화면 문구는 AI-18 (b) ✓) — 동작 결함이 아니라 측정 기준 문제로 분류했다(판정문 §3). 런 레인 §E.2에 AC-009 계수 기록이 없는 것은 절차 누락이다.
+- **렌즈 3종(읽기 전용, 최종 HEAD 독립)**: `code-safety` 차단 0·WARN 2·NOTE 11 · `ai-tooling` 차단 0·WARN 4·NOTE 6 · 디자인/비평 차단 1(조건부)·WARN 5·NOTE 8. 렌즈의 결함 주장은 코드 읽기 가설이라 이 레인이 해당 줄을 직접 읽어 확인했다. 디자인의 조건부 차단 D-1은 **WARN으로 재분류했다**(SPEC의 어떤 REQ·AC도 확인 버튼·말풍선 문구를 요구하지 않고 고칠 파일 `AIChatView.swift`가 REQ-015 범위 밖) — 그래도 사용자가 눈으로 보는 거짓 문구라 **운영자 결정이 필요하다**: 수정·조회 카드의 확인 버튼 `"등록하기"`(`EditCardView.swift:16`·`AIChatView.swift:110`) · 버린 카드 말풍선 `"그 등록은 진행하지 않았어요"`(`AIAssistant.swift:1427`) · 이미 열린 카드 가드의 `"그 등록만"`(`:975-980`). 세 렌즈가 같은 줄을 지목했다. 차단급 주장이 없어 실행 재현 하네스는 돌리지 않았다(재현이 판정을 바꾸지 않는다).
+- **문서(AC-021류)**: 루트 `CHECKLIST.md` Q1~Q8을 t47 동작으로 다시 썼고(Q3은 요구 자체가 운영자 지시로 뒤집혔다 — "정확히 말하면 묻지 않는다" 폐기) Q16(❌ — 운영자 결정 대기)을 신설했으며 요약·시뮬레이터 확인 목록 10번을 갱신했다. 루트 `plan.md`에 t47 행·후속 31~34 닫힘·35는 재시도 부분만 해당 없음(**이음새 부재는 그대로**)·새 후속 36~41. 다시 쓴 행은 `83ac07f` 좌표이고 t44 원장이 건너뛸 목록은 `.moai/reports/t47/sync-doc-ledger.md`다. 파일 전체의 `AIAssistant.swift` 줄번호 재사상은 하지 않았다(`plan.md` §6 (가) — t44 몫).
+- **미관찰(Gaps)**: 시뮬레이터 S-1~S-12(AC-012·013 🟡) · "검색 → 보류" 첫 실행(검색 주입 이음새 없음 — `Shared/PlaceSearch.swift:6`·`Shared/Store.swift:788`, 드라이버 `drvPark`는 보류된 상태에서 시작) · 기준 492를 이 레인이 기준 트리에서 재측정하지 않음(런 레인 로그·t42 sync 로그가 같은 값, 총수 산술은 단언 단위로 맞춤) · 실기기·macOS.
+- **status**: `spec.md` frontmatter `in-progress → implemented`(`updated` 2026-10-07). **`completed`는 올리지 않았다** — Q16을 이 SPEC 아래에서 병합 전에 수리하면 `completed → in-progress` 개정 절차가 붙으므로, 리드가 Q16 결정 뒤 병합 커밋에서 올린다. 병합·push는 리드가 주 체크아웃에서 한다.
+- **알려진 작업 환경**: 이 레인은 `EnterWorktree(path)`로 워크트리에 들어갔다(주 체크아웃 CWD에서 시작). 워크트리 가드가 파이프·`&&`가 섞인 git 명령을 거부해 git은 전부 단독 호출로 돌렸다.
+
+sync_complete_at: 2026-10-07T09:24:36+09:00
+sync_status: PASS-recommended (차단 0 — 운영자 결정 1건(Q16 범위)·시뮬레이터 S-1~S-12 대기, 최종 판정은 리드)
 
 ## §F Phase 4 Mode Selection
 
