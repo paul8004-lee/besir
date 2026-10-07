@@ -1,0 +1,68 @@
+### tree=/Users/iseongmin/Projects/besir/.claude/worktrees/t47
+[AC-002] 판정 본문 안 isSamePlace|.contains( 계수 (기대 0)
+0
+[AC-003] placeSearch.search( (기대 2)
+2
+[AC-003] suffixStrippedRetryQuery|mergedPlaceResults A/D (기대 0 0)
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Shared/AIAssistant.swift:0
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Tools/GuardDriver.swift:0
+[AC-003] drvRetryQuery|drvMerged (기대 0)
+0
+[AC-008] 수정 본문
+2948:                 return parkForUnclearPlaces(tool: "update_schedule", input: input,
+2960:             let ok = store.modifyActivity(id: activity.id, newTitle: newTitle,
+2978:         await store.modifyEvent(id: event.id,
+[AC-008] 반복 본문(+@MX:WARN)
+2252:         switch await adoptPlace(destQuery, creation: true) {
+2263:             return await makeStayingRecurrence(title: title, dest: dest, rule: rule,
+2274:             return await makeStayingRecurrence(title: title, dest: dest, rule: rule,
+2289:         // @MX:WARN 점심 해석은 반드시 첫 store.addRecurringEvents( 앞에 있어야 한다 — 이 자리가
+2296:             switch await adoptPlace(q, creation: true) {
+2306:         let leg1 = await store.addRecurringEvents(title: title, origin: origin, destination: dest,
+2324:             let leg2 = await store.addRecurringEvents(title: "\(title) (복귀)", origin: dest, destination: origin,
+2347:                     let leg3 = await store.addRecurringEvents(title: "\(title) - 점심 이동", origin: dest, destination: lunchPlace,
+2352:                     let leg4 = await store.addRecurringEvents(title: "\(title) - 점심 후 복귀", origin: lunchPlace, destination: dest,
+[AC-008] @MX:WARN 파일 전체 계수
+1
+[AC-009] 다섯 옛 문구 (기대 0 0 0 0 0)
+확실하지 않아요 => 0
+이름이 다른 곳이나 => 0
+첫 결과를 그대로 쓴다 => 0
+평탄화가 그대로다 => 0
+유일 일치 => 0
+[AC-009] 새 고정 조각 (기대 1 1 1 1 1 1 1 1이상)
+검색 결과예요. 맞는 곳을 고르거나 => 1
+검색으로 찾은 장소는 사용자가 후보에서 직접 골라야 확정돼요 => 1
+그 카드의 일만 진행돼요 => 1
+label: "바꿀 장소" => 1
+label: "점심 장소" => 1
+고칠 일정 ' => 0
+label: "기준 장소" => 1
+조회하지 => 1
+[AC-010] 식사 추천 본문
+2802:             switch await adoptPlace(q, creation: false) {
+2809:                 return parkForUnclearPlaces(tool: "recommend_meal", input: input,
+2829:         let found = await store.placeSearch.nearbyPlaces(
+[AC-010] 이동시간 본문
+2876:         switch await resolveOriginAdoption(input["origin_query"] as? String, orDefault: true) {
+2886:         switch await adoptPlace(destQuery, creation: false) {
+2893:         if !unclear.isEmpty { return parkForUnclearPlaces(tool: "check_travel_time", input: input, unclear: unclear) }
+2895:         let estimates = await store.travelEstimates(from: origin, to: dest)
+[AC-010] label: "활동 장소" (기대 1)
+1
+[AC-011.3] drvAdoption( (기대 12)
+12
+[AC-011.4] 죽은 이름 A/D (기대 0 0)
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Shared/AIAssistant.swift:0
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Tools/GuardDriver.swift:0
+[AC-011.4] 래퍼 이름 A/D (기대 0 0)
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Shared/AIAssistant.swift:0
+/Users/iseongmin/Projects/besir/.claude/worktrees/t47/Tools/GuardDriver.swift:0
+[AC-011.4] creation: Bool = false (기대 0)
+0
+[AC-011.4] func resolveDestination(_ query: String, creation (기대 0)
+0
+[AC-011.4] aaT|h4 빈 바인딩 (기대 0)
+0
+[AC-011.6] 소문자 스키마 타입 (기대 0)
+0
