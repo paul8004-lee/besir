@@ -274,6 +274,11 @@
 sync_complete_at: 2026-10-07
 sync_status: PASS-recommended (2차 — 차단 0 · 수리는 사양대로 단일 도구 카드 닫힘 · 혼합 턴 회귀 재현(WARN)·가드 첫머리·기본값 중복은 운영자 결정 · 드라이버 단언 없음 · 시뮬레이터 S-1~S-12 대기, 최종 판정은 리드)
 
+### 리드 종결 (2026-10-07)
+
+- 2차 뒤 운영자 결정 3건(마이크로 수리 ①·가드 사양 유지 ②·기본값 후속 ③)이 `2f2e2ab`(toolName 생성 도구 우선·Q16절 승격 **498/498**)으로 반영됐고, 리드가 게이트 로그·CHECKLIST Q16 ✅·후속 36·42① 닫힘을 직접 읽었다. **리드 최종 판정: PASS.**
+- sync_commit_sha: 2f2e2ab
+
 ## §F Phase 4 Mode Selection
 
 - **입력**: Tier M · 크게 고치는 파일 2(`Shared/AIAssistant.swift`·`Tools/GuardDriver.swift`) · 도메인 1(Swift/AI 실행부) · 언어 Swift · 병행 이득 낮음(코드 작업 + 컴파일 결합 — plan §1: 드라이버는 앱 파일과 함께 컴파일되고 `resolveDestination`·`resolveOrigin` 삭제는 M4·M5 선행) · Agent Teams 요청 없음.
