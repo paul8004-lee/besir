@@ -715,11 +715,26 @@ REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의
 
 ## §E.2 Run-phase Evidence
 
-_<pending run-phase>_
+run 레인(오케스트레이터 + swift-impl·ui-design·code-safety 전문가), 2026-10-08. 전체 원문 기록은 `.moai/reports/t43/run-progress.md`(§1 기준 측정 · §2 Store · §2.5 ContentView · §3 드라이버·게이트·code-safety) — 아래는 요약과 대표 원문.
+
+| 마일스톤 | 커밋 | 증거 요지 |
+|---|---|---|
+| M0 기준 측정·문서 0.7.2 | `7a9ffbf` | 드라이버 **B = 498/498 통과** · exit 0(변경 전 트리, 로그 baseline-driver.log) · 빌드 무경고(baseline-build-ios.log) · Q-3·5·9 표식 닫음 + 경미 9건(N5-4~7·N5-9~13) |
+| M2·M3·M6 Store | `6fad716`·`69f5d74` | 소유 조회·유효 Δ·adjustTravelLeg 소유 갈래(먼저 모으기)·estimatedLegs 정확 대조. `moveActivity` ab65d72c…·`realignReturnLeg` a6ca6f17… 해시 무변경(원문 §2.1), AC-015 G(정확 대조 2·같은 날 0), 신규 코드 Task/await/try?/구글/언래핑 0 |
+| M4·M5 ContentView | `149872a` | 미리보기 span 안·하루 연장·실제 길이(5분 바닥)·자동 스크롤(.common·멈춤 6경로·대체안 스위치). `offsetY` 2cd32a58…·`finalizeDrag` 3027e8ee… 해시 무변경, AC-004(1·0·1)·AC-006(1)·AC-007(금지 0×5·onBegin 1)·AC-013(0·0)·AC-016 전부 통과(원문 §2.5.1) |
+| M7 드라이버·게이트 | `ee8b742` | **522/522 통과 · exit 0 · 실제 데이터 대조 통과**(T = B + 24, 오케스트레이터 관측 + code-safety 독립 재실행 일치) · 빌드 무경고 · 범위 정확히 3파일 · 결정성 0 · `ls Shared` 27 · 샌드박스 잔여 없음 |
+
+**경과 특기**: ① ui-design 전문가가 ContentView 편집 완료 직후 API 429(주간 한도)로 중단 — 구조 대조·해시·컴파일·무경고 빌드 검증은 오케스트레이터가 직접 수행해 마감했다(§2.5). ② swift-impl의 일회성 기대값 하네스(18/18)는 삭제되어 재실행 불가 — 최종 증거는 드라이버 522가 대신한다. ③ code-safety 판정 **PASS(차단 0)** — 주의 1건(5-1)은 plan §7 잔여 위험로 기록, 정보 5건은 run-progress §3.3.
+
+**검증하지 못한 것**: 시뮬레이터·실기기 관측 전부(S-1~S-18, AC-012 — 운영자 몫. 특히 S-16 scrollDisabled 가설·S-17 오프셋 클램프·S-18 5분 블록 탭) · 5-1의 실행 재현(경로만 코드 실증) · 루트 문서 수리는 sync 몫(plan §6).
 
 ## §E.3 Run-phase Audit-Ready Signal
 
-_<pending run-phase>_
+- **방식: 전문가 순차 위임**(쓰기 에이전트 한 번에 하나) — swift-impl(Store) → ui-design(ContentView — 429 중단분은 오케스트레이터가 검증 마감) → swift-impl(드라이버, 문맥 이어 받음) → code-safety(판정, 구현자와 분리). 동시 2 이하 유지.
+- **커밋**: `7a9ffbf`(M0 문서+기준) → `6fad716`(Store) → `69f5d74`(인스턴스 전환) → `149872a`(ContentView) → `ee8b742`(드라이버). 소스 3파일 이외에 SPEC 문서(progress·plan §7 잔여 위험)와 증거 파일만.
+- **AC 상태**: AC-001~011·013·015·016의 D·G 전부 ✅(원문은 run-progress.md) · AC-012(S)·AC-004 S·AC-013 S·AC-016 S는 운영자 시뮬레이터 대기.
+- **하한**: 드라이버 머리 주석에 마감 하한 522(= B 498 + 24) 명시.
+- **run 상태**: 완료 — 병합·push·PR 없음(리드 지시), 리드가 증거를 읽고 sync로 넘긴다.
 
 ## §E.4 Sync-phase Audit-Ready Signal
 
