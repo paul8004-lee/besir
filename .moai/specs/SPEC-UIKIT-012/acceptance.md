@@ -1,6 +1,6 @@
 # SPEC-UIKIT-012 — acceptance.md
 
-수락 기준(0.6.0 — 미감사). 검증 수단은 셋이다.
+수락 기준(0.6.3 — 0.6.1이 감사 5회차를 받았고, 0.6.2·0.6.3 수리본은 미감사). 검증 수단은 셋이다.
 
 - **D — 드라이버(결정적, 네트워크 없음)**: `Tools/GuardDriver.swift` AF-018·AF-015 절. 구간은 `afInjectedLeg`(`:3806-3817`), 활동은 `ActivityBlock` 값. 하위 사례마다 새 픽스처. 종료 코드 0 · 1 · 2 · 3 · 124.
 - **G — 구조 대조**: `grep`·`awk`·`shasum`. `diff <(…)`는 워크트리 가드가 거부하므로 쓰지 않는다. 기준 트리 `b59fcaa`에서 다른 값이면 양성 대조, 같으면 회귀선. 기준 트리에 패턴이 아예 없는 대조는 손으로 만든 입력(`printf … | grep -c`)으로 명령이 작동함을 보인다.
@@ -100,7 +100,26 @@ awk '/private func finalizeDrag/,/^    }$/' Shared/ContentView.swift | shasum
 ```
 
 기대 첫째 = 둘째(`2cd32a58…`), 셋째 = 넷째(`3027e8ee…`). 같은 꼴로 `Shared/Store.swift`의 `/private func realignReturnLeg/,/^    }$/`도 기준과 작업 트리의 해시가 같다(`a6ca6f17…`, 8줄) — 이 카드는 그 함수를 바꾸지 않는다(그 갭은 카드 t49, spec §4). 이 레인이 기준·작업 트리(코드 동일)에서 실제로 돌린 값.
-- **G — 소유 조회는 `onBegin`에서만**: 범위 확인 6줄 각 1 이상, 금지 패턴 계수(`span` 둘·`dragOffsetMinutes(forEvent`·도우미·`onChange` 0, `onBegin` 1). 양성 대조는 0.4.0 표.
+- **G — 소유 조회는 `onBegin`에서만**(REQ-009, 감사 2회차 N-2). run이 붙인 Store 소유 조회 함수 이름을 `<owner>`, 뷰 도우미 이름을 `legDragShift`(다르면 그 이름)로 두고, 0.4.1 판의 명령 묶음을 그대로 돌린다:
+
+```bash
+# 범위 확인(빈 범위면 아래 계수가 거짓 0을 낸다 — 먼저 1줄 이상인지 본다)
+awk '/func span\(for activity/,/^    }$/' Shared/ContentView.swift | wc -l
+awk '/func span\(for event/,/^    }$/' Shared/ContentView.swift | wc -l
+awk '/func dragOffsetMinutes\(forEvent/,/^    }$/' Shared/ContentView.swift | wc -l
+awk '/func legDragShift|var legDragShift/,/^    }$/' Shared/ContentView.swift | wc -l
+awk '/onChange: \{ dy in/,/\},/' Shared/ContentView.swift | wc -l
+awk '/onBegin: \{ x, y in/,/\},/' Shared/ContentView.swift | wc -l
+# 금지 패턴 계수
+awk '/func span\(for activity/,/^    }$/' Shared/ContentView.swift | grep -c '<owner>'
+awk '/func span\(for event/,/^    }$/' Shared/ContentView.swift | grep -c '<owner>'
+awk '/func dragOffsetMinutes\(forEvent/,/^    }$/' Shared/ContentView.swift | grep -c '<owner>'
+awk '/func legDragShift|var legDragShift/,/^    }$/' Shared/ContentView.swift | grep -c '<owner>'
+awk '/onChange: \{ dy in/,/\},/' Shared/ContentView.swift | grep -c '<owner>'
+awk '/onBegin: \{ x, y in/,/\},/' Shared/ContentView.swift | grep -c '<owner>'
+```
+
+기대(마감 트리): 범위 확인 여섯 줄 모두 **1 이상**, 금지 패턴 계수는 앞 다섯이 **0**, `onBegin`이 **1**. 기준 트리 실측(0.6.3 — `progress.md` §E.1 0.6.3 표): 범위 확인 **14 · 35 · 4 · 0 · 4 · 5**(넷째 0 = 도우미가 아직 없음), 손으로 만든 입력의 양성 대조 `printf 'func span(for event: X) {\n        let o = store.owningActivity(forLeg: e)\n    }\n' | awk '/func span\(for event/,/^    }$/' | grep -c 'owningActivity'` → **1**, 그 줄을 뺀 입력 → **0**. 프로세스 치환 `diff <(…)`는 쓰지 않는다(워크트리 가드가 거부 — 바뀌지 않는 함수는 위 `shasum` 비교).
 - **G — 자르기 비교**: `awk '/func span\(for activity/,/^    }$/' Shared/ContentView.swift | grep -v '^ *//' | grep -c '1440'` · 같은 꼴 `span(for event` 기대 **0 · 0**, 기준 **1 · 1**(양성 대조).
 - **S**: S-1·S-3·S-5·S-8.
 
@@ -217,6 +236,6 @@ awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop
 - AC-001~011·013·015·016의 D·G 전부 ✅(원문 출력과 함께 §E.2).
 - AC-012·013·016의 S와 AC-004 S는 운영자 시뮬레이터 결과로 판정한다.
 - 하네스: `swift-impl`·`ui-design`(구현), `code-safety`(판정).
-- `plan.md` §2의 열린 질문 Q-3·5·9·10·11·12가 착수 승인에서 닫힌 뒤 run.
+- `plan.md` §2의 열린 질문 Q-3·5·9가(Q-10·11·12는 0.6.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
 
 🗿 MoAI

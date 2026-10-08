@@ -109,12 +109,12 @@ SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 
 자가 점검 스크립트와 그 출력은 `progress.md` §E.1 0.5.0 표.
 
-## 8. 열린 질문 (0.6.0 — plan.md §2 끝과 같은 목록)
+## 8. 열린 질문 (현재 — plan.md §2 끝과 같은 목록)
 
 0.5.0의 Q-1·Q-2·Q-4·Q-6·Q-7·Q-8은 답변·사실 확인·t48 이관으로 닫혔다(plan §2 끝).
 
 - [NEEDS CLARIFICATION: Q-3 위로 넘기기의 대칭 연장 — 〔가정〕 기본 첫날 0시에서 멈춤]
-- [NEEDS CLARIFICATION: Q-5 연장 상한 — 〔가정〕 기본 끄는 날 다음 날 끝]
+- [NEEDS CLARIFICATION: Q-5 연장 상한 — 〔가정〕 기본은 REQ-007과 같이 끌기 전 첫 나열일 F의 다음 날 끝]
 - [NEEDS CLARIFICATION: Q-9 연장·자동 스크롤 대상 — 〔가정〕 기본 연결된 구간 드래그만]
 0.6.1에서 닫음(운영자 3차 답변): Q-10 "실제 길이 유지, 시뮬레이터에서 확인 (Recommended)" — 대체 탭 경로 없는 짧은 활동은 결정된 수용 위험, S-18 · Q-11 "이 카드 밖, 별도 카드로 (Recommended)" — 카드 t49 · Q-12 Tier M 유지(REQ 16 · AC 15).
 
