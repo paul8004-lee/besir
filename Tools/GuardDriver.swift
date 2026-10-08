@@ -26,6 +26,10 @@
 // t42절(2026-10-05) — 장소 채택 판정·접미 재시도: '스타벅스 강남점' 첫 결과가 다른 강남
 // 지점들과 갈리는데 조용히 확정된 관측(①)과 풀네임 검색이 빗나가 '점'을 뗀 재검색이 필요한
 // 관측(②). 판정·재시도·병합은 전부 결정적 함수라 주입된 결과 목록으로 검증한다.
+//
+// t43절(2026-10-08) — SPEC-UIKIT-012 연결된 구간 드래그: AF-018-02·03·AF-015-09·11 고쳐 쓰기
+// 4 · AF-018-04~27 추가 24. 마감 하한은 **522**(기준 B 498 + 24, 둘 다 이 트리에서 실측 —
+// .moai/reports/t43/run-progress.md §1.1) — 단언을 지우면 하한 밑으로 떨어진다.
 
 
 var drvPass = 0, drvFail = 0
@@ -3634,7 +3638,10 @@ struct Drv {
                       store.events.allSatisfy { $0.linkedActivityId == nil || afAliveIds.contains($0.linkedActivityId!) },
                       "매달린 구간=\(store.events.filter { $0.linkedActivityId != nil && !afAliveIds.contains($0.linkedActivityId!) }.count)건")
 
-        // AF-018 — 드래그 특성화(전부 기준 ✓ — 구현을 바꾸기 전에 의미를 못박는다).
+        // AF-018 — 드래그 특성화. 01은 기준 ✓(활동 이동이 두 구간을 데려간다 — 회귀선).
+        // 02·03은 t43(SPEC-UIKIT-012)으로 고쳐 썼다: 소유 활동이 있는 구간 드래그는 활동
+        // 가장자리를 함께 옮긴다(REQ-001·002 — 오는 편은 끝, 가는 편은 시작). 04~27·AF-015는
+        // 아래 t43 절과 AF-015 절에 있다.
         let af018Start = Date(timeIntervalSinceReferenceDate: 812_300_000)
         let (afA18, _) = await store.addActivityWithTravel(
             title: "AF018 활동", location: afOffice, startDate: af018Start,
@@ -3666,21 +3673,23 @@ struct Drv {
         store.adjustTravelLeg(af18RetAfterMove, byMinutes: 15, wholeSeries: false)
         let af18RetAfterDrag = store.events.first { $0.id == af18Ret.id }!
         let af18ActAfterDrag = store.activities.first { $0.id == afA18 }!
-        afAi.drvCheck("AF-018-02 오는 편 +15분 드래그 → 구간이 통째로 +15분, 활동은 그대로다",
+        afAi.drvCheck("AF-018-02 오는 편 +15분 드래그 → 활동 끝이 +15분, 구간이 통째로 +15분, 시작·여유는 그대로다(REQ-001)",
                       af18RetAfterDrag.arrivalDate == af18RetAfterMove.arrivalDate.addingTimeInterval(900)
                           && af18RetAfterDrag.departureDate == af18RetAfterMove.departureDate?.addingTimeInterval(900)
-                          && af18ActAfterDrag.startDate == af18ActBefore.startDate.addingTimeInterval(1800)
-                          && af18ActAfterDrag.endDate == af18ActBefore.endDate.addingTimeInterval(1800),
-                      "도착 변위=\(af18RetAfterDrag.arrivalDate.timeIntervalSince(af18RetAfterMove.arrivalDate))s, 출발 변위=\(String(describing: af18RetAfterDrag.departureDate?.timeIntervalSince(af18RetAfterMove.departureDate!)))s")
+                          && af18RetAfterDrag.bufferMinutes == af18RetBefore.bufferMinutes
+                          && af18ActAfterDrag.endDate == af18ActBefore.endDate.addingTimeInterval(1800 + 900)
+                          && af18ActAfterDrag.startDate == af18ActBefore.startDate.addingTimeInterval(1800),
+                      "도착 변위=\(af18RetAfterDrag.arrivalDate.timeIntervalSince(af18RetAfterMove.arrivalDate))s, 끝 변위=\(af18ActAfterDrag.endDate.timeIntervalSince(af18ActBefore.endDate) - 1800)s")
         store.adjustTravelLeg(af18OutAfterMove, byMinutes: 15, wholeSeries: false)
         let af18OutAfterDrag = store.events.first { $0.id == af18Out.id }!
         let af18ActAfterDrag2 = store.activities.first { $0.id == afA18 }!
-        afAi.drvCheck("AF-018-03 가는 편 +15분 드래그 → 도착 고정, 여유 20→5(clampBuffer), 활동 시작·구간 도착 그대로다",
-                      af18OutAfterDrag.arrivalDate == af18OutAfterMove.arrivalDate
-                          && af18OutAfterDrag.bufferMinutes == 5
-                          && af18OutAfterDrag.departureDate == af18OutAfterDrag.arrivalDate.addingTimeInterval(-1800 - 300)
-                          && af18ActAfterDrag2.startDate == af18ActBefore.startDate.addingTimeInterval(1800),
-                      "buffer=\(af18OutAfterDrag.bufferMinutes), 도착 고정=\(af18OutAfterDrag.arrivalDate == af18OutAfterMove.arrivalDate)")
+        afAi.drvCheck("AF-018-03 가는 편 +15분 드래그 → 활동 시작이 +15분, 구간이 통째로 +15분, 끝·여유 20은 그대로다(REQ-002)",
+                      af18OutAfterDrag.arrivalDate == af18OutAfterMove.arrivalDate.addingTimeInterval(900)
+                          && af18OutAfterDrag.departureDate == af18OutAfterMove.departureDate?.addingTimeInterval(900)
+                          && af18OutAfterDrag.bufferMinutes == 20
+                          && af18ActAfterDrag2.startDate == af18ActBefore.startDate.addingTimeInterval(1800 + 900)
+                          && af18ActAfterDrag2.endDate == af18ActBefore.endDate.addingTimeInterval(1800 + 900),
+                      "도착 변위=\(af18OutAfterDrag.arrivalDate.timeIntervalSince(af18OutAfterMove.arrivalDate))s, 시작 변위=\(af18ActAfterDrag2.startDate.timeIntervalSince(af18ActBefore.startDate) - 1800)s, buffer=\(af18OutAfterDrag.bufferMinutes)")
 
         // AF-019 — 구 형식 JSON 디코딩 고정점. 리터럴은 이 트리의 인코더가 실제으로 뱉은
         //        출력 문자열을 그대로 박아둔 것이다(키 순서는 실행마다 흔들려도 디코딩은
@@ -4296,9 +4305,10 @@ struct Drv {
         store.activities.append(contentsOf: [af15R, af15L])
         let af15Groups = store.packingGroups(events: [af15ROut, af15RRet, af15LRet], activities: [af15R, af15L])
         let af15PairSet = Set(af15Groups.map { "\($0.key.uuidString)->\($0.value.uuidString)" })
-        afAi.drvCheck("AF-015-09 packingGroups == 정확히 {R 가는 편 → R, R 오는 편 → R}이다(키·값 쌍 집합 대조)",
+        afAi.drvCheck("AF-015-09 packingGroups == 정확히 {R 가는 편 → R, R 오는 편 → R, L 오는 편 → L}이다(키·값 쌍 집합 대조 — 정확한 앵커 대조, REQ-016)",
                       af15PairSet == ["\(af15ROut.id.uuidString)->\(af15R.id.uuidString)",
-                                      "\(af15RRet.id.uuidString)->\(af15R.id.uuidString)"],
+                                      "\(af15RRet.id.uuidString)->\(af15R.id.uuidString)",
+                                      "\(af15LRet.id.uuidString)->\(af15L.id.uuidString)"],
                       "pairs=\(af15PairSet.sorted().joined(separator: ", "))")
         // (10) 명시적 연결 — 같은 역할 둘(E6)도 전부 반환.
         let af15E6 = ActivityBlock(title: "AF015 E6", location: af15P,
@@ -4318,9 +4328,9 @@ struct Drv {
         afAi.drvCheck("AF-015-10 명시적 연결 활동(같은 역할 둘 포함)에서는 명시적 구간 전부를 반환한다",
                       af15G10[af15E6a.id] == af15E6.id && af15G10[af15E6b.id] == af15E6.id && af15G10.count == 2,
                       "count=\(af15G10.count)")
-        afAi.drvCheck("AF-015-11 늦은 회차 L의 오는 편(도착이 다음 날)은 조회에 들지 않는다 — 알려진 약점의 고정",
-                      !af15Groups.keys.contains(af15LRet.id),
-                      "L 오는편이 키로 들어 있다")
+        afAi.drvCheck("AF-015-11 늦은 회차 L의 오는 편(도착이 다음 날, 출발 = L 끝)은 정확한 앵커 대조로 조회에 **든다**(REQ-016)",
+                      af15Groups.keys.contains(af15LRet.id),
+                      "L 오는편이 키에 없다")
         // (12) 배치 묶음과 "함께 움직이는 구간"이 같은 추정 — R을 +30분 옮긴다.
         let af15LRetBytesBefore = afLegBytes(store.events.first { $0.id == af15LRet.id }!)
         let af15ROutArrival0 = af15ROut.arrivalDate, af15RRetDep0 = af15RRet.departureDate!, af15RRetArr0 = af15RRet.arrivalDate
@@ -4328,7 +4338,7 @@ struct Drv {
         store.moveActivity(af15RInst, byMinutes: 30, wholeSeries: false)
         let af15ROutAfter = store.events.first { $0.id == af15ROut.id }!
         let af15RRetAfter = store.events.first { $0.id == af15RRet.id }!
-        afAi.drvCheck("AF-015-12 moveActivity(R, +30분) → 정확히 (9)가 돌려준 구간들이 +30분이다(L 오는편은 그대로)",
+        afAi.drvCheck("AF-015-12 R 단건 이동(+30분)은 R의 두 구간만 +30분이다",
                       af15ROutAfter.arrivalDate == af15ROutArrival0.addingTimeInterval(1800)
                           && af15RRetAfter.departureDate == af15RRetDep0.addingTimeInterval(1800)
                           && af15RRetAfter.arrivalDate == af15RRetArr0.addingTimeInterval(1800)
@@ -4337,7 +4347,578 @@ struct Drv {
         store.events = []
         store.activities = []
 
-        // ── AG. t17-b(SPEC-UIKIT-009 MB) — 구간 줄 문법(LegCardForm)의 전이를 AC-006 (4)–(8)
+        // ── AF-018(t43) — SPEC-UIKIT-012 연결된 구간 드래그(04~27, AF-015-09·11 고쳐 쓰기는 위 절).
+        //        번호 하나 = 무조건 실행되는 drvCheck 하나(복합 기대는 &&). 하위 사례마다 새
+        //        픽스처이고(do 블록이 이름 충돌을 막는다) 구간은 afInjectedLeg·활동은 ActivityBlock
+        //        값으로 직접 만든다(추정 대기 없음, AC-011 3). 기준일은 af15d0 양식(오늘+60일) —
+        //        출발이 2시간 안에 드는 픽스처가 없어 재추정 훅이 돌지 않는다. 기대값은 plan §5.
+        let af18d0 = afCal.startOfDay(for: Date()).addingTimeInterval(60 * 86400)
+        func af18Act(_ title: String, _ start: Date, _ end: Date, _ rid: UUID? = nil) -> ActivityBlock {
+            ActivityBlock(title: title, location: afOffice, startDate: start, endDate: end, recurrenceId: rid)
+        }
+        func af18LegOut(_ linked: UUID?, _ dep: Date, _ arr: Date, _ rid: UUID? = nil) -> ScheduledEvent {
+            afInjectedLeg(title: "AF018 가는편", anchor: .arrival, arrival: arr, departure: dep,
+                          origin: afHome, destination: afOffice, linked: linked, recurrence: rid)
+        }
+        func af18LegRet(_ linked: UUID?, _ dep: Date, _ arr: Date, _ rid: UUID? = nil) -> ScheduledEvent {
+            afInjectedLeg(title: "AF018 오는편", anchor: .departure, arrival: arr, departure: dep,
+                          origin: afOffice, destination: afHome, linked: linked, recurrence: rid)
+        }
+        let af18m = 60.0
+
+        // AF-018-04 — 오는 편 −15(REQ-001 반대 방향).
+        do {
+            let act = af18Act("AF01804", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(13 * 3600), af18d0.addingTimeInterval(13 * 3600 + 1200))
+            store.activities.append(act); store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: -15, wholeSeries: false)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-04 오는 편 −15분 → 활동 끝 −15분, 구간 통째 −15분, 시작 그대로(REQ-001)",
+                          actA.endDate == act.endDate.addingTimeInterval(-15 * af18m)
+                              && actA.startDate == act.startDate
+                              && legA.departureDate == leg.departureDate?.addingTimeInterval(-15 * af18m)
+                              && legA.arrivalDate == leg.arrivalDate.addingTimeInterval(-15 * af18m),
+                          "끝 변위=\(actA.endDate.timeIntervalSince(act.endDate))s")
+        }
+
+        // AF-018-05 — 가는 편 −15(REQ-002 반대 방향).
+        do {
+            let act = af18Act("AF01805", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            var leg = af18LegOut(act.id, af18d0.addingTimeInterval(11 * 3600 + 2400), af18d0.addingTimeInterval(12 * 3600))
+            leg.bufferMinutes = 20
+            store.activities.append(act); store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: -15, wholeSeries: false)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-05 가는 편 −15분 → 활동 시작 −15분, 구간 통째 −15분, 끝·여유 20 그대로(REQ-002)",
+                          actA.startDate == act.startDate.addingTimeInterval(-15 * af18m)
+                              && actA.endDate == act.endDate
+                              && legA.arrivalDate == leg.arrivalDate.addingTimeInterval(-15 * af18m)
+                              && legA.departureDate == leg.departureDate?.addingTimeInterval(-15 * af18m)
+                              && legA.bufferMinutes == 20,
+                          "시작 변위=\(actA.startDate.timeIntervalSince(act.startDate))s, buffer=\(legA.bufferMinutes)")
+        }
+
+        // AF-018-06 — 최소 5분: 1시간 활동 오는 편 −60 → −55, 끝 = 시작 + 5분(AC-006: 한계 반환 = 실제 변위).
+        do {
+            let act = af18Act("AF01806", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(13 * 3600), af18d0.addingTimeInterval(13 * 3600 + 1200))
+            store.activities.append(act); store.events.append(leg)
+            let limit = store.effectiveDragMinutes(leg: leg, owner: act, requestedMinutes: -60)
+            store.adjustTravelLeg(leg, byMinutes: -60, wholeSeries: false)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-06 1시간 활동 오는 편 −60 → −55에서 멈춘다(끝 = 시작 + 5분, REQ-006)",
+                          limit == -55
+                              && actA.endDate == act.startDate.addingTimeInterval(5 * af18m)
+                              && actA.startDate == act.startDate
+                              && legA.departureDate == actA.endDate
+                              && legA.arrivalDate == leg.arrivalDate.addingTimeInterval(-55 * af18m),
+                          "한계=\(limit), 끝−시작=\(Int(actA.endDate.timeIntervalSince(actA.startDate) / 60))분")
+        }
+
+        // AF-018-07 — 이미 5분 미만인 활동: 가는 편 +5 → 0 && 새 픽스처 −15 → −15.
+        do {
+            let actA = af18Act("AF01807a", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(12 * 3600 + 180))
+            let legA = af18LegOut(actA.id, af18d0.addingTimeInterval(11 * 3600 + 2400), af18d0.addingTimeInterval(12 * 3600))
+            store.activities.append(actA); store.events.append(legA)
+            let limitA = store.effectiveDragMinutes(leg: legA, owner: actA, requestedMinutes: 5)
+            store.adjustTravelLeg(legA, byMinutes: 5, wholeSeries: false)
+            let a = store.events.first { $0.id == legA.id }!, aAct = store.activities.first { $0.id == actA.id }!
+            let caseA = limitA == 0 && afLegBytes(a) == afLegBytes(legA) && afRecBytes(aAct) == afRecBytes(actA)
+            let actB = af18Act("AF01807b", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(12 * 3600 + 180))
+            let legB = af18LegOut(actB.id, af18d0.addingTimeInterval(11 * 3600 + 2400), af18d0.addingTimeInterval(12 * 3600))
+            store.activities.append(actB); store.events.append(legB)
+            let limitB = store.effectiveDragMinutes(leg: legB, owner: actB, requestedMinutes: -15)
+            store.adjustTravelLeg(legB, byMinutes: -15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!, bAct = store.activities.first { $0.id == actB.id }!
+            afAi.drvCheck("AF-018-07 3분 활동 가는 편: +5 → 0(불변) && −15 → −15(18분, 늘임은 그대로)",
+                          caseA && limitB == -15
+                              && bAct.startDate == actB.startDate.addingTimeInterval(-15 * af18m)
+                              && bAct.endDate == actB.endDate
+                              && b.arrivalDate == bAct.startDate,
+                          "A 한계=\(limitA), B 한계=\(limitB), B 시작=\(Int(bAct.startDate.timeIntervalSince(actB.startDate)))s")
+        }
+
+        // AF-018-08 — 아래로 자정 넘기기: 22:00–23:00 활동, 오는 편 23:00→23:20, +90.
+        do {
+            let act = af18Act("AF01808", af18d0.addingTimeInterval(22 * 3600), af18d0.addingTimeInterval(23 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(23 * 3600), af18d0.addingTimeInterval(23 * 3600 + 1200))
+            store.activities.append(act); store.events.append(leg)
+            let limit = store.effectiveDragMinutes(leg: leg, owner: act, requestedMinutes: 90)
+            store.adjustTravelLeg(leg, byMinutes: 90, wholeSeries: false)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            let day1 = af18d0.addingTimeInterval(86400)
+            afAi.drvCheck("AF-018-08 오는 편 +90 → +90(자정 넘기기): 활동 끝 D+1 00:30, 구간 00:30→00:50, 활동은 D·D+1 나열·구간은 D+1만",
+                          limit == 90
+                              && actA.endDate == day1.addingTimeInterval(1800)
+                              && legA.departureDate == day1.addingTimeInterval(1800)
+                              && legA.arrivalDate == day1.addingTimeInterval(3000)
+                              && Store.overlapsDay(start: actA.startDate, end: actA.endDate, day: af18d0)
+                              && Store.overlapsDay(start: actA.startDate, end: actA.endDate, day: day1)
+                              && !legA.isListed(on: af18d0, calendar: afCal)
+                              && legA.isListed(on: day1, calendar: afCal),
+                          "한계=\(limit), 구간 D 나열=\(legA.isListed(on: af18d0, calendar: afCal))")
+        }
+
+        // AF-018-09 — 위로 한쪽 자르기: 00:40–03:40 활동, 가는 편 00:20→00:40, −30 → −20.
+        do {
+            let act = af18Act("AF01809", af18d0.addingTimeInterval(40 * 60), af18d0.addingTimeInterval(3 * 3600 + 40 * 60))
+            let leg = af18LegOut(act.id, af18d0.addingTimeInterval(20 * 60), af18d0.addingTimeInterval(40 * 60))
+            store.activities.append(act); store.events.append(leg)
+            let limit = store.effectiveDragMinutes(leg: leg, owner: act, requestedMinutes: -30)
+            store.adjustTravelLeg(leg, byMinutes: -30, wholeSeries: false)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-09 가는 편 −30 → −20(새 출발이 첫 나열일 0시에서 멈춘다, REQ-007)",
+                          limit == -20
+                              && legA.departureDate == af18d0
+                              && legA.arrivalDate == af18d0.addingTimeInterval(20 * 60)
+                              && actA.startDate == af18d0.addingTimeInterval(20 * 60),
+                          "한계=\(limit), 출발=\(String(describing: legA.departureDate))")
+        }
+
+        // AF-018-10 — 자정을 걸친 구간: +15 · 새 픽스처 −15 → −5 · 밤샘 가는 편 −30 → −30.
+        do {
+            let actA = af18Act("AF01810a", af18d0.addingTimeInterval(20 * 3600 + 50 * 60), af18d0.addingTimeInterval(23 * 3600 + 50 * 60))
+            let legA = af18LegRet(actA.id, af18d0.addingTimeInterval(23 * 3600 + 50 * 60), af18d0.addingTimeInterval(86400 + 10 * 60))
+            store.activities.append(actA); store.events.append(legA)
+            let limA = store.effectiveDragMinutes(leg: legA, owner: actA, requestedMinutes: 15)
+            store.adjustTravelLeg(legA, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == legA.id }!, aAct = store.activities.first { $0.id == actA.id }!
+            let caseA = limA == 15
+                && a.departureDate == af18d0.addingTimeInterval(86400 + 5 * 60)
+                && a.arrivalDate == af18d0.addingTimeInterval(86400 + 25 * 60)
+                && aAct.endDate == a.departureDate
+            let actB = af18Act("AF01810b", af18d0.addingTimeInterval(20 * 3600 + 50 * 60), af18d0.addingTimeInterval(23 * 3600 + 50 * 60))
+            let legB = af18LegRet(actB.id, af18d0.addingTimeInterval(23 * 3600 + 50 * 60), af18d0.addingTimeInterval(86400 + 10 * 60))
+            store.activities.append(actB); store.events.append(legB)
+            let limB = store.effectiveDragMinutes(leg: legB, owner: actB, requestedMinutes: -15)
+            store.adjustTravelLeg(legB, byMinutes: -15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!
+            let caseB = limB == -5
+                && b.departureDate == af18d0.addingTimeInterval(23 * 3600 + 45 * 60)
+                && b.arrivalDate == af18d0.addingTimeInterval(86400 + 5 * 60)
+            let actC = af18Act("AF01810c", af18d0.addingTimeInterval(22 * 3600), af18d0.addingTimeInterval(86400 + 6 * 3600))
+            let legC = af18LegOut(actC.id, af18d0.addingTimeInterval(21 * 3600 + 40 * 60), af18d0.addingTimeInterval(22 * 3600))
+            store.activities.append(actC); store.events.append(legC)
+            let limC = store.effectiveDragMinutes(leg: legC, owner: actC, requestedMinutes: -30)
+            store.adjustTravelLeg(legC, byMinutes: -30, wholeSeries: false)
+            let c = store.events.first { $0.id == legC.id }!, cAct = store.activities.first { $0.id == actC.id }!
+            let caseC = limC == -30
+                && c.departureDate == af18d0.addingTimeInterval(21 * 3600 + 10 * 60)
+                && c.arrivalDate == af18d0.addingTimeInterval(21 * 3600 + 30 * 60)
+                && cAct.startDate == c.arrivalDate
+            afAi.drvCheck("AF-018-10 걸친 오는 편 +15 → +15 && −15 → −5(도착 > L 시작 경계) && 밤샘 가는 편 −30 → −30",
+                          caseA && caseB && caseC,
+                          "A=\(limA), B=\(limB), C=\(limC)")
+        }
+
+        // AF-018-11 — 소유 없는 오는 편: 지금 동작(통째 이동, 어떤 활동도 바뀌지 않는다).
+        do {
+            let actsBefore = afArrBytes(store.activities)
+            let leg = af18LegRet(nil, af18d0.addingTimeInterval(13 * 3600), af18d0.addingTimeInterval(13 * 3600 + 1200))
+            store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!
+            afAi.drvCheck("AF-018-11 소유 없는 오는 편 +15 → 구간이 통째로 +15분, 활동은 바이트 불변(지금 동작, REQ-005)",
+                          a.departureDate == leg.departureDate?.addingTimeInterval(15 * af18m)
+                              && a.arrivalDate == leg.arrivalDate.addingTimeInterval(15 * af18m)
+                              && afArrBytes(store.activities) == actsBefore,
+                          "출발 변위=\(String(describing: a.departureDate?.timeIntervalSince(leg.departureDate!)))s")
+        }
+
+        // AF-018-12 — 소유 없는 가는 편: 도착 고정, 버퍼 20→5로 흡수(지금 동작).
+        do {
+            var leg = af18LegOut(nil, af18d0.addingTimeInterval(12 * 3600 - 2400), af18d0.addingTimeInterval(13 * 3600))
+            leg.bufferMinutes = 20
+            store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!
+            afAi.drvCheck("AF-018-12 소유 없는 가는 편 +15 → 도착 고정, 여유 20→5(clampBuffer)로 흡수(지금 동작, REQ-005)",
+                          a.arrivalDate == leg.arrivalDate
+                              && a.bufferMinutes == 5
+                              && a.departureDate == a.arrivalDate.addingTimeInterval(-1200 - 300),
+                          "buffer=\(a.bufferMinutes)")
+        }
+
+        // AF-018-13 — 소유 없는 반복 구간 '전체': 같은 역할 회차가 함께 통째 이동(지금 동작).
+        do {
+            let actsBefore = afArrBytes(store.activities)
+            let rid = UUID()
+            let leg1 = af18LegRet(nil, af18d0.addingTimeInterval(13 * 3600), af18d0.addingTimeInterval(13 * 3600 + 1200), rid)
+            let leg2 = af18LegRet(nil, af18d0.addingTimeInterval(86400 + 13 * 3600), af18d0.addingTimeInterval(86400 + 13 * 3600 + 1200), rid)
+            store.events.append(contentsOf: [leg1, leg2])
+            store.adjustTravelLeg(leg1, byMinutes: 15, wholeSeries: true)
+            let a1 = store.events.first { $0.id == leg1.id }!, a2 = store.events.first { $0.id == leg2.id }!
+            afAi.drvCheck("AF-018-13 소유 없는 반복 오는 편 '전체' +15 → 같은 역할 회차 둘 다 통째 +15, 활동은 바이트 불변(지금 동작)",
+                          a1.departureDate == leg1.departureDate?.addingTimeInterval(15 * af18m)
+                              && a2.departureDate == leg2.departureDate?.addingTimeInterval(15 * af18m)
+                              && afArrBytes(store.activities) == actsBefore,
+                          "회차1=\(String(describing: a1.departureDate?.timeIntervalSince(leg1.departureDate!)))s, 회차2=\(String(describing: a2.departureDate?.timeIntervalSince(leg2.departureDate!)))s")
+        }
+
+        // AF-018-14 — 경고 블록(이동시간 미계산, 출발 없음): ±15가 그대로 적용된다.
+        do {
+            let actA = af18Act("AF01814a", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let legA = afInjectedLeg(title: "AF01814 가는편", anchor: .arrival,
+                                     arrival: af18d0.addingTimeInterval(12 * 3600), departure: nil,
+                                     origin: afHome, destination: afOffice, linked: actA.id, recurrence: nil)
+            store.activities.append(actA); store.events.append(legA)
+            let limA = store.effectiveDragMinutes(leg: legA, owner: actA, requestedMinutes: 15)
+            store.adjustTravelLeg(legA, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == legA.id }!, aAct = store.activities.first { $0.id == actA.id }!
+            let caseA = limA == 15 && a.travelSeconds == nil && a.departureDate == nil
+                && a.arrivalDate == legA.arrivalDate.addingTimeInterval(15 * af18m)
+                && aAct.startDate == a.arrivalDate && aAct.endDate == actA.endDate
+            let actB = af18Act("AF01814b", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let legB = afInjectedLeg(title: "AF01814 가는편", anchor: .arrival,
+                                     arrival: af18d0.addingTimeInterval(12 * 3600), departure: nil,
+                                     origin: afHome, destination: afOffice, linked: actB.id, recurrence: nil)
+            store.activities.append(actB); store.events.append(legB)
+            let limB = store.effectiveDragMinutes(leg: legB, owner: actB, requestedMinutes: -15)
+            store.adjustTravelLeg(legB, byMinutes: -15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!, bAct = store.activities.first { $0.id == actB.id }!
+            afAi.drvCheck("AF-018-14 경고 블록 가는 편: +15 → +15 && −15 → −15(활동 시작·구간 도착이 같은 Δ, 나열 시각만 한계에 든다)",
+                          caseA && limB == -15
+                              && b.arrivalDate == legB.arrivalDate.addingTimeInterval(-15 * af18m)
+                              && bAct.startDate == b.arrivalDate,
+                          "A=\(limA), B=\(limB)")
+        }
+
+        // AF-018-15 — Δ = 0 → 아무것도 바뀌지 않는다.
+        do {
+            let act = af18Act("AF01815", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(13 * 3600), af18d0.addingTimeInterval(13 * 3600 + 1200))
+            store.activities.append(act); store.events.append(leg)
+            let bytesBefore = afArrBytes(store.events) + afArrBytes(store.activities)
+            store.adjustTravelLeg(leg, byMinutes: 0, wholeSeries: false)
+            afAi.drvCheck("AF-018-15 유효 Δ = 0인 드롭 → 이벤트·활동 전부 바이트 불변",
+                          store.effectiveDragMinutes(leg: leg, owner: act, requestedMinutes: 0) == 0
+                              && afArrBytes(store.events) + afArrBytes(store.activities) == bytesBefore,
+                          "배열이 바뀌었다")
+        }
+
+        // AF-018-16 — 추정 연결 반복 '전체': 회차마다 자기 한계(길이 60·60·15 → −15·−15·−10).
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400), d3 = af18d0.addingTimeInterval(2 * 86400)
+            var acts: [ActivityBlock] = []
+            for (i, d) in [(1, d1), (2, d2), (3, d3)] {
+                let startMinute = i == 3 ? 12 * 60 + 45 : 12 * 60
+                acts.append(af18Act("AF01816 회의", d.addingTimeInterval(Double(startMinute) * 60),
+                                    d.addingTimeInterval(13 * 3600), rid))
+            }
+            let legs = acts.map { af18LegRet(nil, $0.endDate, $0.endDate.addingTimeInterval(1200), rid) }
+            store.activities.append(contentsOf: acts); store.events.append(contentsOf: legs)
+            store.adjustTravelLeg(legs[0], byMinutes: -15, wholeSeries: true)
+            let ends = acts.map { a in store.activities.first { $0.id == a.id }!.endDate }
+            afAi.drvCheck("AF-018-16 추정 반복 3회차(길이 60·60·15) 오는 편 '전체' −15 → −15·−15·−10(각 회차 자기 한계)",
+                          ends[0] == d1.addingTimeInterval(13 * 3600 - 15 * 60)
+                              && ends[1] == d2.addingTimeInterval(13 * 3600 - 15 * 60)
+                              && ends[2] == d3.addingTimeInterval(13 * 3600 - 10 * 60)
+                              && store.events.first { $0.id == legs[0].id }!.departureDate == ends[0]
+                              && store.events.first { $0.id == legs[2].id }!.departureDate == ends[2],
+                          "끝들=\(ends.map { Int($0.timeIntervalSince(af18d0)) })")
+        }
+
+        // AF-018-17 — 드롭이 연결·반복 표지(linkedActivityId·recurrenceId·제목)를 바꾸지 않는다.
+        do {
+            let act = af18Act("AF01817", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let leg = af18LegOut(act.id, af18d0.addingTimeInterval(11 * 3600 + 2400), af18d0.addingTimeInterval(12 * 3600))
+            store.activities.append(act); store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!, aAct = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-17 드롭 뒤 linkedActivityId·recurrenceId·제목이 그대로다(대화상자 키 회귀선)",
+                          a.linkedActivityId == act.id && a.recurrenceId == nil && a.title == leg.title
+                              && aAct.recurrenceId == nil && aAct.title == act.title,
+                          "link=\(String(describing: a.linkedActivityId))")
+        }
+
+        // AF-018-18 — '이 일정만': 드래그한 회차만 움직인다.
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400)
+            let act1 = af18Act("AF01818 회의", d1.addingTimeInterval(12 * 3600), d1.addingTimeInterval(13 * 3600), rid)
+            let act2 = af18Act("AF01818 회의", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), rid)
+            let leg1 = af18LegRet(nil, act1.endDate, act1.endDate.addingTimeInterval(1200), rid)
+            let leg2 = af18LegRet(nil, act2.endDate, act2.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(contentsOf: [act1, act2]); store.events.append(contentsOf: [leg1, leg2])
+            store.adjustTravelLeg(leg1, byMinutes: -15, wholeSeries: false)
+            let a1 = store.events.first { $0.id == leg1.id }!, a1Act = store.activities.first { $0.id == act1.id }!
+            let a2 = store.events.first { $0.id == leg2.id }!, a2Act = store.activities.first { $0.id == act2.id }!
+            afAi.drvCheck("AF-018-18 '이 일정만' −15 → 첫 회차만 움직이고 둘째 회차는 바이트 불변(REQ-011)",
+                          a1Act.endDate == act1.endDate.addingTimeInterval(-15 * af18m)
+                              && a1.departureDate == a1Act.endDate
+                              && afLegBytes(a2) == afLegBytes(leg2) && afRecBytes(a2Act) == afRecBytes(act2),
+                          "둘째 회차가 바뀌었다")
+        }
+
+        // AF-018-19 — '전체' 범위: 같은 반복·제목·장소의 같은 역할만(REQ-010).
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400), d3 = af18d0.addingTimeInterval(2 * 86400)
+            let act1 = af18Act("AF01819 회의", d1.addingTimeInterval(12 * 3600), d1.addingTimeInterval(13 * 3600), rid)
+            let act2 = af18Act("AF01819 회의", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), rid)
+            let actX = af18Act("AF01819 다른 제목", d3.addingTimeInterval(12 * 3600), d3.addingTimeInterval(13 * 3600), rid)
+            let out1 = af18LegOut(nil, act1.startDate.addingTimeInterval(-2400), act1.startDate, rid)
+            let out2 = af18LegOut(nil, act2.startDate.addingTimeInterval(-2400), act2.startDate, rid)
+            let ret1 = af18LegRet(nil, act1.endDate, act1.endDate.addingTimeInterval(1200), rid)
+            let ret2 = af18LegRet(nil, act2.endDate, act2.endDate.addingTimeInterval(1200), rid)
+            let retX = af18LegRet(nil, actX.endDate, actX.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(contentsOf: [act1, act2, actX])
+            store.events.append(contentsOf: [out1, out2, ret1, ret2, retX])
+            store.adjustTravelLeg(ret1, byMinutes: -15, wholeSeries: true)
+            let e1 = store.activities.first { $0.id == act1.id }!, e2 = store.activities.first { $0.id == act2.id }!
+            let xAct = store.activities.first { $0.id == actX.id }!
+            let o1 = store.events.first { $0.id == out1.id }!, o2 = store.events.first { $0.id == out2.id }!
+            let r2 = store.events.first { $0.id == ret2.id }!, rx = store.events.first { $0.id == retX.id }!
+            afAi.drvCheck("AF-018-19 '전체' −15 → 같은 반복·제목·장소 회차의 오는 편만 −15, 가는 편·다른 제목 회차는 바이트 불변",
+                          e1.endDate == act1.endDate.addingTimeInterval(-15 * af18m)
+                              && e2.endDate == act2.endDate.addingTimeInterval(-15 * af18m)
+                              && r2.departureDate == act2.endDate.addingTimeInterval(-15 * af18m)
+                              && afLegBytes(o1) == afLegBytes(out1) && afLegBytes(o2) == afLegBytes(out2)
+                              && afLegBytes(rx) == afLegBytes(retX) && afRecBytes(xAct) == afRecBytes(actX),
+                          "가는 편 또는 다른 제목 회차가 바뀌었다")
+        }
+
+        // AF-018-20 — 모호: 같은 시각·같은 장소 오는 편이 둘 → 정방향 조회는 첫째만 담는다 → 둘째는 소유 없음.
+        do {
+            let rid = UUID()
+            let act = af18Act("AF01820", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600), rid)
+            let legA = af18LegRet(nil, act.endDate, act.endDate.addingTimeInterval(1200), rid)
+            let legB = af18LegRet(nil, act.endDate, act.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(act); store.events.append(contentsOf: [legA, legB])
+            let noOwner = store.owningActivity(of: legB) == nil
+            store.adjustTravelLeg(legB, byMinutes: 15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!, a = store.events.first { $0.id == legA.id }!
+            let actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-20 같은 시각 오는 편 둘 → 둘째는 소유 없음(지금 동작 통째 이동), 활동·첫째 구간 불변",
+                          noOwner
+                              && b.departureDate == legB.departureDate?.addingTimeInterval(15 * af18m)
+                              && afRecBytes(actA) == afRecBytes(act) && afLegBytes(a) == afLegBytes(legA),
+                          "소유 없음=\(noOwner)")
+        }
+
+        // AF-018-21 — 동률: (a) 같은 끝 활동 둘 → 소유 없음. (b) 출발 없는 오는 편은 동률조차 성립하지 않는다.
+        do {
+            let ridA = UUID()
+            let aa = af18Act("AF01821a 체류", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600), ridA)
+            let ab = af18Act("AF01821a 점심", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600), ridA)
+            let legA = af18LegRet(nil, aa.endDate, aa.endDate.addingTimeInterval(1200), ridA)
+            store.activities.append(contentsOf: [aa, ab]); store.events.append(legA)
+            let tieNil = store.owningActivity(of: legA) == nil
+            store.adjustTravelLeg(legA, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == legA.id }!
+            let aaA = store.activities.first { $0.id == aa.id }!, abA = store.activities.first { $0.id == ab.id }!
+            let caseA = tieNil
+                && a.departureDate == legA.departureDate?.addingTimeInterval(15 * af18m)
+                && afRecBytes(aaA) == afRecBytes(aa) && afRecBytes(abA) == afRecBytes(ab)
+            let ridB = UUID()
+            let d2 = af18d0.addingTimeInterval(86400)
+            let ba = af18Act("AF01821b 체류", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), ridB)
+            let bb = af18Act("AF01821b 점심", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), ridB)
+            let legB = afInjectedLeg(title: "AF01821b 오는편", anchor: .departure,
+                                     arrival: ba.endDate, departure: nil,
+                                     origin: afOffice, destination: afHome, linked: nil, recurrence: ridB)
+            store.activities.append(contentsOf: [ba, bb]); store.events.append(legB)
+            let noDepNil = store.owningActivity(of: legB) == nil
+            store.adjustTravelLeg(legB, byMinutes: 15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!
+            let baA = store.activities.first { $0.id == ba.id }!, bbA = store.activities.first { $0.id == bb.id }!
+            afAi.drvCheck("AF-018-21 동률: 같은 끝 활동 둘 → 소유 없음 && 출발 없는 오는 편도 소유 없음(활동 불변, REQ-004)",
+                          caseA && noDepNil
+                              && b.departureDate == nil
+                              && b.arrivalDate == legB.arrivalDate.addingTimeInterval(15 * af18m)
+                              && afRecBytes(baA) == afRecBytes(ba) && afRecBytes(bbA) == afRecBytes(bb),
+                          "동률 소유없음=\(tieNil), 출발없음 소유없음=\(noDepNil)")
+        }
+
+        // AF-018-22 — 옛 틈: 끌어도 틈(30분)이 유지된 채 함께 움직인다(REQ-001·D-9).
+        do {
+            let act = af18Act("AF01822", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(13 * 3600 + 1800), af18d0.addingTimeInterval(13 * 3600 + 3000))
+            store.activities.append(act); store.events.append(leg)
+            store.adjustTravelLeg(leg, byMinutes: 15, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!, aAct = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("AF-018-22 틈 30분 오는 편 +15 → 활동 끝·구간이 같이 +15분, 틈 30분 유지·시작 불변",
+                          aAct.endDate == act.endDate.addingTimeInterval(15 * af18m)
+                              && aAct.startDate == act.startDate
+                              && a.departureDate == leg.departureDate?.addingTimeInterval(15 * af18m)
+                              && a.departureDate == aAct.endDate.addingTimeInterval(1800),
+                          "틈=\(Int(a.departureDate!.timeIntervalSince(aAct.endDate) / 60))분")
+        }
+
+        // AF-018-23 — 나열 성질 격자(세 픽스처 × 요청 −180…+180, 5분 간격, 0 제외).
+        do {
+            func af18GridOK(_ leg: ScheduledEvent, _ owner: ActivityBlock, _ label: String) -> (Bool, String) {
+                guard let span = leg.listedSpan else { return (false, "\(label): 나열 구간 없음") }
+                let base = afCal.startOfDay(for: span.start)
+                var days: [Date] = []
+                for o in -1...5 { if let d = afCal.date(byAdding: .day, value: o, to: base) { days.append(d) } }
+                let before = days.map { leg.isListed(on: $0, calendar: afCal) }
+                let listedDays = zip(days, before).filter { $0.1 }.map { $0.0 }
+                guard let firstListed = listedDays.first, let lastListed = listedDays.last else {
+                    return (false, "\(label): 나열일 0건")
+                }
+                var delta = -180
+                while delta <= 180 {
+                    if delta != 0 {
+                        let e = store.effectiveDragMinutes(leg: leg, owner: owner, requestedMinutes: delta)
+                        let inRange = delta < 0 ? (e >= delta && e <= 0) : (e >= 0 && e <= delta)
+                        if !inRange { return (false, "\(label) Δ\(delta): 유효 \(e)가 0과 요청 사이 밖") }
+                        var moved = leg
+                        moved.departureDate = span.start.addingTimeInterval(Double(e) * 60)
+                        moved.arrivalDate = span.end.addingTimeInterval(Double(e) * 60)
+                        if delta < 0 {
+                            for (i, day) in days.enumerated() {
+                                if moved.isListed(on: day, calendar: afCal) != before[i] {
+                                    return (false, "\(label) Δ\(delta): 위로 나열 날이 바뀜(\(day))")
+                                }
+                            }
+                        } else {
+                            var lastMoved: Date? = nil
+                            for day in days where moved.isListed(on: day, calendar: afCal) { lastMoved = day }
+                            if let last = lastMoved, last > max(firstListed.addingTimeInterval(86400), lastListed) {
+                                return (false, "\(label) Δ\(delta): 마지막 나열일이 max(F+1, L)을 넘음")
+                            }
+                        }
+                    }
+                    delta += 5
+                }
+                return (true, "")
+            }
+            // 하루짜리 · 자정 걸친 · 이틀 넘는 오는 편(활동 3시간 — 최소 길이가 격자를 지배하지 않게).
+            let o1 = af18Act("AF01823", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(15 * 3600))
+            let o2 = af18Act("AF01823", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(15 * 3600))
+            let o3 = af18Act("AF01823", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(15 * 3600))
+            let g1 = af18LegRet(o1.id, af18d0.addingTimeInterval(22 * 3600 + 600), af18d0.addingTimeInterval(22 * 3600 + 1800))
+            let g2 = af18LegRet(o2.id, af18d0.addingTimeInterval(23 * 3600 + 50 * 60), af18d0.addingTimeInterval(86400 + 10 * 60))
+            let g3 = af18LegRet(o3.id, af18d0.addingTimeInterval(23 * 3600), af18d0.addingTimeInterval(2 * 86400 + 3600))
+            store.activities.append(contentsOf: [o1, o2, o3])
+            store.events.append(contentsOf: [g1, g2, g3])
+            var allOK = true; var why = ""
+            for (leg, owner) in zip([g1, g2, g3], [o1, o2, o3]) {
+                let (ok, reason) = af18GridOK(leg, owner, leg.title)
+                if !ok { allOK = false; why = reason; break }
+            }
+            afAi.drvCheck("AF-018-23 나열 격자(세 모양 × −180…+180): 위로는 나열 날 불변, 아래로는 마지막 나열일 ≤ max(F+1, L), 유효 Δ는 0과 요청 사이",
+                          allOK, why.isEmpty ? "통과" : why)
+        }
+
+        // AF-018-24 — 드롭 재읽기: 사본의 시각이 아니라 현재 저장값으로 확정한다 && 지운 id는 무변.
+        do {
+            let act = af18Act("AF01824", af18d0.addingTimeInterval(50 * 60), af18d0.addingTimeInterval(3 * 3600 + 50 * 60))
+            let leg = af18LegOut(act.id, af18d0.addingTimeInterval(30 * 60), af18d0.addingTimeInterval(50 * 60))
+            store.activities.append(act); store.events.append(leg)
+            let snap = leg   // 드래그가 시작된 때의 사본
+            if let idx = store.events.firstIndex(where: { $0.id == leg.id }) {
+                store.events[idx].departureDate = af18d0.addingTimeInterval(20 * 60)
+                store.events[idx].arrivalDate = af18d0.addingTimeInterval(40 * 60)
+            }
+            store.adjustTravelLeg(snap, byMinutes: -30, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!, aAct = store.activities.first { $0.id == act.id }!
+            let caseReread = aAct.startDate == af18d0.addingTimeInterval(30 * 60)
+                && a.departureDate == af18d0
+                && a.arrivalDate == af18d0.addingTimeInterval(20 * 60)
+            let ghost = af18LegOut(nil, af18d0.addingTimeInterval(5 * 3600), af18d0.addingTimeInterval(5 * 3600 + 1200))
+            let ghostCopy = ghost
+            store.events.append(ghost)
+            store.events.removeAll { $0.id == ghost.id }   // 드래그 중 삭제됐다 — 사본만 손에 남는다
+            let bytesBefore = afArrBytes(store.events) + afArrBytes(store.activities)
+            store.adjustTravelLeg(ghostCopy, byMinutes: -30, wholeSeries: false)
+            afAi.drvCheck("AF-018-24 드롭 재읽기: 늙은 사본(−30)이라도 현재 저장값 기준 −20으로 확정 && 지운 구간 사본은 바이트 불변",
+                          caseReread && afArrBytes(store.events) + afArrBytes(store.activities) == bytesBefore,
+                          "재읽기=\(caseReread), 지운 id 무변=\(afArrBytes(store.events) + afArrBytes(store.activities) == bytesBefore)")
+        }
+
+        // AF-018-25 — 방향별 자르기: (a) 이틀 넘는 오는 편 ±15. (b) 재추정 실패 경고 블록 +15.
+        do {
+            let actA = af18Act("AF01825a", af18d0.addingTimeInterval(20 * 3600), af18d0.addingTimeInterval(23 * 3600))
+            let legA = af18LegRet(actA.id, af18d0.addingTimeInterval(23 * 3600), af18d0.addingTimeInterval(2 * 86400 + 3600))
+            store.activities.append(actA); store.events.append(legA)
+            let limUp = store.effectiveDragMinutes(leg: legA, owner: actA, requestedMinutes: 15)
+            store.adjustTravelLeg(legA, byMinutes: 15, wholeSeries: false)
+            let aAct = store.activities.first { $0.id == actA.id }!
+            let caseUp = limUp == 0 && aAct.endDate == actA.endDate && aAct.startDate == actA.startDate
+            let actD = af18Act("AF01825a2", af18d0.addingTimeInterval(20 * 3600), af18d0.addingTimeInterval(23 * 3600))
+            let legD = af18LegRet(actD.id, af18d0.addingTimeInterval(23 * 3600), af18d0.addingTimeInterval(2 * 86400 + 3600))
+            store.activities.append(actD); store.events.append(legD)
+            let limDown = store.effectiveDragMinutes(leg: legD, owner: actD, requestedMinutes: -15)
+            store.adjustTravelLeg(legD, byMinutes: -15, wholeSeries: false)
+            let d = store.events.first { $0.id == legD.id }!, dAct = store.activities.first { $0.id == actD.id }!
+            let caseDown = limDown == -15
+                && d.departureDate == af18d0.addingTimeInterval(23 * 3600 - 15 * 60)
+                && dAct.endDate == d.departureDate
+            let actB = af18Act("AF01825b", af18d0.addingTimeInterval(20 * 3600 + 50 * 60), af18d0.addingTimeInterval(23 * 3600 + 50 * 60))
+            var legB = af18LegRet(actB.id, af18d0.addingTimeInterval(23 * 3600 + 50 * 60), af18d0.addingTimeInterval(86400 + 10 * 60))
+            legB.travelSeconds = nil   // 재추정 실패 모양 — 나열 시각(출발)만 한계에 들어간다
+            store.activities.append(actB); store.events.append(legB)
+            let limB = store.effectiveDragMinutes(leg: legB, owner: actB, requestedMinutes: 15)
+            store.adjustTravelLeg(legB, byMinutes: 15, wholeSeries: false)
+            let b = store.events.first { $0.id == legB.id }!, bAct = store.activities.first { $0.id == actB.id }!
+            afAi.drvCheck("AF-018-25 이틀 넘는 오는 편: +15 → 0(상한 이미 초과) && −15 → −15 && 옛 경고 블록 +15 → +15(끝 D+1 00:05)",
+                          caseUp && caseDown && limB == 15
+                              && b.departureDate == af18d0.addingTimeInterval(86400 + 5 * 60)
+                              && bAct.endDate == b.departureDate,
+                          "+15=\(limUp), −15=\(limDown), 경고=\(limB)")
+        }
+
+        // AF-018-26 — 아래 상한: 도착이 F 다음 날 끝(D+2 00:00)에서 멈춘다.
+        do {
+            let act = af18Act("AF01826", af18d0.addingTimeInterval(22 * 3600), af18d0.addingTimeInterval(23 * 3600))
+            let leg = af18LegRet(act.id, af18d0.addingTimeInterval(23 * 3600), af18d0.addingTimeInterval(23 * 3600 + 1200))
+            store.activities.append(act); store.events.append(leg)
+            let limit = store.effectiveDragMinutes(leg: leg, owner: act, requestedMinutes: 1500)
+            store.adjustTravelLeg(leg, byMinutes: 1500, wholeSeries: false)
+            let a = store.events.first { $0.id == leg.id }!
+            let day1 = af18d0.addingTimeInterval(86400), day2 = af18d0.addingTimeInterval(2 * 86400)
+            afAi.drvCheck("AF-018-26 오는 편 +1500 → +1480(도착 D+2 00:00), 드롭 뒤 구간은 D+1에만 나열",
+                          limit == 1480
+                              && a.arrivalDate == day2
+                              && a.departureDate == day1.addingTimeInterval(23 * 3600 + 40 * 60)
+                              && !a.isListed(on: af18d0, calendar: afCal) && !a.isListed(on: day2, calendar: afCal)
+                              && a.isListed(on: day1, calendar: afCal),
+                          "한계=\(limit), 도착 D+2 00:00=\(a.arrivalDate == day2)")
+        }
+
+        // AF-018-27 — 자정을 넘어도 한 묶음(REQ-016) + 밤샘 어긋남 회차는 단독 && '전체' 이동의 이중 이동 없음.
+        do {
+            let rid = UUID()
+            let actR = af18Act("AF01827 R", af18d0.addingTimeInterval(21 * 3600), af18d0.addingTimeInterval(23 * 3600), rid)
+            let legR = af18LegRet(nil, actR.endDate, actR.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(actR); store.events.append(legR)
+            store.adjustTravelLeg(legR, byMinutes: 90, wholeSeries: false)
+            let legR0 = store.events.first { $0.id == legR.id }!, actR0 = store.activities.first { $0.id == actR.id }!
+            let packed = store.packingGroups(events: [legR0], activities: [actR0])[legR.id] == actR.id
+            store.moveActivity(actR0, byMinutes: 30, wholeSeries: false)
+            let legR1 = store.events.first { $0.id == legR.id }!
+            let part1 = packed
+                && legR1.departureDate == legR0.departureDate?.addingTimeInterval(1800)
+                && legR1.arrivalDate == legR0.arrivalDate.addingTimeInterval(1800)
+            let rid2 = UUID()
+            let a0 = af18Act("AF01827 밤샘", af18d0.addingTimeInterval(22 * 3600), af18d0.addingTimeInterval(26 * 3600), rid2)
+            let a1 = af18Act("AF01827 밤샘", af18d0.addingTimeInterval(46 * 3600), af18d0.addingTimeInterval(50 * 3600), rid2)
+            let e1 = af18LegOut(nil, af18d0.addingTimeInterval(21 * 3600 + 1800), af18d0.addingTimeInterval(22 * 3600), rid2)
+            let e2 = af18LegRet(nil, a0.endDate, a0.endDate.addingTimeInterval(1800), rid2)
+            let e3 = af18LegOut(nil, af18d0.addingTimeInterval(45 * 3600 + 1800), af18d0.addingTimeInterval(46 * 3600), rid2)
+            let e4 = af18LegRet(nil, a1.endDate.addingTimeInterval(600), a1.endDate.addingTimeInterval(2400), rid2)
+            store.activities.append(contentsOf: [a0, a1]); store.events.append(contentsOf: [e1, e2, e3, e4])
+            let groups2 = store.packingGroups(events: [e1, e2, e3, e4], activities: [a0, a1])
+            store.moveActivity(a0, byMinutes: 30, wholeSeries: true)
+            let f1 = store.events.first { $0.id == e1.id }!, f2 = store.events.first { $0.id == e2.id }!
+            let f3 = store.events.first { $0.id == e3.id }!, f4 = store.events.first { $0.id == e4.id }!
+            afAi.drvCheck("AF-018-27 넘긴 추정 구간이 한 묶음으로 남는다(+90 드롭 뒤에도 묶음·이동 연계) && 밤샘 어긋난 회차는 단독이고 '전체' +30에서 두 번 옮겨지는 구간이 없다",
+                          part1
+                              && groups2[e1.id] == a0.id && groups2[e2.id] == a0.id && groups2[e3.id] == a1.id
+                              && groups2[e4.id] == nil
+                              && f1.arrivalDate == e1.arrivalDate.addingTimeInterval(1800)
+                              && f2.departureDate == e2.departureDate?.addingTimeInterval(1800)
+                              && f3.arrivalDate == e3.arrivalDate.addingTimeInterval(1800)
+                              && afLegBytes(f4) == afLegBytes(e4),
+                          "묶음=\(packed), #4 소유=\(String(describing: groups2[e4.id] != nil))")
+        }
+
+        store.events = []
+        store.activities = []
+
         //        모양으로 본다. 이 절이 뷰 없이 컴파일·실행된다는 것 자체가 문법이 SwiftUI-free로
         //        추출됐다는 증명이기도 하다(AC-006 (3)은 grep이 임다). Store을 건드리지 않으므로
         //        네트워크와 무관하게 결정적이다.
