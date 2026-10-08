@@ -1,6 +1,6 @@
 # SPEC-UIKIT-012 — acceptance.md
 
-수락 기준(0.6.3 — 0.6.1이 감사 5회차를 받았고, 0.6.2·0.6.3 수리본은 미감사). 검증 수단은 셋이다.
+수락 기준(0.7.0 — 0.6.1이 감사 5회차를 받았고, 0.6.2 이후 판은 미감사). 검증 수단은 셋이다.
 
 - **D — 드라이버(결정적, 네트워크 없음)**: `Tools/GuardDriver.swift` AF-018·AF-015 절. 구간은 `afInjectedLeg`(`:3806-3817`), 활동은 `ActivityBlock` 값. 하위 사례마다 새 픽스처. 종료 코드 0 · 1 · 2 · 3 · 124.
 - **G — 구조 대조**: `grep`·`awk`·`shasum`. `diff <(…)`는 워크트리 가드가 거부하므로 쓰지 않는다. 기준 트리 `b59fcaa`에서 다른 값이면 양성 대조, 같으면 회귀선. 기준 트리에 패턴이 아예 없는 대조는 손으로 만든 입력(`printf … | grep -c`)으로 명령이 작동함을 보인다.
@@ -25,7 +25,7 @@
 | AC-011 | 드라이버 마감 · 범위 · 빌드 | 013 · 014 | D · G |
 | AC-012 | 시뮬레이터 | 001 · 002 · 006 · 007 · 009 · 010 · 011 · 015 · 016 | S |
 | AC-013 | 끄는 중 시간표 연장 | 009 · 015 | G · S |
-| AC-015 | 자정을 넘어도 한 묶음(정확한 대조 우선) | 016 · 004 | D · G |
+| AC-015 | 자정을 넘어도 한 묶음(정확한 앵커 시각 대조만) | 016 · 004 | D · G |
 | AC-016 | 가장자리 자동 스크롤 | 015 | G · S |
 
 (AC-014는 0.6.0에서 카드 t48 인계 파일로 옮겼다 — 번호를 다시 쓰지 않는다.)
@@ -99,7 +99,7 @@ git show b59fcaa:Shared/ContentView.swift | awk '/private func finalizeDrag/,/^ 
 awk '/private func finalizeDrag/,/^    }$/' Shared/ContentView.swift | shasum
 ```
 
-기대 첫째 = 둘째(`2cd32a58…`), 셋째 = 넷째(`3027e8ee…`). 같은 꼴로 `Shared/Store.swift`의 `/private func realignReturnLeg/,/^    }$/`도 기준과 작업 트리의 해시가 같다(`a6ca6f17…`, 8줄) — 이 카드는 그 함수를 바꾸지 않는다(그 갭은 카드 t49, spec §4). 이 레인이 기준·작업 트리(코드 동일)에서 실제로 돌린 값.
+기대 첫째 = 둘째(`2cd32a58…`), 셋째 = 넷째(`3027e8ee…`). 같은 꼴로 `Shared/Store.swift`의 `/private func realignReturnLeg/,/^    }$/`도 기준과 작업 트리의 해시가 같다(`a6ca6f17…`, 8줄) — 이 카드는 그 함수를 바꾸지 않는다(그 갭은 카드 t49, spec §4). **`moveActivity` 본문도 같은 대조에 든다**(REQ-014, 0.7.0 — 운영자 4차 답변): 기준 트리와 작업 트리에서 `awk '/func moveActivity\(/,/^    }$/' Shared/Store.swift | shasum`이 같아야 한다 — 기준 `ab65d72c…`(22줄, 이 레인 실측). 이 레인이 기준·작업 트리(코드 동일)에서 실제로 돌린 값.
 - **G — 소유 조회는 `onBegin`에서만**(REQ-009, 감사 2회차 N-2). run이 붙인 Store 소유 조회 함수 이름을 `<owner>`, 뷰 도우미 이름을 `legDragShift`(다르면 그 이름)로 두고, 0.4.1 판의 명령 묶음을 그대로 돌린다:
 
 ```bash
@@ -166,8 +166,8 @@ AF-018-14(경고 블록 ±15) · AF-018-25(이틀 넘는 구간 +15 → 0, −15
 
 근거: 운영자 2차 Q-6 "자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 결정하여 이동과 편집이 연계되던 연결성을 유지".
 
-- **D**: AF-018-27(넘긴 추정 구간이 묶음에 남고 활동 이동에 따라온다 · 옛 틈 구간은 폴백 약점 그대로 · **0.6.2 N5-1**: 밤샘 반복에서 오는 편이 10분 어긋난 회차가 앞 회차의 정확한 오는 편을 집지 않고, `moveActivity` "전체" +30에서 모든 구간이 정확히 한 번 +30 — 픽스처 시각은 `plan.md` §5 AF-018-27) · AF-015-09 · AF-015-11(고쳐 쓰기). 기준 ✗.
-- **G**: `awk '/private func estimatedLegs/,/^    }$/' Shared/Store.swift | grep -c 'arrivalDate == activity.startDate\|departureDate == activity.endDate'` 1 이상, 기준 **0**(양성 대조) · 같은 범위 `grep -c 'inSameDayAs'` 1(폴백 유지), 기준 1.
+- **D**: AF-018-27(넘긴 추정 구간이 묶음에 남고 활동 이동에 따라온다 · 밤샘 반복에서 10분 어긋난 오는 편은 소유 없음이고, `moveActivity` "전체" +30에서 두 번 옮겨지는 구간이 없다 — 픽스처 시각은 `plan.md` §5 AF-018-27) · AF-015-09 · AF-015-11(고쳐 쓰기). 기준 ✗.
+- **G**: `awk '/private func estimatedLegs/,/^    }$/' Shared/Store.swift | grep -c 'arrivalDate == activity.startDate\|departureDate == activity.endDate'` 1 이상, 기준 **0**(양성 대조) · 같은 범위 `grep -c 'inSameDayAs'` **0**(같은 날 규칙 삭제 — 0.7.0), 기준 **1**(양성 대조).
 
 ## AC-016 — 가장자리 자동 스크롤 ⬜
 
@@ -236,6 +236,6 @@ awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop
 - AC-001~011·013·015·016의 D·G 전부 ✅(원문 출력과 함께 §E.2).
 - AC-012·013·016의 S와 AC-004 S는 운영자 시뮬레이터 결과로 판정한다.
 - 하네스: `swift-impl`·`ui-design`(구현), `code-safety`(판정).
-- `plan.md` §2의 열린 질문 Q-3·5·9가(Q-10·11·12는 0.6.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
+- `plan.md` §2의 열린 질문 Q-3·5·9·13이(Q-10·11·12는 0.6.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
 
 🗿 MoAI

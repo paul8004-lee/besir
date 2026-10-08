@@ -1,7 +1,7 @@
 ---
 id: SPEC-UIKIT-012
 title: "연결된 이동 구간 드래그 재설계 — 오는 편은 활동 끝을, 가는 편은 활동 시작을 옮긴다 · 최소 5분 · 자정 넘기기와 끄는 중 연장·가장자리 자동 스크롤 · 자정을 넘어도 묶음 유지"
-version: "0.6.3"
+version: "0.7.0"
 status: draft
 created: "2026-10-08"
 updated: "2026-10-08"
@@ -32,6 +32,7 @@ kanban_card: t43
 | 0.6.1 | 2026-10-08 | **0.6.1 — 운영자 3차 답변 반영, 감사 대상 판.** Q-10 닫음 — "실제 길이 유지, 시뮬레이터에서 확인 (Recommended)": 대체 탭 경로가 없는 짧은 활동은 결정된 수용 위험(S-18). Q-11 닫음 — "이 카드 밖, 별도 카드로 (Recommended)": 활동 편집 끝 변경 시 추정 복귀 구간 갭은 카드 t49(§4, `realignReturnLeg` 무변경 — AC-007 해시). Q-12 닫음 — Tier M 유지, REQ 16 · AC 15. 요구·단언 수 변화 없음. |
 | 0.6.2 | 2026-10-08 | **0.6.2 — 5회차 감사 N5-1 수리, 감사 대상 아님(수리본 미감사).** REQ-016에 "폴백은 같은 반복의 다른 활동이 정확히 대조하는 구간을 고르지 않는다"와 "전체 이동은 모든 회차의 구간을 먼저 모으고 한 번씩 옮긴다"를 더했고, REQ-010·REQ-014·§3을 거기에 맞췄다. 리드가 제안한 배제만으로는 `moveActivity`의 조회·이동 교차 때문에 여전히 +60이 되어(자가 점검 (a)(b)) 먼저 모으기를 함께 넣었다. AF-018-27에 밤샘 어긋남 픽스처를 `&&`로 더했다 — REQ 16 · AC 15 · T = B + 24 그대로. N5-2·N5-3(주요, 재현됨)과 경미 N5-4~N5-13은 고치지 않았다(`progress.md` §J). |
 | 0.6.3 | 2026-10-08 | **0.6.3 — 문서 수리(N5-2·N5-3·N5-8), 미감사.** N5-2: 0.6.0 압축으로 빠진 AF-018 픽스처 시각(`plan.md` §5 — 06·07·08·09·10·14·16·23·24·25·26)과 0.4.1의 AC-007 범위 확인·금지 패턴 명령 묶음을 되살렸다. N5-3: Q-5 기본값과 착수 설명의 아래 상한을 REQ-007과 같은 "끌기 전 첫 나열일 F의 다음 날 끝"으로 맞췄다. N5-8: 현재 판을 잘못 알리는 판 표기 줄을 고쳤다. 규칙 의미·경계값·REQ 16 · AC 15 · T = B + 24·0.6.2의 `moveActivity` 내용은 그대로다. 나머지 경미는 `progress.md` "run M0 할 일". |
+| 0.7.0 | 2026-10-08 | **0.7.0 — 운영자 4차 답변 반영(정확 대조만 · moveActivity 무변경), 미감사.** REQ-016을 정확한 앵커 시각 대조만으로 줄였다 — 0.6.1의 같은 날 폴백과 0.6.2의 폴백 배제 조각을 지웠고, 정확히 맞는 활동이 없는 구간은 소유 없음(단독)이다. REQ-014의 `moveActivity` 예외를 지워 본문 무변경으로 되돌렸다(REQ-010의 "먼저 해결하고 한 번씩"은 새 구간 드래그 코드의 요구라 남김). 운영자 확인 전제("없음 — moveActivity 무변경")와 틀렸을 때의 연결 상실을 수용 위험으로(t50). 데이터 모양·이중 이동·고정 핀 분석을 `research.md` §10·`plan.md` D-10에. REQ 16 · AC 15 · T = B + 24 그대로. |
 
 ## 0. 이 SPEC의 성격과 예산
 
@@ -104,7 +105,7 @@ kanban_card: t43
 
 (마) **옛 틈 데이터** — 틈을 유지하고 함께 옮긴다(REQ-001).
 
-(바) **자정을 넘긴 반복 추정 구간은 묶음을 잃는다 — 운영자의 "한 묶음" 뜻과 어긋난다.** 추정 대조는 구간 도착이 활동 시작일과 같은 날인지 본다(`Store.swift:1430`). 오는 편을 끌어 도착이 다음 날이 되면 그 구간은 `linkedLegs`·`packingGroups`·`moveActivity`·"전체" 조회에서 빠진다. 운영자 2차 답변("자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 … 이동과 편집이 연계되던 연결성을 유지")이 정확한 앵커 시각 대조 우선(REQ-016)의 근거이고, 같은 근거로 고정 핀 AF-015-09·11과 `@MX:WARN`(`Store.swift:436`)을 뒤집는다. 연결을 쓰는 모든 자리의 표는 `research.md` §9다 — 요약: 드래그·활동 이동·배치 묶음·새 소유 조회는 (A)로 묶음을 지킨다. 활동 편집 화면에서 **끝**을 바꾸면 복귀 구간을 옮기는 `realignReturnLeg`(`:352-359`)는 명시 연결만 보아(`:353`) 반복 추정 복귀 구간을 **자정과 무관하게 지금도** 옮기지 않는다 — 이 카드가 만든 갭이 아니므로 범위 밖으로 둔다 — 카드 t49(운영자 3차 답변, `plan.md` Q-11 닫음).
+(바) **자정을 넘긴 반복 추정 구간은 묶음을 잃는다 — 운영자의 "한 묶음" 뜻과 어긋난다.** 추정 대조는 구간 도착이 활동 시작일과 같은 날인지 본다(`Store.swift:1430`). 오는 편을 끌어 도착이 다음 날이 되면 그 구간은 `linkedLegs`·`packingGroups`·`moveActivity`·"전체" 조회에서 빠진다. 운영자 2차 답변("자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 … 이동과 편집이 연계되던 연결성을 유지")이 정확한 앵커 시각 대조(REQ-016 — 0.7.0부터 정확 대조만, 운영자 4차 답변)의 근거이고, 같은 근거로 고정 핀 AF-015-09·11과 `@MX:WARN`(`Store.swift:436`)을 뒤집는다. 연결을 쓰는 모든 자리의 표는 `research.md` §9다 — 요약: 드래그·활동 이동·배치 묶음·새 소유 조회는 (A)로 묶음을 지킨다. 활동 편집 화면에서 **끝**을 바꾸면 복귀 구간을 옮기는 `realignReturnLeg`(`:352-359`)는 명시 연결만 보아(`:353`) 반복 추정 복귀 구간을 **자정과 무관하게 지금도** 옮기지 않는다 — 이 카드가 만든 갭이 아니므로 범위 밖으로 둔다 — 카드 t49(운영자 3차 답변, `plan.md` Q-11 닫음).
 
 (사) **활동을 실제 길이대로 그리면 짧은 활동의 탭 범위가 줄어든다.** `span`은 렌더와 히트 테스트가 함께 읽는다(계약 5). 5분 활동은 56pt/시간에서 약 4.7pt다. 구간이 붙은 활동은 구간을 눌러 들어갈 수 있다는 것이 운영자 근거지만, 그 우회는 명시 연결 구간에서만 활동 편집으로 간다(§1.2). 반복 회차(추정 구간)와 구간이 없는 활동은 대체 경로가 없다 — 결정된 수용 위험(운영자 3차 답변, `plan.md` Q-10 닫음, S-18). 그리기 바닥이 5분으로 내려가면 5~19분 활동이 바로 붙은 오는 편과 화면에서 겹치지 않으므로 같은 묶음 반폭 분할(`ScheduleLogic.overlapSlots` `Models.swift:395`)이 줄어든다.
 
@@ -179,7 +180,7 @@ kanban_card: t43
 
 - **REQ-011 (Event-driven)**: When the user chooses to move only this occurrence, or the dragged leg has no recurrence id, the store shall apply REQ-001 or REQ-002 to the dragged leg's owning activity only; the recurrence dialog shall continue to be keyed on the dragged leg's recurrence id. 근거: §1.3 (라).
 
-- **REQ-016 (Ubiquitous)**: The store's estimated leg lookup for a recurring activity shall first look for the legs whose anchor time equals the activity's anchor-side time — an outbound leg whose arrival equals the activity's start and a return leg whose departure equals the activity's end, each with the activity's recurrence id and the place-name match used today — and shall fall back to today's same-day rule only for a role with no such leg, choosing in that fallback only among legs that are not the exact match of another activity of the same recurrence, so that the lookup never gives an activity a leg that another activity of the series matches exactly, in the one function that the forward leg lookup and the packing groups already share; and a whole-series activity move shall resolve the legs of every occurrence from the stored times before shifting any of them and shift each leg at most once — so that an activity and its outbound and return legs stay one linked group across midnight for moving the activity, dragging a leg, and grouping on screen. An occurrence whose own leg is found by neither step has no estimated leg for that role and behaves as a stand-alone for that role. 근거(0.6.2 — 감사 5회차 N5-1): 정확한 대조 우선 + 같은 날 폴백만으로는 밤샘 반복에서 오는 편이 어긋난 회차가 앞 회차의 오는 편을 다시 집어 "전체" 이동에서 그 구간이 두 번 옮겨진다. 폴백 배제만으로도 모자라다 — `moveActivity`는 회차마다 그때의 일정으로 조회하고 곧바로 옮기므로(`Store.swift:1370-1374`), 앞 회차가 옮긴 구간은 더 이상 그 회차와 정확히 맞지 않아 배제에서 풀리고 뒤 회차가 다시 집는다. 그래서 먼저 모으고 한 번씩 옮긴다(`progress.md` §E.1 0.6.2 표 — 배제만이면 +60, 배제 + 먼저 모으기면 +30). 근거: 2차 Q-6 "자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 결정하여 이동과 편집이 연계되던 연결성을 유지"〔운영자〕. 이 문장이 고정 핀 AF-015-09·11과 `@MX:WARN`(`Store.swift:436`)을 뒤집는 근거다. 연결을 쓰는 모든 자리는 `research.md` §9. 같은 날 대조로만 이어지던 옛 틈 구간은 넘기면 여전히 잃는다(잔여).
+- **REQ-016 (Ubiquitous)**: The store's estimated leg lookup for a recurring activity shall pair the activity only with legs whose anchor time equals the activity's anchor-side time exactly — an outbound leg whose arrival equals the activity's start and a return leg whose departure equals the activity's end, each with the activity's recurrence id and the place-name match used today — with no same-day or other approximate fallback, in the one function that the forward leg lookup and the packing groups already share; a recurring leg that no activity matches exactly has no estimated owner and behaves as a stand-alone leg, and a leg that two activities match exactly is resolved by the tie rule of REQ-004 — so that an activity and its outbound and return legs stay one linked group across midnight for moving the activity, dragging a leg, and grouping on screen. 근거: 2차 Q-6 "자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 결정하여 이동과 편집이 연계되던 연결성을 유지"〔운영자〕 — 이 문장이 고정 핀 AF-015-09·11과 `@MX:WARN`(`Store.swift:436`)을 뒤집는 근거다. 4차 답변: 폴백 없이 정확 대조만 쓰고 `moveActivity` 본문은 바꾸지 않는다〔운영자 — 리드 전달 `.moai/reports/t43/exactonly-brief.md` §1〕. **운영자가 확인한 전제**: "없음 — moveActivity 무변경"(옛 오는 편 드래그로 틈이 생긴 반복 일정이 지금 없다는 답) 〔운영자〕. 정상 생성 데이터는 앵커 시각이 정확히 같다 — 반복 생성의 구간과 활동이 같은 날 목록에서 `calendar.date(bySettingHour:minute:second: 0, of:)`로 같은 시각을 만든다(`Store.swift:950`·`:253-254`). 정확 대조로 짝을 잃는 모양과 그 처리는 `research.md` §10·`plan.md` D-10 표. 연결을 쓰는 모든 자리는 `research.md` §9.
 
 ### [DELTA] E 동기성
 
@@ -189,11 +190,11 @@ kanban_card: t43
 
 - **REQ-013 (Ubiquitous)**: The guard driver shall assert the observable behavior of REQ-001 through REQ-012 and REQ-016 by `plan.md` §5 — AF-018-02, AF-018-03, AF-015-09, and AF-015-11 rewritten in place and AF-018-04 through AF-018-27 added, each number one unconditional `drvCheck` call, with no fixture that waits on a travel-time estimate — and its run shall end with no ✗ and exit 0, with the new total recorded against a base total measured on the unchanged tree in the same run phase. 근거: 드라이버 하한 규칙(`Tools/GuardDriver.swift:306`). T = B + 24. 화면(연장·자동 스크롤·탭 범위)은 UIKit이라 드라이버가 닿지 않는다 — 시뮬레이터 S절.
 
-- **REQ-014 (Ubiquitous · Unwanted)**: The change shall touch only `Shared/Store.swift`, `Shared/ContentView.swift`, and `Tools/GuardDriver.swift` among source files; shall add no source file, no AI class, no color outside `Theme`, and no secret; shall leave `proxy/`, `Shared/AIAssistant.swift`, `Shared/GoogleCalendarService.swift`, `Shared/Models.swift`, and the activity drag (`moveActivity`) body unchanged except for resolving every occurrence's legs before shifting and shifting each leg once (REQ-016); shall keep `adjustBuffer` reachable from the no-owner path; shall keep the iOS build free of source warnings; and shall neither build nor verify the macOS app. 근거: `CLAUDE.md` 계약 1·2·4·6, Day 파일 한도, iOS 전용 방침.
+- **REQ-014 (Ubiquitous · Unwanted)**: The change shall touch only `Shared/Store.swift`, `Shared/ContentView.swift`, and `Tools/GuardDriver.swift` among source files; shall add no source file, no AI class, no color outside `Theme`, and no secret; shall leave `proxy/`, `Shared/AIAssistant.swift`, `Shared/GoogleCalendarService.swift`, `Shared/Models.swift`, and the activity drag (`moveActivity`) body unchanged; shall keep `adjustBuffer` reachable from the no-owner path; shall keep the iOS build free of source warnings; and shall neither build nor verify the macOS app. 근거: `CLAUDE.md` 계약 1·2·4·6, Day 파일 한도, iOS 전용 방침.
 
 ## 3. 바뀌지 않는 것
 
-- `moveActivity` 본문 — 활동과 두 구간이 함께 평행이동(읽는 추정이 REQ-016으로 바뀌고, 0.6.2부터 "전체"에서 모든 회차의 구간을 먼저 모은 뒤 한 번씩 옮긴다 — N5-1). 활동 드래그는 연장·자동 스크롤을 하지 않는다.
+- `moveActivity` 본문 — 활동과 두 구간이 함께 평행이동(읽는 추정만 REQ-016으로 바뀐다. 본문은 0.7.0에서 다시 무변경 — 운영자 4차 답변). 활동 드래그는 연장·자동 스크롤을 하지 않는다.
 - 길게 누르기 0.35초, 5분 단위, 탭·스와이프, 드래그 중 날짜 넘김 잠금.
 - 대화상자 문구, 소유 없는 구간의 드래그와 그 미리보기.
 - 이동 구간 최소 그리기 높이 16분.
@@ -215,7 +216,7 @@ kanban_card: t43
 
 ### Out of Scope — 데이터 · 편집 경로
 
-- 옛 틈을 드래그가 닫지 않는다. 같은 날 대조로만 이어지던 옛 틈 추정 구간의 자정 넘김 연결 상실은 고치지 않는다.
+- 옛 틈을 드래그가 닫지 않는다. 정확 대조와 맞지 않는 반복 회차(옛 오는 편 드래그로 틈이 생긴 회차 등)는 활동과 연결을 잃는다 — **결정된 수용 위험**(운영자 확인 전제 "없음 — moveActivity 무변경"). 카드 t50이 닫는다.
 - 활동 편집에서 끝을 바꿀 때 반복 추정 복귀 구간이 따라오지 않는 기존 갭 — `realignReturnLeg`(`Store.swift:352-359`)가 명시 연결만 찾는다 — 은 카드 **t49**가 닫는다(운영자 3차 답변 "이 카드 밖, 별도 카드로 (Recommended)"). 이 카드는 `realignReturnLeg`를 바꾸지 않는다(§3, AC-007 해시 대조).
 - 반복 추정 구간을 눌렀을 때 활동 편집 대신 이동 일정 폼이 열리는 경로(`EventDetailView.swift:94`)는 바꾸지 않는다. 그래서 대체 탭 경로가 없는 짧은 활동(구간 없는 활동, 구간이 추정뿐인 반복 회차 활동)은 **결정된 수용 위험**이다(운영자 3차 답변 "실제 길이 유지, 시뮬레이터에서 확인 (Recommended)"). S-18에서 사람이 실제로 눌리는지 보고, 불편하면 후속 카드로 올린다.
 
@@ -236,7 +237,7 @@ kanban_card: t43
 | D-7 반복 "전체" | 〔제안〕 | REQ-010 |
 | D-8 SPEC-UIKIT-009 | 〔운영자〕 | §1.4 |
 | D-9 옛 틈 | 〔제안〕 | REQ-001 |
-| D-10 정확한 대조 우선 | 〔운영자〕 2차 Q-6 | REQ-016 |
+| D-10 정확한 앵커 시각 대조만(폴백 없음) | 〔운영자〕 2차 Q-6 · 4차 답변 | REQ-016 |
 | D-11 가장자리 자동 스크롤 | 〔운영자〕 2차 Q-4 + 매개값〔제안〕 | REQ-015 |
 
 ## 6. 관련 문서
@@ -244,7 +245,7 @@ kanban_card: t43
 - `.moai/reports/2026-10-05-sim-4bundle-result.md:23`·`:65` — 카드와 18번 메모
 - `.moai/reports/t43/gate-answers.md`·`split-answers.md`(주 체크아웃, 미추적) — 답변 원문
 - `.moai/reports/t43/google-card-handoff.md` — t48 인계
-- `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`~`-review-5.md` — 5회차는 0.6.1을 평가했다. 0.5.0·0.6.0·0.6.2·0.6.3은 감사받지 않았다
+- `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`~`-review-5.md` — 5회차는 0.6.1을 평가했다. 0.5.0·0.6.0·0.6.2·0.6.3·0.7.0은 감사받지 않았다
 - [SPEC-UIKIT-009](../SPEC-UIKIT-009/spec.md) · [SPEC-UIKIT-011](../SPEC-UIKIT-011/spec.md)
 - `research.md`
 
