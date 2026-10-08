@@ -661,6 +661,38 @@ REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의
 
 **낡은 줄 판정**(`grep -n '0\.6\.2\|폴백\|먼저 모으\|배제\|대조 우선'`): 고침 — spec `:108`·`:183`·`:192`·`:196`·`:220`·`:240`·`:248`, plan `:3`·`:22`·D-10 전체·`:143-144`·AF-018-27 행, acceptance `:3`·`:28`·`:169-170`·`:239`, research `:123`·`:127`·`:130-132`. 둠(기록) — spec HISTORY `:31`·`:33`·`:34`, progress의 0.6.x 절.
 
+### 0.7.1 개정 — Q-13 닫음(2026-10-08, 문서만, 미감사)
+
+운영자 답 "수용하고 t49를 t43 다음 카드로 (Recommended)" 〔운영자〕 → Q-13은 결정된 수용 위험, 카드 t49가 t43 다음에 닫는다.
+
+#### 0.7.1 실측 표
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `grep -c 'NEEDS CLARIFICATION'` spec · plan · acceptance · research | `0` · `3` · `0` · `3`(Q-3·Q-5·Q-9만) |
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` | `16` · `15` |
+| `grep -n '^version' spec.md` | `4:version: "0.7.1"` |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md \| sort \| uniq -c` | acceptance 1 · plan 2 · spec 6(HISTORY 행 포함), 모두 `B + 24` |
+| `git diff --stat HEAD -- .moai/specs/SPEC-UIKIT-012`(이 절 전) | acceptance 2 · plan 10 · research 4 · spec 5 — 4 files, 11 insertions, 10 deletions |
+
+**Q-13 grep 표**(`grep -n 'Q-13'` 다섯 파일):
+
+| 자리 | 판정 |
+|---|---|
+| `plan.md:94`(D-10 표 처리 열) | 고침 — 결정된 수용 위험 |
+| `plan.md:108`(D-10 아래 목록) | 고침 — 수용 위험(결정, 0.7.1) |
+| `plan.md:151`(열린 질문 표식) | 고침 — 닫은 질문(운영자 원문·영향·t49) |
+| `plan.md:256`(§9 열린 질문 줄) | 고침 — Q-13 제거 |
+| `plan.md:258`(§9 결정된 수용 위험 줄) | 고침 — Q-13 항목 추가 |
+| `research.md:119`(표식) | 고침 — 닫음 기록 |
+| `research.md:172`(§10 (a2) 표) | 고침 — 결정된 수용 위험 |
+| `acceptance.md:239`(완료 정의) | 고침 — 열린 질문 Q-3·5·9, Q-13 닫힘 |
+| `spec.md:221`(범위 밖 t49 줄) | 고침 — "Q-13 수용 위험 포함" 덧붙임 |
+| `spec.md:36`(HISTORY 0.7.1) | 새 행 |
+| `progress.md:656`(§K 0.7.0 기록 "열린 질문 Q-13") | 둠 — 0.7.0 시점 기록 |
+
+**`git diff HEAD` 읽기**: 모든 덩어리가 1(Q-13 닫기·표식 제거)·2(착수 목록 정리, spec t49 줄)·3(version·HISTORY)·4(Q-13 낡은 줄 — acceptance 완료 정의)에 속한다. 범위 밖 줄 0. Q-3·Q-5·Q-9 표식과 문구는 그대로다.
+
 ## §E.2 Run-phase Evidence
 
 _<pending run-phase>_

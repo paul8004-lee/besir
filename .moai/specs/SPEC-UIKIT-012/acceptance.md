@@ -236,6 +236,6 @@ awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop
 - AC-001~011·013·015·016의 D·G 전부 ✅(원문 출력과 함께 §E.2).
 - AC-012·013·016의 S와 AC-004 S는 운영자 시뮬레이터 결과로 판정한다.
 - 하네스: `swift-impl`·`ui-design`(구현), `code-safety`(판정).
-- `plan.md` §2의 열린 질문 Q-3·5·9·13이(Q-10·11·12는 0.6.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
+- `plan.md` §2의 열린 질문 Q-3·5·9가(Q-10·11·12는 0.6.1, Q-13은 0.7.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
 
 🗿 MoAI
