@@ -533,10 +533,10 @@ struct ContentView: View {
         return true
     }
 
-    /// D-11 대체안 스위치. 기본(false)은 `.scrollDisabled`를 그대로 쓰는 본안 — scrollDisabled가
-    /// 프로그램 오프셋 setContentOffset까지 막는지는 확인되지 않았다(가설). 시뮬레이터 S-16이
-    /// 본안이 안 움직인다고 보이면 이 값을 true로 바꿔 소유 구간 드래그만 팬 인식기 끄기로 돌린다.
-    private static let usesPanLockFallbackForOwnedLegDrag = false
+    /// D-11 대체안 스위치. true는 2026-10-08 t51의 선택 — 운영자가 S-6·S-16·S-17에서 본안
+    /// (.scrollDisabled)일 때 자동 스크롤이 시간표를 움직이지 않는 것을 관측했다. 팬 끄기가
+    /// 프로그램 오프셋을 살리는지는 운영자 재확인(S-6·S-16·S-17)이 판정한다.
+    private static let usesPanLockFallbackForOwnedLegDrag = true
 
     /// 자리가 정해진 블록 하나를 그린다(종류에 맞는 뷰 선택). date는 그리는 날 — 자정을
     /// 넘는 블록의 잘린 범위 계산에 쓰인다.
