@@ -32,6 +32,10 @@
 // 인계 문서가 쓰는 번호라 비켰다). 마감 하한은
 // **523**(기준 B 498 + 25, 둘 다 이 트리에서 실측 — .moai/reports/t43/run-progress.md §1.1) —
 // 단언을 지우면 하한 밑으로 떨어진다.
+//
+// t49절(2026-10-08) — 편집 끝 시각 변경의 추정 복귀 구간 연계(카드 t49 — t43이 범위 밖으로
+// 미뤄둔 편집 쪽 조각): T49-1~6 추가 6. 마감 하한은 **529**(t43 마감 523 + 6) — 단언을 지우면
+// 하한 밑으로 떨어진다.
 
 
 var drvPass = 0, drvFail = 0
@@ -4938,6 +4942,83 @@ struct Drv {
                               && after.arrivalDate == leg.arrivalDate.addingTimeInterval(1800)
                               && after.departureDate == nil,
                           "소유=\(owned), 묶음=\(grouped), arrival 변위=\(after.arrivalDate.timeIntervalSince(leg.arrivalDate))s")
+        }
+
+        // t49절(2026-10-08) — 편집 끝 시각 변경의 추정 복귀 구간 연계: realignReturnLeg가
+        //        linkedActivityId 명시 연결만 보던 갭(SPEC-UIKIT-012 (바)가 범위 밖으로 미뤄
+        //        둔 편집 쪽 조각, 카드 t49). 수리 *전에* 바라는 동작으로 쓴 단언이라 이 절의 ✗는
+        //        실패가 아니라 결함의 기록이다(AF절 머리말과 같은 규칙). 픽스처는 AF-018 양식
+        //        그대로(rid 공유·명시 연결 없음·대조 시각 = 활동 끝).
+        do {
+            let rid = UUID()
+            let base = af18d0.addingTimeInterval(10 * 3600)
+            let act = af18Act("T49 추정", base, base.addingTimeInterval(3600), rid)
+            let leg = af18LegRet(nil, act.endDate, act.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(act); store.events.append(leg)
+            let pairedBefore = store.owningActivity(of: leg)?.id == act.id
+            let t49NewEnd = act.endDate.addingTimeInterval(1800)
+            _ = store.modifyActivity(id: act.id, newEnd: t49NewEnd)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("T49-1 편집 전 추정 복귀 구간(출발 = 활동 끝)은 짝이 성립한다",
+                          pairedBefore, "짝 없음 — 픽스처가 틀렸다")
+            afAi.drvCheck("T49-2 활동 끝 +30분 편집에 추정 복귀 구간이 통째로 따라온다(출발 = 새 끝)",
+                          legA.departureDate == t49NewEnd
+                              && legA.arrivalDate == leg.arrivalDate.addingTimeInterval(1800),
+                          "출발=\(String(describing: legA.departureDate)), 새끝=\(t49NewEnd)")
+            afAi.drvCheck("T49-3 편집 뒤에도 추정 짝·배치 묶음이 유지된다(대조 시각 = 새 끝)",
+                          store.owningActivity(of: legA)?.id == act.id
+                              && store.packingGroups(events: [legA], activities: [actA])[legA.id] == act.id,
+                          "소유=\(String(describing: store.owningActivity(of: legA)?.id == act.id)), 묶음=\(String(describing: store.packingGroups(events: [legA], activities: [actA])[legA.id] == act.id))")
+        }
+        // 출발 nil 추정 복귀 구간(첫 회차 추정 실패 형태 — AF-018-29와 같은 회차)도 끝 편집을
+        // 따라와야 편집으로 짝이 깨지지 않는다.
+        do {
+            let rid = UUID()
+            let base = af18d0.addingTimeInterval(12 * 3600)
+            let act = af18Act("T49 출발없음", base, base.addingTimeInterval(3600), rid)
+            let leg = afInjectedLeg(title: "T49 오는편", anchor: .departure, arrival: act.endDate,
+                                    departure: nil, origin: afOffice, destination: afHome,
+                                    linked: nil, recurrence: rid)
+            store.activities.append(act); store.events.append(leg)
+            _ = store.modifyActivity(id: act.id, newEnd: act.endDate.addingTimeInterval(1800))
+            let legA = store.events.first { $0.id == leg.id }!
+            afAi.drvCheck("T49-4 출발 nil 추정 복귀 구간도 끝 편집을 따라온다(arrival = 새 끝, departure nil 유지) && 짝 유지",
+                          legA.arrivalDate == act.endDate.addingTimeInterval(1800) && legA.departureDate == nil
+                              && store.owningActivity(of: legA)?.id == act.id,
+                          "arrival=\(legA.arrivalDate), 새끝=\(act.endDate.addingTimeInterval(1800))")
+        }
+        // 어긋난 회차(밤샘 등으로 출발 ≠ 활동 끝)는 단독으로 남는 결정된 동작(REQ-016 정확 대조만) —
+        // 수리가 대조를 넓히지 않았는지의 회귀선.
+        do {
+            let rid = UUID()
+            let base = af18d0.addingTimeInterval(14 * 3600)
+            let act = af18Act("T49 어긋남", base, base.addingTimeInterval(3600), rid)
+            let stray = af18LegRet(nil, act.endDate.addingTimeInterval(600), act.endDate.addingTimeInterval(1800), rid)
+            store.activities.append(act); store.events.append(stray)
+            _ = store.modifyActivity(id: act.id, newEnd: act.endDate.addingTimeInterval(1800))
+            afAi.drvCheck("T49-5 어긋난 추정 복귀 구간(출발 ≠ 활동 끝)은 끝 편집에 움직이지 않는다(바이트 동일)",
+                          afLegBytes(store.events.first { $0.id == stray.id }!) == afLegBytes(stray),
+                          "레코드가 바뀌었다")
+        }
+        // 조합 경로 — 시작+끝을 한 번에 고치면 moveActivity가 구간을 시작 변위로 먼저 옮기고
+        // realign의 잔차 변위만 남는다. 시작 변위와 끝 변위를 다르게 둬야 이중 이동(N5-1 형태)이
+        // 바로 드러난다(같으면 잔차 0이라 못 본다).
+        do {
+            let rid = UUID()
+            let base = af18d0.addingTimeInterval(16 * 3600)
+            let act = af18Act("T49 조합", base, base.addingTimeInterval(3600), rid)
+            let leg = af18LegRet(nil, act.endDate, act.endDate.addingTimeInterval(1200), rid)
+            store.activities.append(act); store.events.append(leg)
+            let t49Start = act.startDate.addingTimeInterval(1800)   // +30분
+            let t49End = act.endDate.addingTimeInterval(5400)       // +90분 — 시작 변위와 다르게
+            _ = store.modifyActivity(id: act.id, newStart: t49Start, newEnd: t49End)
+            let legA = store.events.first { $0.id == leg.id }!, actA = store.activities.first { $0.id == act.id }!
+            afAi.drvCheck("T49-6 시작+끝을 함께 고치면 추정 복귀 구간은 새 끝에 정확히 붙는다(이동+잔차 한 번, 이중 이동 없음)",
+                          legA.departureDate == t49End
+                              && legA.arrivalDate == leg.arrivalDate.addingTimeInterval(5400)
+                              && actA.startDate == t49Start && actA.endDate == t49End
+                              && store.owningActivity(of: legA)?.id == act.id,
+                          "출발=\(String(describing: legA.departureDate)), 새끝=\(t49End), 소유=\(String(describing: store.owningActivity(of: legA)?.id == act.id))")
         }
 
         store.events = []
