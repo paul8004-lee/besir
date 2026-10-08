@@ -332,6 +332,11 @@ final class Store: ObservableObject {
         // 위에서 옮겼을 수 있으니 최신 값을 다시 읽는다.
         guard var updated = activities.first(where: { $0.id == id }) else { return changed }
         let endBefore = updated.endDate
+        // 복귀 구간 짝은 끝을 쓰기 **전에** 잡는다 — 추정 짝은 '대조 시각 == 활동 끝' 대조(REQ-016)라
+        // 새 끝이 저장된 뒤엔 옛 시각의 구간과 대조가 깨져 못 찾는다. clearPlace면 잡지 않는다:
+        // 장소를 지운 활동의 구간은 존재할 수 없어 명시 짝이 지워지는데(REQ-004), 추정 짝만 끝을
+        // 따라 옮기면 그 규칙과 어긋난다(카드 t49).
+        let returnLegBefore = clearPlace ? nil : linkedLegs(for: updated).departure
         if let newTitle, !newTitle.isEmpty, newTitle != updated.title { updated.title = newTitle; changed = true }
         if let newPlace, newPlace != updated.location { updated.location = newPlace; changed = true }
         if clearPlace, updated.location != nil { updated.location = nil; changed = true }
@@ -341,18 +346,20 @@ final class Store: ObservableObject {
         // 복귀 구간 재정렬은 endDate가 **실제로** 바뀐 경우에만 한다 — 끝 ≤ 시작으로 거절된
         // newEnd는 endDate도 안 바꿨으니 재정렬도 하지 않는다(잘못된 끝에 구간을 붙이지 않는다).
         if updated.endDate != endBefore {
-            realignReturnLeg(activityId: id, departingAt: updated.endDate)
+            realignReturnLeg(returnLegBefore, departingAt: updated.endDate)
         }
         return changed
     }
 
     /// 활동에 묶인 복귀(출발 기준) 이동 구간의 출발 시각을 주어진 시각으로 옮긴다.
     /// 이동량(shift) 기반의 기존 함수라 legAnchor(유도 규칙의 한 자리)를 바로 쓰지 않는다 —
-    /// 시각을 호출자가 이미 알고 있을 때 쓰는 경로다(design §9).
-    private func realignReturnLeg(activityId: UUID, departingAt: Date) {
-        guard let leg = events.first(where: { $0.linkedActivityId == activityId && $0.anchor == .departure }),
-              let dep = leg.departureDate else { return }
-        let delta = Int(departingAt.timeIntervalSince(dep) / 60)
+    /// 시각을 호출자가 이미 알고 있을 때 쓰는 경로다(design §9). 짝은 호출부가 **끝을 쓰기 전에**
+    /// 잡아 넘긴다(linkedLegs — 명시 연결이 없는 반복 회차는 추정 짝까지, 카드 t49). 변위의
+    /// 기준은 대조 시각(anchorComparisonTime)이다: 출발 시각이 없는 회차(첫 추정 실패)는 출발이
+    /// arrivalDate에 있어 departureDate로 잴면 그 회차만 편집에서 남겨진다.
+    private func realignReturnLeg(_ leg: ScheduledEvent?, departingAt: Date) {
+        guard let leg else { return }
+        let delta = Int(departingAt.timeIntervalSince(leg.anchorComparisonTime) / 60)
         guard delta != 0 else { return }
         shiftEvent(leg.id, byMinutes: delta)
         save()
