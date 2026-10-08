@@ -1468,7 +1468,7 @@ final class Store: ObservableObject {
                 guard let sameRole = isReturnLeg ? returnLeg : outbound else { continue }
                 // 각 회차의 Δ는 그 회차 자신의 한계(활동 길이·나열 범위)로 잘린다 — 드래그한
                 // 회차의 한계를 다른 회차에 덮어쓰지 않는다(AF-018-16: −15·−15·−10).
-                let delta = Self.effectiveDragMinutes(leg: sameRole, owner: occurrence,
+                let delta = effectiveDragMinutes(leg: sameRole, owner: occurrence,
                                                       requestedMinutes: requestedMinutes)
                 if delta != 0 { moves.append((occurrence.id, sameRole.id, delta)) }
             }
@@ -1492,7 +1492,7 @@ final class Store: ObservableObject {
             return
         }
         // 단일 확정(REQ-011): 드래그 시작 때가 아니라 지금 저장된 값으로 유효 Δ를 정한다.
-        let delta = Self.effectiveDragMinutes(leg: leg, owner: owner, requestedMinutes: requestedMinutes)
+        let delta = effectiveDragMinutes(leg: leg, owner: owner, requestedMinutes: requestedMinutes)
         guard delta != 0, let idx = activities.firstIndex(where: { $0.id == owner.id }) else { return }
         if isReturnLeg {
             activities[idx].endDate = activities[idx].endDate.addingTimeInterval(Double(delta) * 60)
@@ -1520,7 +1520,7 @@ final class Store: ObservableObject {
     /// 한계는 요청 방향으로만 적용해 유효 Δ가 항상 0과 요청 사이에 둔다 — 양방향 자르기는 옛
     /// 데이터에서 +15 요청이 −60이 되는 뜻하지 않은 반대 이동을 만든다(progress §E.1).
     /// @MX:NOTE 끄는 중 미리보기와 드롭이 같은 한계를 읽게 단일 출처로 둔다(계약 5)
-    static func effectiveDragMinutes(leg: ScheduledEvent, owner: ActivityBlock, requestedMinutes: Int) -> Int {
+    func effectiveDragMinutes(leg: ScheduledEvent, owner: ActivityBlock, requestedMinutes: Int) -> Int {
         let step = Self.dragSnapStepMinutes
         guard requestedMinutes != 0 else { return 0 }
         // 초 단위 시각은 먼저 0쪽으로 분 잘라 쓴다(REQ-008) — 이동시간 조회가 남긴 초가 0시·자정
