@@ -20,7 +20,7 @@
 | AC-006 | 유효 Δ 단일 함수 · Δ = 0 | 008 | D · G |
 | AC-007 | 미리보기 = 확정 | 009 | G · S |
 | AC-008 | 소유 조회 · 반복 범위 · 대화상자 키 | 004 · 010 · 011 | D · G |
-| AC-009 | 경고 블록(이동시간 미계산 구간) | 001 · 002 · 007 | D |
+| AC-009 | 경고 블록(이동시간 미계산 구간) · 반대 부호 금지 | 001 · 002 · 007 · 008 | D |
 | AC-010 | 동기성 · 저장 · 복제 · 언래핑 | 003 · 010 · 012 | G |
 | AC-011 | 드라이버 마감 · 범위 · 빌드 | 013 · 014 | D · G |
 | AC-012 | 시뮬레이터 | 001 · 002 · 006 · 007 · 009 · 010 · 011 | S |
@@ -181,7 +181,8 @@ awk '/private func finalizeDrag/,/^    }$/' Shared/ContentView.swift | grep -c '
 
 ## AC-009 — 경고 블록 ⬜
 
-- AF-018-14: 이동시간이 없는 연결 가는 편(`afInjectedLeg`의 `departure: nil` → `travelSeconds = nil`, 명시 연결)을 +15 && −15 → 각각 활동 시작과 구간 도착이 같은 Δ로 움직이고 끝은 그대로다. 자정 한계는 출발 대신 앵커 시각으로 잰다(REQ-007). 기준 ✗(지금은 `adjustBuffer`가 이동시간 없음으로 아무것도 하지 않는다 `Shared/Store.swift:1454`).
+- AF-018-14: 이동시간이 없는 연결 가는 편(`afInjectedLeg`의 `departure: nil` → `travelSeconds = nil`, 명시 연결)을 +15 && −15 → 각각 활동 시작과 구간 도착이 같은 Δ로 움직이고 끝은 그대로다. 자정 한계는 앵커 시각 하나로만 잰다(REQ-007).
+- AF-018-25(반대 부호 금지, REQ-007·008): 명시 연결 활동 22:50–23:50의 오는 편을 재추정 실패 모양(출발 23:50·옛 도착 다음 날 00:10·`travelSeconds = nil`, AF-010-10-a `Tools/GuardDriver.swift:3751-3777`가 관측하는 모양을 값으로 주입)으로 두고 +15 → 유효 Δ **+5**(≥ 0), 활동 끝 23:55(앞당겨지지 않는다) && 깨진 레코드(출발 23:00·도착 22:00) +15 → **+15**, −15 → **−15**. 기준 ✗(지금은 활동이 그대로). 0.4.0 규칙이었다면 +15 → −10(독립 재현 — `progress.md` §E.1 0.4.1 표). 기준 ✗(지금은 `adjustBuffer`가 이동시간 없음으로 아무것도 하지 않는다 `Shared/Store.swift:1454`).
 
 ## AC-010 — 동기성 · 저장 · 복제 · 언래핑 ⬜
 
@@ -209,7 +210,7 @@ git diff b59fcaa -- Shared/Store.swift Shared/ContentView.swift | grep '^+' | gr
 ## AC-011 — 드라이버 마감 · 범위 · 빌드 ⬜
 
 1. **기준 실행(run M1)**: 바꾸기 전 트리에서 `P/T 통과` 줄 원문(기대 `498/498 통과`, exit 0)을 §E.2에 적는다. 다르면 그 값이 B다.
-2. **마감 실행**: ✗ 0 · exit 0 · `[실제 데이터] 대조 통과` 줄. **T = B + 21**(지운 0 · 고쳐 쓴 2 · 더한 21, 번호 하나 = 한 번 실행되는 `drvCheck` 하나 — `plan.md` §5). AF-018-01~24의 ✓ 줄을 §E.2에 옮긴다.
+2. **마감 실행**: ✗ 0 · exit 0 · `[실제 데이터] 대조 통과` 줄. **T = B + 22**(지운 0 · 고쳐 쓴 2 · 더한 22, 번호 하나 = 한 번 실행되는 `drvCheck` 하나 — `plan.md` §5). AF-018-01~25의 ✓ 줄을 §E.2에 옮긴다.
 3. **결정성**: 새 단언 픽스처가 추정을 기다리지 않는다 — `git diff b59fcaa -- Tools/GuardDriver.swift | grep '^+' | grep -c 'addRecurringEvents\|await store.addEvent'` 기대 **0**.
 4. **범위**: 커밋 전 변경과 미추적 파일까지 보도록 작업 트리를 기준과 비교한다 — `git diff --name-only b59fcaa -- Shared Tools proxy project.yml`(커밋·미커밋 변경)와 `git status --porcelain -- Shared Tools proxy project.yml`(미추적 포함)을 함께 돌려 합집합이 정확히 `Shared/ContentView.swift` · `Shared/Store.swift` · `Tools/GuardDriver.swift`. 기준 트리에서 두 명령은 0줄 · 0줄(이 레인 실측). `ls Shared | wc -l`이 기준 27과 같다.
 5. **iOS 빌드**: `hns-besir-app-verify`의 iOS 명령으로 `** BUILD SUCCEEDED **`, 소스 경고 0(공유 상수 격리 경고 〔가설〕 — 나면 해소). 맥 빌드는 돌리지 않는다.

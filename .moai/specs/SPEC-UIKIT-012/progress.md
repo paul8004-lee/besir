@@ -10,7 +10,7 @@
 - **범위**: 이 SPEC 디렉터리 밖에는 쓰지 않았다. 코드·빌드·드라이버 실행·커밋을 하지 않았다.
 - **게이트 표식**: `plan.md` §2에 4건(D-3·D-4·D-6·D-8), `research.md` §7에 같은 4건. `spec.md`·`acceptance.md` 0건.
 - **일관성 재독**: 다섯 파일을 한 번 다시 읽고 REQ↔AC 추적(REQ 14개 모두 AC 매트릭스에 1회 이상), 게이트 표식 위치, 시간 추정 없음, 번역투 비유어 없음을 아래 명령으로 확인했다.
-- **plan_status**: audit-ready — **0.4.0**(감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
+- **plan_status**: audit-ready — **0.4.1**(재감사 4회차 차단 결함 N4-1 수리, `.moai/reports/plan-audit/SPEC-UIKIT-012-review-4.md`; 이전: 0.4.0 감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
 
 ### 관측된 증거 — 이 레인이 직접 돌린 명령
 
@@ -209,6 +209,57 @@
 **쓰지 못한 대조**: AC-007의 `diff <(…) <(…)`는 이 세션의 worktree 가드가 복합 git 명령으로 막아 그대로는 돌리지 못했다 — 대신 같은 범위를 `git show … | awk … | wc -l`로 돌려 범위가 잘리는 것(8줄)을 보였다. run은 두 범위를 파일로 떨어뜨린 뒤 `diff`한다.
 
 **검증하지 못한 것**: 드라이버·빌드·시뮬레이터 미실행. 0시 정각 구간의 목록 이탈과 미리보기 토막은 감사의 독립 실행과 코드 읽기로만 확인. 공유 상수 격리 경고는 〔가설〕. 드래그 중 재추정이 실제로 끼어드는 타이밍은 관측하지 않았다.
+
+### 0.4.1 개정 — 재감사 4회차 차단 결함 N4-1만 수리 (2026-10-08, 5회차 없음)
+
+현재 수치: REQ 14 · AC 12 · AF-018-01~25(추가 22) · **T = B + 22**(B = 498이면 520) · 게이트 표식 plan 4 / research 4(착수 승인 몫). 위 0.2.0~0.4.0 절의 `B + 20`·`B + 21`은 그 시점의 기록이다.
+
+| 바꾼 곳 | 내용 |
+|---|---|
+| spec.md frontmatter·HISTORY 0.4.1 행 | 버전 0.4.1 |
+| spec.md REQ-007 끝 | 경고 블록·깨진 레코드는 나열을 정하는 시각 하나(앵커 / 도착)만 d.시작 ≤ 새 값 < d.끝, 다른 시각은 한계 밖 |
+| spec.md REQ-008 끝 | 유효 Δ는 요청과 반대 부호가 되지 않는다 — 되면 0 |
+| spec.md §0 · REQ-013 | 추가 22(AF-018-04~25), T = B + 22 |
+| plan.md D-4 규칙 | 같은 내용의 산식 문장 |
+| plan.md §5 | AF-018-25 행, 계수 22, T = B + 22(520), `&&` 번호 목록에 25 |
+| acceptance.md AC-009 · 매트릭스 · AC-011 | AF-018-25, REQ 008 추가, T = B + 22, AF-018-01~25 |
+
+**미수리 경미 — 재감사 범위 밖(run M0 또는 sync에서 처리)**: N4-2(S-14가 최소 길이 한계에 먼저 걸림) · N4-3(AF-018-10 연달은 −15의 기준 위치) · N4-4(REQ-008·REQ-005 드롭 문구) · N4-5(HISTORY 동률 문구와 REQ-004) · N4-6(게이트 D-4 예 ③·안 (b) 문구) · N4-7(AC-007 `diff <(…)` 가드 거부 — 파일로 떨어뜨려 `diff`). 
+
+#### 0.4.1 실측 표 — 자가 점검(실제 술어를 옮긴 독립 스크립트)
+
+스크립트: `/private/tmp/claude-501/-Users-iseongmin-Projects-besir/a2ac6679-46a7-4926-9b74-35c2f672850f/scratchpad/n41/check.swift`. `Store.overlapsDay`(`Store.swift:38-41`), `failedBlockAnchor`(`Models.swift:210-213`), `listedSpan`(`:219-222`), `isListed(on:)`(`:229-235`)를 옮겨 적고 0.4.1 한계(위 규칙 + 반대 부호 → 0)와 0.4.0 한계(양성 대조)를 구현했다. 달력은 Asia/Seoul. 이 워크트리의 가드가 바깥 경로 heredoc·Write를 거부해, 파일을 SPEC 디렉터리에 잠깐 쓰고 `mv`로 scratchpad로 옮긴 뒤 `swiftc -o …/check …/check.swift`(출력 없음) → `…/check` 실행.
+
+```text
+(a) N4-1 case: dep 23:50, old arr 00:10, travelSeconds=nil, anchor=.departure
+  req 15 -> 0.4.1 eff 5 | 0.4.0 eff -10
+  req 5 -> 0.4.1 eff 5 | 0.4.0 eff -10
+  req -5 -> 0.4.1 eff -5 | 0.4.0 eff -10
+  req -30 -> 0.4.1 eff -30 | 0.4.0 eff -30
+(b) grid: 23232 cases (broken-record legs incl. 132) | 0.4.1 opposite-sign 0, 0.4.1 listing changed 0 | 0.4.0 opposite-sign 2292
+(c) AF-018-08 ret 23:00->23:20 +60 -> 35 (0.4.0: 35)
+    AF-018-09 out 00:20->00:40 -30 -> -20 (0.4.0: -20)
+    AF-018-10 cross +15 -> 5 (0.4.0: 5), -15 -> -5 (0.4.0: -5), overnight out 21:40->22:00 -30 -> -30 (0.4.0: -30)
+    AF-018-23 listing preserved -180..+180: true
+    AF-018-24 live 23:15->23:35 +60 -> 20 (0.4.0: 20)
+    broken record arr<=dep (dep 23:00 arr 22:00) +15 -> 15, -15 -> -15
+```
+
+격자: 출발 분 {0, 1, 5, 10, 300, 1380, 1400, 1410, 1430, 1435, 1439} × 도착 날 {같은 날, 다음 날} × 도착 분 같은 집합 × 이동시간 {있음, 없음} × 앵커 {도착, 출발} × 요청 ±5…±60(5분 간격, 0 제외) = 23,232건. 0.4.1은 반대 부호 0건·나열 변경 0건, 0.4.0은 반대 부호 2,292건(양성 대조 — 같은 격자가 옛 규칙을 잡는다).
+
+| 명령 | 출력 | 쓰인 곳 |
+|---|---|---|
+| `awk 'NR>=1310&&NR<=1332' Shared/Store.swift` | `travelSeconds = nil` `:1320` · 출발 대입 `:1321` · 추정 실패 반환 `:1327`(도착 그대로) | REQ-007 근거 |
+| `awk 'NR>=3751&&NR<=3778' Tools/GuardDriver.swift` | AF-010-10-a 픽스처 `:3753-3759` · 재추정 `:3770` · 단언 `:3773-3777` | AF-018-25 |
+| `awk 'NR>=216&&NR<=236' Shared/Models.swift`(0.4.0 표와 같음) | 앵커 날 `:230` · 도착 날 폴백 `:234` | REQ-007 |
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` · `grep -o 'AF-018-[0-9][0-9]' plan.md \| sort -u \| wc -l` | `14` · `12` · `25` | 추가 22 |
+| `grep -c 'NEEDS CLARIFICATION'` spec · acceptance · plan · research | `0` · `0` · `4` · `4` | 게이트 |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md research.md \| sort \| uniq -c` | spec·plan·acceptance 각 `B + 22` 1건, research 0 | T 일치 |
+| `awk '/^\| AC-0/' acceptance.md \| grep -c '008'` | `3` | REQ-008 추적(AC-006·009·…) |
+| `grep -c '축\|기둥'`(네 파일) | spec 1(HISTORY "범위 축소" — 비유어 아님) · 나머지 0 | 문체 |
+| `ls .moai/specs/SPEC-UIKIT-012` | `acceptance.md plan.md progress.md research.md spec.md` | 임시 스크립트를 남기지 않았다 |
+
+**검증하지 못한 것**: 스크립트는 술어를 옮겨 적은 것이라 앱 코드 자체를 실행하지 않았다(드라이버·빌드 미실행). 최소 길이 한계(REQ-006)는 이 격자에 넣지 않았다 — 소유 활동 없이 자정 한계만 쟀다.
 
 ## §E.2 Run-phase Evidence
 
