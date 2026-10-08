@@ -648,9 +648,13 @@ struct ContentView: View {
         // 반대 방향(위로)은 자리가 없다 — 자정 직전에 잘린 반쪽이 위로 늘면 그 날의 이웃을 덮고,
         // 0시에 붙어 시작하는 반쪽은 0 위에 그릴 수 없다. 밑으로 넘치는 몇 분은 그 날 화면
         // 밖이라 아무것도 덮지 않는다.
-        let start = CGFloat(clippedStart.timeIntervalSince(dayStart) / 60)
-        let length = CGFloat(clippedEnd.timeIntervalSince(clippedStart) / 60)
-        return (start, max(Self.minActivityMinutes, length))
+        // 분 단위로 자른다(초는 내린다) — 외부 가져오기·AI가 만든 시각은 초가 0이 아닐 수 있는데,
+        // 초까지 반영하면 10:00:30~11:00:30 활동과 11:00:30 복귀 다리가 반쪽 폭으로 갈라진다.
+        // b59fcaa 기준선의 minutesSinceMidnight(시*60+분, 초 버림)와 같은 의미이며 초가 0이면
+        // 내림이 항등이므로 기존 그림은 바이트 단위로 그대로다.
+        let start = CGFloat((clippedStart.timeIntervalSince(dayStart) / 60).rounded(.down))
+        let end = CGFloat((clippedEnd.timeIntervalSince(dayStart) / 60).rounded(.down))
+        return (start, max(Self.minActivityMinutes, end - start))
     }
 
     private func span(for event: ScheduledEvent, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
@@ -1015,7 +1019,12 @@ private final class ScrollTouchFixView: UIView {
 /// 약한 참조 대리를 대상으로 두고 틱마다 코디네이터를 다시 잡게 한다(D-11).
 private final class AutoScrollProxy: NSObject {
     weak var target: RescheduleOverlay.Coordinator?
-    @objc func tick(_ link: CADisplayLink) { target?.autoScrollTick(link) }
+    @objc func tick(_ link: CADisplayLink) {
+        // 코디네이터가 stopAutoScroll 없이 사라지면 링은 proxy만 붙잡은 채 프레임마다
+        // 헛돈다 — 대상이 없을 때는 여기서 직접 끊는다.
+        guard let target else { link.invalidate(); return }
+        target.autoScrollTick(link)
+    }
 }
 
 /// 시간표 전체(ZStack)를 덮는 투명 UIKit 오버레이. 블록을 꾹 눌러 옮기는 드래그와
@@ -1213,9 +1222,11 @@ private struct RescheduleOverlay: UIViewRepresentable {
             let elapsed = CGFloat(max(link.timestamp - lastTick, 0))
             lastTick = link.timestamp
             guard elapsed > 0 else { return }
-            // 띠 판정은 스크롤 뷰 좌표(보이는 영역 기준)로 한다 — location(in: scroll)이 곧
-            // 보이는 창 안 위치다.
-            let fingerY = gr.location(in: scroll).y
+            // 띠 판정은 보이는 창 기준으로 한다 — UIScrollView의 bounds 원점은 contentOffset과
+            // 같아 location(in: scroll)이 돌려주는 값은 콘텐츠 좌표다. 스크롤이 된 뒤 이를
+            // 보정하지 않으면 화면 한가운데의 손가락이 아래 띠 깊은 곳으로 읽히고, 오프셋이
+            // 커질수록 속도가 더 커지는 되먹임 폭주가 생긴다(D-11).
+            let fingerY = gr.location(in: scroll).y - scroll.contentOffset.y
             let visible = scroll.bounds.height
             let band = max(visible * Self.autoScrollBandRatio, Self.autoScrollMinBand)
             var speed: CGFloat = 0
@@ -1224,6 +1235,9 @@ private struct RescheduleOverlay: UIViewRepresentable {
             } else if fingerY > visible - band {
                 speed = Self.autoScrollMaxSpeed * (1 - (visible - fingerY) / band)
             }
+            // 손가락이 스크롤 영역 밖(띠보다 더 위/아래)이면 비례식이 최대 속도를 넘긴다 —
+            // 깊이 ≥ 띠 높이면 최대 속도로 막는다(D-11).
+            speed = min(max(speed, -Self.autoScrollMaxSpeed), Self.autoScrollMaxSpeed)
             guard speed != 0 else { return }
             if speed > 0 { scrolledDown = true }
             // 콘텐츠 맨 위(첫날 0시)와 지금 콘텐츠 끝(연장이 자라면 같이 자란다)에서 멈춘다.
