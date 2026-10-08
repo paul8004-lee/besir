@@ -116,9 +116,7 @@ SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 - [NEEDS CLARIFICATION: Q-3 위로 넘기기의 대칭 연장 — 〔가정〕 기본 첫날 0시에서 멈춤]
 - [NEEDS CLARIFICATION: Q-5 연장 상한 — 〔가정〕 기본 끄는 날 다음 날 끝]
 - [NEEDS CLARIFICATION: Q-9 연장·자동 스크롤 대상 — 〔가정〕 기본 연결된 구간 드래그만]
-- [NEEDS CLARIFICATION: Q-10 짧은 활동의 탭 경로 — 운영자 근거는 명시 연결 구간에서만 성립]
-- [NEEDS CLARIFICATION: Q-11 활동 편집에서 끝을 바꿀 때 추정 복귀 구간이 따라오지 않는 기존 갭]
-- [NEEDS CLARIFICATION: Q-12 Tier — 자동 스크롤을 REQ-015에 접어 Tier M 유지 / 분리해 Tier L]
+0.6.1에서 닫음(운영자 3차 답변): Q-10 "실제 길이 유지, 시뮬레이터에서 확인 (Recommended)" — 대체 탭 경로 없는 짧은 활동은 결정된 수용 위험, S-18 · Q-11 "이 카드 밖, 별도 카드로 (Recommended)" — 카드 t49 · Q-12 Tier M 유지(REQ 16 · AC 15).
 
 ## 9. 활동 ↔ 구간 연결을 쓰는 모든 자리 (0.6.0, Q-6 (A)가 "한 묶음"을 채우는지)
 

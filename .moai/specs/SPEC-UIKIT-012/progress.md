@@ -442,6 +442,27 @@ REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의
 - 대체 경로가 없는 경우: 구간 없는 활동, 반복 회차 활동(구간이 추정). Q-10에서 (a) 그대로 · (b) 히트 범위만 최소 보장(계약 5의 한 곳 계산이 두 값을 냄) · (c) 추정 구간 탭 라우팅 확장(범위 밖 파일)을 물으며, 이 레인의 기울기는 (a) + S-18 관찰 후 결정.
 - 반폭 분할은 줄어든다(바로 붙은 오는 편과 겹치지 않음).
 
+### 0.6.1 개정 — 운영자 3차 답변 반영 (2026-10-08, 감사 대상 판)
+
+#### 0.6.1 실측 표
+
+| 명령 | 관측된 출력 |
+|---|---|
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` | `16` · `15` — 0.6.0과 같다(요구·수락 기준 추가 없음) |
+| `grep -n '^version:\|^tier:' spec.md` | `4:version: "0.6.1"` · `14:tier: M` |
+| `grep -c 'NEEDS CLARIFICATION'` spec · acceptance · plan · research | `0` · `0` · `3` · `3`(Q-3·Q-5·Q-9) |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md \| sort \| uniq -c` | spec 2 · plan 2 · acceptance 1, 모두 `B + 24` — T 그대로 |
+| `git show b59fcaa:Shared/Store.swift \| awk '/private func realignReturnLeg/,/^    }$/' \| shasum` · 작업 트리 같은 꼴 · `… \| wc -l` | `a6ca6f17d69f…` · `a6ca6f17d69f…` · `8` — AC-007 해시 대조에 접은 값 |
+
+## §I 0.6.1 변경
+
+세 항목만 고쳤다. 줄 목록은 `git diff HEAD -- .moai/specs/SPEC-UIKIT-012`(HEAD `12a0590` = 0.6.0)의 출력이다 — 보고서에 그대로 옮긴다.
+
+- Q-10 닫음: spec §4 범위 밖(수용 위험 문장) · spec §1.2·§1.3 (사)의 `plan.md` Q-10 가리킴 · plan §2 닫은 질문 · plan §7 잔여 위험 · plan §9 〔가정〕(5분 바닥 해석)·결정된 수용 위험 · acceptance S-18 메모 · research §8.
+- Q-11 닫음: spec §4 범위 밖(t49 문장) · spec §1.3 (바) 가리킴 · plan §2 · plan §7 · plan §9 · plan §11 · acceptance AC-007(`realignReturnLeg` 해시 한 문장) · research §8.
+- Q-12 닫음: plan §2 · plan §9 · plan §11 · research §8.
+- 공통: spec frontmatter `version` · HISTORY 0.6.1 행 · 이 절과 위 실측 표.
+
 ## §E.2 Run-phase Evidence
 
 _<pending run-phase>_
