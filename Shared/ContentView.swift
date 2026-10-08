@@ -64,6 +64,13 @@ struct ContentView: View {
         }
         var kind: Kind
         var deltaMinutes: Int = 0
+        /// 구간 드래그가 시작될 때 onBegin이 한 번 구해 둔 소유 활동(REQ-009). 드래그 중에는
+        /// span·도우미·onChange 어디서도 다시 조회하지 않는다 — 중간에 값이 어긋나면 미리보기와
+        /// 드롭이 다른 블록을 움직인다. 활동 드래그와 소유 없는 구간 드래그는 nil.
+        var owner: ActivityBlock? = nil
+        /// 드래그가 시작된 페이지 날짜 — 하루 연장(dayLimitMinutes)과 자동 스크롤이 이 날에만
+        /// 붙는다(REQ-015 "끄는 동안"의 연장은 시작한 페이지의 것이고 다른 페이지는 그대로).
+        var pageDate: Date = Date()
         var blockId: String {
             switch kind {
             case .event(let e): return "e-\(e.id)"
@@ -414,19 +421,26 @@ struct ContentView: View {
         let dayEvents = events(on: date)
         let dayActivities = activities(on: date)
         let placed = positionedBlocks(events: dayEvents, activities: dayActivities, on: date)
+        // 하루 길이는 하루 한계 도우미 하나가 낸다(REQ-015) — 소유 구간을 끄는 중 시작 페이지는
+        // 24시 아래로 늘어나고, 눈금·구분선·콘텐츠 높이·두 span의 자르기가 전부 이 값을 읽는다.
+        let hourCount = dayLimitMinutes(on: date) / 60
         return ScrollView {
             HStack(alignment: .top, spacing: 4) {
                 VStack(spacing: 0) {
-                    ForEach(0..<24, id: \.self) { h in
-                        Text(String(format: "%02d", h))
+                    // Array로 싸는 것은 칸 수가 드래그 중 24보다 커질 수 있기 때문 — 리터럴 범위
+                    // ForEach는 상수 전용이라 연장이 붙는 순간 경고·재생성 문제를 낸다.
+                    ForEach(Array(0..<hourCount), id: \.self) { h in
+                        // 24시 위로는 "다음 날 00"처럼 조용히(같은 Theme.faint, 글자만 알려준다).
+                        Text(h < 24 ? String(format: "%02d", h) : String(format: "다음 날 %02d", h - 24))
                             .font(.caption2).foregroundStyle(Theme.faint)
+                            .lineLimit(1).minimumScaleFactor(0.6)
                             .frame(width: 28, height: hourHeight, alignment: .top)
                     }
                 }
                 GeometryReader { geo in
                     ZStack(alignment: .topLeading) {
                         VStack(spacing: 0) {
-                            ForEach(0..<24, id: \.self) { _ in
+                            ForEach(Array(0..<hourCount), id: \.self) { _ in
                                 Divider().overlay(Theme.line).frame(height: hourHeight, alignment: .top)
                             }
                         }
@@ -457,12 +471,24 @@ struct ContentView: View {
                         RescheduleOverlay(
                             onBegin: { x, y in
                                 guard let found = block(atX: x, y: y, in: placed, total: geo.size.width) else { return false }
-                                activeDrag = ActiveDrag(kind: found, deltaMinutes: 0)
+                                // 소유 조회는 드래그 시작 때 이 한 번뿐이다(REQ-009·AC-007) — 이후
+                                // span·도우미·onChange가 다시 찾으면 드래그 중 회차가 어긋날 때
+                                // 미리보기와 드롭이 다른 활동을 움직인다. 활동 드래그는 소유가 없다.
+                                let owner: ActivityBlock?
+                                if case .event(let e) = found { owner = store.owningActivity(of: e) } else { owner = nil }
+                                activeDrag = ActiveDrag(kind: found, deltaMinutes: 0, owner: owner, pageDate: date)
                                 return true
                             },
                             onChange: { dy in
                                 let rawMinutes = Double(dy) / Double(hourHeight) * 60
-                                activeDrag?.deltaMinutes = Int((rawMinutes / 5).rounded()) * 5
+                                var requested = Int((rawMinutes / Double(Store.dragSnapStepMinutes)).rounded()) * Store.dragSnapStepMinutes
+                                // 소유 있는 구간은 요청 Δ를 그대로 쓰지 않고 Store 한계 함수의 유효 Δ를
+                                // 쓴다(REQ-008) — 미리보기(두 span)와 드롭(adjustTravelLeg)이 같은 값을
+                                // 읽게 하는 단일 출처다. 소유 없는 구간은 오늘처럼 요청값을 그대로 둔다.
+                                if let drag = activeDrag, let owner = drag.owner, case .event(let leg) = drag.kind {
+                                    requested = store.effectiveDragMinutes(leg: leg, owner: owner, requestedMinutes: requested)
+                                }
+                                activeDrag?.deltaMinutes = requested
                             },
                             onEnd: { committed in
                                 guard let drag = activeDrag else { return }
@@ -475,14 +501,17 @@ struct ContentView: View {
                                 case .event(let e): selection = e.id
                                 case .activity(let a): selectedActivityId = a.id
                                 }
-                            }
+                            },
+                            // 가장자리 자동 스크롤·하루 연장은 소유 있는 구간 드래그에만 붙는다(Q-9).
+                            autoScrollEligible: { activeDrag?.owner != nil },
+                            panLockFallback: Self.usesPanLockFallbackForOwnedLegDrag
                         )
                     )
                     #endif
                 }
-                .frame(height: 24 * hourHeight)
+                .frame(height: CGFloat(hourCount) * hourHeight)
             }
-            .frame(height: 24 * hourHeight, alignment: .topLeading)
+            .frame(height: CGFloat(hourCount) * hourHeight, alignment: .topLeading)
             .padding([.horizontal, .bottom])
 
             if dayEvents.isEmpty && dayActivities.isEmpty {
@@ -491,8 +520,23 @@ struct ContentView: View {
         }
         // 블록을 꾹 눌러 드래그하는 동안만 스크롤을 잠가 화면 스크롤과 블록 이동이 서로 방해하지
         // 않게 한다(평소엔 블록 위에서 시작한 스와이프도 정상적으로 화면을 스크롤할 수 있어야 함).
-        .scrollDisabled(activeDrag != nil)
+        // 대체안(usesPanLockFallbackForOwnedLegDrag)에서는 소유 있는 구간 드래그만 이 잠금 대신
+        // 스크롤 뷰의 팬 인식기를 끈다 — 활동·소유 없는 구간 드래그는 어느 쪽에서나 잠긴 채(spec §3).
+        .scrollDisabled(scrollLockedDuringDrag)
     }
+
+    /// 드래그 중 스크롤 잠금 여부 — 본안에서는 드래그 중 항상 참, 대체안에서는 소유 있는 구간
+    /// 드래그만 거짓(팬 인식기 끄기가 대신한다, D-11).
+    private var scrollLockedDuringDrag: Bool {
+        guard let drag = activeDrag else { return false }
+        if Self.usesPanLockFallbackForOwnedLegDrag && drag.owner != nil { return false }
+        return true
+    }
+
+    /// D-11 대체안 스위치. 기본(false)은 `.scrollDisabled`를 그대로 쓰는 본안 — scrollDisabled가
+    /// 프로그램 오프셋 setContentOffset까지 막는지는 확인되지 않았다(가설). 시뮬레이터 S-16이
+    /// 본안이 안 움직인다고 보이면 이 값을 true로 바꿔 소유 구간 드래그만 팬 인식기 끄기로 돌린다.
+    private static let usesPanLockFallbackForOwnedLegDrag = false
 
     /// 자리가 정해진 블록 하나를 그린다(종류에 맞는 뷰 선택). date는 그리는 날 — 자정을
     /// 넘는 블록의 잘린 범위 계산에 쓰인다.
@@ -527,8 +571,10 @@ struct ContentView: View {
 
     /// 블록이 화면에서 실제로 그려지는 최소 높이(분 환산). 이 값보다 짧은 일정도 눈에 보이게
     /// 이만큼은 그리므로, 히트 테스트 범위도 반드시 같은 값을 써야 한다 — 예전엔 렌더와 히트
-    /// 테스트가 따로 계산돼 "보이는데 탭이 안 되는" 짧은 블록 문제가 있었다.
-    private static let minActivityMinutes: CGFloat = 20
+    /// 테스트가 따로 계산돼 "보이는데 탭이 안 되는" 짧은 블록 문제가 있었다. 5분은 드래그가 만들
+    /// 수 있는 가장 짧은 활동(REQ-006)과 같은 값이지만 그리기 전용이다 — Store 상수와 하나로
+    /// 묶으면 화면 상수가 Store 격리를 끌어당긴다. 5분 이상 활동은 모두 실제 길이로 그려진다.
+    private static let minActivityMinutes: CGFloat = 5
     private static let minTravelMinutes: CGFloat = 16
     /// 이동시간 계산 실패 블록의 고정 높이(pt).
     private static let failedBlockHeight: CGFloat = 20
@@ -536,26 +582,115 @@ struct ContentView: View {
     /// 렌더와 히트테스트가 같은 값을 쓰는지는 `SlotRange.points`가 보증한다.
     private static let columnGap: CGFloat = 3
 
+    /// 소유 있는 구간 드래그의 이동량(유효 Δ, 분)을 한 곳에서 낸다(REQ-009 — 미리보기 = 확정).
+    /// 끌리는 구간 자신(legId)과 그 소유 활동(activityId)에만 Δ를 돌려주고 다른 모든 블록은
+    /// 0이다 — 두 span이 이 값으로 옮긴 범위를 만들고 dragOffsetMinutes는 소유 있는 끌림 구간의
+    /// 평행이동을 이 값으로 걷는다(같은 블록이 두 번 움직이지 않게). 소유 조회는 onBegin이 이미
+    /// 끝냈다 — 여기서 다시 찾지 않는다(AC-007).
+    private func legDragShift(legId: ScheduledEvent.ID? = nil, activityId: ActivityBlock.ID? = nil) -> Int {
+        guard let drag = activeDrag, let owner = drag.owner, case .event(let e) = drag.kind else { return 0 }
+        if legId == e.id || activityId == owner.id { return drag.deltaMinutes }
+        return 0
+    }
+
+    /// 그리는 날의 하루 한계(분). 평소 1440이고, 소유 있는 구간을 끄는 중에는 그 드래그가 시작된
+    /// 페이지에서만 아래로 늘어난다(REQ-015 (1)) — 늘어나는 양은 드래그가 움직이는 끝(끌린 구간의
+    /// 더 늦은 쪽 끝, 소유 활동의 끌리는 쪽 가장자리)이 그 날 24시를 넘는 초과분을 시간으로 올림한
+    /// 값이다. 드래그가 움직이지 않는 끝은 이미 자정을 넘어 있어도 연장하지 않는다(N5-5). 드래그가
+    /// 끝나면(activeDrag == nil) 상태가 이끄는 대로 1440로 돌아가고, 다른 페이지는 언제나 1440이다.
+    /// @MX:NOTE 하루 길이의 단일 출처 — 눈금·구분선·콘텐츠 높이·두 span의 자르기·히트 테스트가
+    /// 모두 이 값을 읽는다. 여기서 따로 세면 연장 중 렌더와 히트가 어긋난다(계약 5).
+    private func dayLimitMinutes(on date: Date) -> Int {
+        guard let drag = activeDrag, let owner = drag.owner,
+              case .event(let leg) = drag.kind,
+              calendar.isDate(drag.pageDate, inSameDayAs: date) else { return 1440 }
+        let delta = TimeInterval(drag.deltaMinutes) * 60
+        let dayEnd = calendar.startOfDay(for: date).addingTimeInterval(24 * 3600)
+        let laterLegEnd = max(leg.departureDate ?? leg.arrivalDate, leg.arrivalDate).addingTimeInterval(delta)
+        let ownerDraggedEdge = ((leg.anchor ?? .arrival) == .departure ? owner.endDate : owner.startDate)
+            .addingTimeInterval(delta)
+        let excess = max(0, laterLegEnd.timeIntervalSince(dayEnd), ownerDraggedEdge.timeIntervalSince(dayEnd))
+        return 1440 + Int(ceil(excess / 3600)) * 60
+    }
+
     /// 일간 시간표에서 블록이 차지하는 세로 범위(자정 기준 분). 렌더링 위치·높이와 히트 테스트가
     /// 반드시 같은 값을 보도록 여기 한 곳에서만 계산한다. 자정을 넘는 블록은 이틀에 나뉘어
-    /// 그려지므로 "그리는 날"(on)을 받아 그 날의 0~1440분으로 자른다 — 호출자가 제각각 자르면
-    /// 렌더와 히트 테스트가 어긋나는, 이 함수가 원래 하나로 묶으려 했던 문제가 다시 생긴다.
+    /// 그려지므로 "그리는 날"(on)을 받아 그 날의 0시~하루 한계분으로 자른다 — 호출자가 제각각
+    /// 자르면 렌더와 히트 테스트가 어긋나는, 이 함수가 원래 하나로 묶으려 했던 문제가 다시 생긴다.
     private func span(for activity: ActivityBlock, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
-        // 그리는 날보다 시작이 이르면(전날부터 이어지는 반쪽) 0시부터, 끝이 늦으면 그 날
-        // 자정(1440분)까지만 — 그냥 빼면 음수가 나온다.
-        let start = calendar.isDate(activity.startDate, inSameDayAs: date)
-            ? minutesSinceMidnight(activity.startDate) : 0
-        let end = calendar.isDate(activity.endDate, inSameDayAs: date)
-            ? minutesSinceMidnight(activity.endDate) : 1440
+        // 소유 활동이 끌리는 중에는 먼저 옮긴 시각을 만든다 — 오는 편 드래그는 활동 끝이, 가는 편
+        // 드래그는 활동 시작이 유효 Δ만큼 움직이고 반대쪽은 그대로(REQ-001·002와 같은 방향 —
+        // 미리보기가 곧 확정값이므로 드래그 중에도 확정과 같은 모양으로 그린다).
+        var startDate = activity.startDate
+        var endDate = activity.endDate
+        let shift = legDragShift(activityId: activity.id)
+        if shift != 0, case .event(let leg)? = activeDrag?.kind {
+            let delta = TimeInterval(shift) * 60
+            if (leg.anchor ?? .arrival) == .departure {
+                endDate = endDate.addingTimeInterval(delta)      // 오는 편 → 끝을 늘린다
+            } else {
+                startDate = startDate.addingTimeInterval(delta)  // 가는 편 → 시작을 민다
+            }
+        }
+        let dayStart = calendar.startOfDay(for: date)
+        let clippedStart = max(startDate, dayStart)
+        let clippedEnd = min(endDate, dayStart.addingTimeInterval(TimeInterval(dayLimitMinutes(on: date)) * 60))
+        // 옮긴 범위가 그 날에 남지 않으면 (start, 0)을 돌려 positionedBlocks가 건너뛰게 한다(REQ-009)
+        // — 최소 높이로 늘려 그리면 하루 끝에 없는 토막이 생긴다. 저장된 블록(나열 판정이 그 날과
+        // 겹침을 보장)과 시작 = 끝인 깨진 레코드는 이 갈래에 오지 않고 오늘처럼 최소 높이로 그린다.
+        guard clippedEnd > clippedStart else {
+            if shift != 0 { return (0, 0) }
+            let s = calendar.isDate(activity.startDate, inSameDayAs: date) ? minutesSinceMidnight(activity.startDate) : 0
+            return (s, Self.minActivityMinutes)
+        }
         // 잘린 반쪽이 최소 높이에 못 미쳐도 늘리는 방향은 그대로 아래로 둔다. 늘리지 않으면 그
         // 조각은 보이지도 탭되지도 않는 블록이 되고(이 값은 렌더와 히트 테스트가 함께 쓴다),
         // 반대 방향(위로)은 자리가 없다 — 자정 직전에 잘린 반쪽이 위로 늘면 그 날의 이웃을 덮고,
         // 0시에 붙어 시작하는 반쪽은 0 위에 그릴 수 없다. 밑으로 넘치는 몇 분은 그 날 화면
         // 밖이라 아무것도 덮지 않는다.
+        // 분 단위로 자른다(초는 내린다) — 외부 가져오기·AI가 만든 시각은 초가 0이 아닐 수 있는데,
+        // 초까지 반영하면 10:00:30~11:00:30 활동과 11:00:30 복귀 다리가 반쪽 폭으로 갈라진다.
+        // b59fcaa 기준선의 minutesSinceMidnight(시*60+분, 초 버림)와 같은 의미이며 초가 0이면
+        // 내림이 항등이므로 기존 그림은 바이트 단위로 그대로다.
+        let start = CGFloat((clippedStart.timeIntervalSince(dayStart) / 60).rounded(.down))
+        let end = CGFloat((clippedEnd.timeIntervalSince(dayStart) / 60).rounded(.down))
         return (start, max(Self.minActivityMinutes, end - start))
     }
 
     private func span(for event: ScheduledEvent, on date: Date) -> (start: CGFloat, minutes: CGFloat) {
+        let dayStart = calendar.startOfDay(for: date)
+        let limit = CGFloat(dayLimitMinutes(on: date))
+        // 끌리는 소유 구간은 시각에 유효 Δ를 더해 옮긴 뒤 그 날의 0~하루 한계 안에서 그린다(REQ-009)
+        // — 평행이동 미리보기(dragOffsetMinutes)를 겹쳐 쓰지 않는다. 옮긴 범위가 그 날에 남지
+        // 않으면 (start, 0)을 돌려 positionedBlocks가 건너뛰게 한다 — 연장 밖이나 하루 시작 앞에
+        // 토막을 그리면 놓을 자리를 잘못 읽게 한다.
+        let shift = legDragShift(legId: event.id)
+        if shift != 0 {
+            let delta = TimeInterval(shift) * 60
+            // 경고 블록(미계산)은 나열 시각 = 앵커 하나만 옮겨 그린다 — 한계 함수도 그 시각
+            // 하나로 자르므로 그림도 같은 시각을 따라간다.
+            if let anchor = event.failedBlockAnchor {
+                let m = CGFloat(anchor.addingTimeInterval(delta).timeIntervalSince(dayStart) / 60)
+                guard m >= 0, m < limit else { return (0, 0) }
+                return (m, Self.failedBlockHeight / hourHeight * 60)
+            }
+            guard let dep = event.departureDate else {
+                let m = CGFloat(event.arrivalDate.addingTimeInterval(delta).timeIntervalSince(dayStart) / 60)
+                guard m >= 0, m < limit else { return (0, 0) }
+                return (m, Self.failedBlockHeight / hourHeight * 60)
+            }
+            let depMin = min(max(CGFloat(dep.addingTimeInterval(delta).timeIntervalSince(dayStart) / 60), 0), limit)
+            let arrivalMin = min(max(CGFloat(event.arrivalDate.addingTimeInterval(delta).timeIntervalSince(dayStart) / 60), 0), limit)
+            guard arrivalMin > depMin else { return (0, 0) }
+            let natural = arrivalMin - depMin
+            guard natural < Self.minTravelMinutes else { return (depMin, natural) }
+            // 최소 높이로 늘리는 방향은 고정된 쪽의 반대 — 아래 저장된 구간의 규칙과 같다.
+            if (event.anchor ?? .arrival) == .departure {
+                return (depMin, Self.minTravelMinutes)                                   // 출발 고정 → 아래로
+            }
+            return (max(0, arrivalMin - Self.minTravelMinutes), Self.minTravelMinutes)    // 도착 고정 → 위로
+        }
+        // 이하는 저장된 구간 — 지금의 자르기에서 하루 끝 값만 하루 한계 도우미로 바뀐다.
         // 이동시간 미계산 구간은 경고 블록 하나 — 앵커 시각(REQ-023의 A)의 분에서 "아래로" 고정
         // 높이만큼 그린다. **날짜로 자르지 않는다**: 미계산 구간은 앵커가 든 날 하루에만 나열되므로
         // 자르기가 필요 없고, 앵커가 자정 직전이면 블록 끝이 그 날 화면 아래 밖으로 몇 분 넘치는
@@ -569,13 +704,13 @@ struct ContentView: View {
             // travelSeconds도 같이 비운다). 도착 시각에서 아래로 그려 옛 경고 모양으로 폴백한다.
             return (minutesSinceMidnight(event.arrivalDate), Self.failedBlockHeight / hourHeight * 60)
         }
-        // 출발·도착을 그리는 날의 0~1440분 안으로 자른다 — 전날 밤에 출발해 자정을 넘겨 도착하는
+        // 출발·도착을 그리는 날의 0~하루 한계분 안으로 자른다 — 전날 밤에 출발해 자정을 넘겨 도착하는
         // 구간은 출발 시각(예: 23:30)을 그대로 쓰면 도착일 화면의 엉뚱한 자리에 그려지므로 도착일
-        // 에서는 0시부터, 출발일에서는 자정(1440분)까지. 자정을 넘는 이동이 이틀에 각각 반쪽씩
+        // 에서는 0시부터, 출발일에서는 그 날 끝까지. 자정을 넘는 이동이 이틀에 각각 반쪽씩
         // 그려지는 것(결함 G)은 이 자르기와 나열(events(on:)의 겹침 판정)이 함께 완성한다.
         let depMin = calendar.isDate(dep, inSameDayAs: date) ? minutesSinceMidnight(dep) : 0
         let arrivalMin = calendar.isDate(event.arrivalDate, inSameDayAs: date)
-            ? minutesSinceMidnight(event.arrivalDate) : 1440
+            ? minutesSinceMidnight(event.arrivalDate) : limit
         let natural = arrivalMin - depMin
         guard natural < Self.minTravelMinutes else { return (depMin, natural) }
 
@@ -599,6 +734,10 @@ struct ContentView: View {
 
     private func dragOffsetMinutes(forEvent id: ScheduledEvent.ID) -> CGFloat {
         guard let drag = activeDrag, case .event(let e) = drag.kind, e.id == id else { return 0 }
+        // 소유 있는 구간의 미리보기는 span이 옮긴 범위로 이미 그린다(legDragShift가 Δ를 주는
+        // 블록) — 여기서 또 평행이동하면 같은 블록이 두 번 움직인다(REQ-009). 소유 없는 구간은
+        // 오늘처럼 평행이동 미리보기를 쓴다.
+        if legDragShift(legId: id) != 0 { return 0 }
         return CGFloat(drag.deltaMinutes)
     }
 
@@ -713,13 +852,18 @@ struct ContentView: View {
                                   on date: Date) -> [PositionedBlock] {
         let groups = store.packingGroups(events: dayEvents, activities: dayActivities)
         struct Item { let id: String; let kind: ActiveDrag.Kind; let start: CGFloat; let end: CGFloat; let key: String? }
-        var items: [Item] = dayActivities.map {
+        // 옮긴 범위가 그 날에 남지 않은 블록(span이 minutes 0을 돌려준 것)은 여기서 뺀다 — 렌더와
+        // 히트 테스트가 같은 목록을 보므로 그려지지도 눌리지도 않는다(REQ-009). 저장된 블록은
+        // 나열 판정이 그 날과의 겹침을 보장하므로 이 갈래에 오지 않는다.
+        var items: [Item] = dayActivities.compactMap {
             let s = span(for: $0, on: date)
+            guard s.minutes > 0 else { return nil }
             return Item(id: "a-\($0.id)", kind: .activity($0), start: s.start, end: s.start + s.minutes,
                         key: $0.id.uuidString)
         }
-        items += dayEvents.map {
+        items += dayEvents.compactMap {
             let s = span(for: $0, on: date)
+            guard s.minutes > 0 else { return nil }
             return Item(id: "e-\($0.id)", kind: .event($0), start: s.start, end: s.start + s.minutes,
                         key: groups[$0.id]?.uuidString)
         }
@@ -852,13 +996,34 @@ private struct SwipePager<Content: View>: View {
 /// 그 사이 무사히 살아남지만, 짧은 탭은 이 지연 때문에 종종 씹혔다(탭해도 상세정보가 안 뜨던
 /// 원인). window에 붙는 시점에 조상 UIScrollView를 찾아 꺼버려 탭이 확실히 전달되게 한다.
 private final class ScrollTouchFixView: UIView {
+    /// 창에서 빠질 때의 알림 — 자동 스크롤 타이머가 살아 있으면 여기서 멈춘다(AC-016 끝 경로:
+    /// 앱 내리기 등으로 오버레이가 창에서 떨어져도 .cancelled가 오지 않을 수 있다).
+    var onLeaveWindow: (() -> Void)?
+
     override func didMoveToWindow() {
         super.didMoveToWindow()
+        if window == nil {
+            onLeaveWindow?()
+            return
+        }
         var v: UIView? = superview
         while let cur = v {
             if let scroll = cur as? UIScrollView { scroll.delaysContentTouches = false }
             v = cur.superview
         }
+    }
+}
+
+/// CADisplayLink는 대상을 retain한다(공식 문서 "The newly constructed display link retains the
+/// target") — 코디네이터를 직접 대상으로 두면 무효화 전까지 링과 코디네이터가 서로 붙잡는다.
+/// 약한 참조 대리를 대상으로 두고 틱마다 코디네이터를 다시 잡게 한다(D-11).
+private final class AutoScrollProxy: NSObject {
+    weak var target: RescheduleOverlay.Coordinator?
+    @objc func tick(_ link: CADisplayLink) {
+        // 코디네이터가 stopAutoScroll 없이 사라지면 링은 proxy만 붙잡은 채 프레임마다
+        // 헛돈다 — 대상이 없을 때는 여기서 직접 끊는다.
+        guard let target else { link.invalidate(); return }
+        target.autoScrollTick(link)
     }
 }
 
@@ -884,15 +1049,24 @@ private struct RescheduleOverlay: UIViewRepresentable {
     let onEnd: (Bool) -> Void
     /// 짧은 탭이 끝난 시점의 좌표(가로 0~1 정규화, 세로 pt).
     let onTap: (CGFloat, CGFloat) -> Void
+    /// 가장자리 자동 스크롤을 켜도 되는지(= 소유 활동이 있는 구간 드래그 중인지). 드래그가
+    /// 시작된 뒤에야 답이 정해지므로 매 순간의 상태를 읽는 클로저로 받는다(Q-9 — 활동 드래그와
+    /// 소유 없는 구간 드래그는 자동 스크롤·연장을 하지 않는다).
+    let autoScrollEligible: () -> Bool
+    /// D-11 대체안 스위치 — true면 소유 구간 드래그에서 scrollDisabled 대신 스크롤 뷰의 팬
+    /// 인식기를 끈다. 기본값은 ContentView의 상수가 정한다.
+    let panLockFallback: Bool
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onBegin: onBegin, onChange: onChange, onEnd: onEnd, onTap: onTap)
+        Coordinator(onBegin: onBegin, onChange: onChange, onEnd: onEnd, onTap: onTap,
+                    autoScrollEligible: autoScrollEligible, panLockFallback: panLockFallback)
     }
 
     func makeUIView(context: Context) -> UIView {
         let view = ScrollTouchFixView()
         view.backgroundColor = .clear
         view.isOpaque = false
+        view.onLeaveWindow = { [weak coordinator = context.coordinator] in coordinator?.stopAutoScroll() }
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator,
                                                        action: #selector(Coordinator.handleLongPress(_:)))
@@ -908,11 +1082,19 @@ private struct RescheduleOverlay: UIViewRepresentable {
         return view
     }
 
+    static func dismantleUIView(_ uiView: UIView, coordinator: Coordinator) {
+        // SwiftUI가 오버레이를 조용히 치우는 경로도 끝 경로다 — 타이머가 남으면 뷰가 없는 데도
+        // 스크롤을 돌린다(AC-016).
+        coordinator.stopAutoScroll()
+    }
+
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onBegin = onBegin
         context.coordinator.onChange = onChange
         context.coordinator.onEnd = onEnd
         context.coordinator.onTap = onTap
+        context.coordinator.autoScrollEligible = autoScrollEligible
+        context.coordinator.panLockFallback = panLockFallback
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
@@ -920,13 +1102,31 @@ private struct RescheduleOverlay: UIViewRepresentable {
         var onChange: (CGFloat) -> Void
         var onEnd: (Bool) -> Void
         var onTap: (CGFloat, CGFloat) -> Void
+        var autoScrollEligible: () -> Bool
+        var panLockFallback: Bool
 
         private var startY: CGFloat = 0
         private var didBegin = false
 
+        // 자동 스크롤 상태 — 링 하나, 인식기 하나, 시작할 때 찾아 둔 스크롤 뷰 하나뿐이다.
+        private var displayLink: CADisplayLink?
+        private var activeRecognizer: UILongPressGestureRecognizer?
+        private var dragScrollView: UIScrollView?
+        private var lastTick: CFTimeInterval = 0
+        private var scrolledDown = false
+        private var panWasDisabled = false
+
+        /// 매김값(D-11 〔제안〕 — 시뮬레이터 S-16이 감각으로 정한다): 띠는 보이는 높이의 12%,
+        /// 최소 44pt. 최대 속도 600pt/초(56pt/시간이므로 초당 약 10.7시간 분량).
+        private static let autoScrollBandRatio: CGFloat = 0.12
+        private static let autoScrollMinBand: CGFloat = 44
+        private static let autoScrollMaxSpeed: CGFloat = 600
+
         init(onBegin: @escaping (CGFloat, CGFloat) -> Bool, onChange: @escaping (CGFloat) -> Void,
-             onEnd: @escaping (Bool) -> Void, onTap: @escaping (CGFloat, CGFloat) -> Void) {
+             onEnd: @escaping (Bool) -> Void, onTap: @escaping (CGFloat, CGFloat) -> Void,
+             autoScrollEligible: @escaping () -> Bool, panLockFallback: Bool) {
             self.onBegin = onBegin; self.onChange = onChange; self.onEnd = onEnd; self.onTap = onTap
+            self.autoScrollEligible = autoScrollEligible; self.panLockFallback = panLockFallback
         }
 
         /// 가로 좌표를 0~1로 바꾼다(겹친 블록이 좌우로 나뉘어 있어 어느 열인지 판단해야 한다).
@@ -935,20 +1135,41 @@ private struct RescheduleOverlay: UIViewRepresentable {
             return width > 0 ? min(max(gr.location(in: gr.view).x / width, 0), 1) : 0
         }
 
+        /// 가장 가까운 조상 UIScrollView — ScrollTouchFixView와 같은 올라가기(코디네이터 안에는
+        /// while을 두지 않는다, AC-016).
+        private func nearestScrollView(from view: UIView?) -> UIScrollView? {
+            guard let v = view?.superview else { return nil }
+            if let scroll = v as? UIScrollView { return scroll }
+            return nearestScrollView(from: v)
+        }
+
         @objc func handleLongPress(_ gr: UILongPressGestureRecognizer) {
             let y = gr.location(in: gr.view).y
             switch gr.state {
             case .began:
                 startY = y
                 didBegin = onBegin(normalizedX(gr), y)
-                if !didBegin { gr.state = .cancelled }
+                if !didBegin {
+                    // 블록 밖에서 시작한 자리 — 상태를 취소로 못박고 타이머도 (시작 전이지만) 멈춤
+                    // 함수로 끝낸다. 모든 끝 경로가 같은 함수를 지나야 한다는 규칙의 하나(AC-016).
+                    gr.state = .cancelled
+                    stopAutoScroll()
+                    return
+                }
+                startAutoScrollIfNeeded(for: gr)
             case .changed:
                 guard didBegin else { return }
                 onChange(y - startY)
+                // 길게 누르기 인식기는 손가락이 움직일 때만 .changed를 보낸다 — 손가락이 가장자리에
+                // 머무른 채 움직이지 않으면 이벤트가 없으므로 여기서도 (이미 켜져 있으면 아무 일
+                // 없이) 링을 다시 건다. 띠 안팎 판정은 틱이 한다.
+                startAutoScrollIfNeeded(for: gr)
             case .ended:
+                stopAutoScroll()
                 if didBegin { onEnd(true) }
                 didBegin = false
             case .cancelled, .failed:
+                stopAutoScroll()
                 if didBegin { onEnd(false) }
                 didBegin = false
             default:
@@ -959,6 +1180,97 @@ private struct RescheduleOverlay: UIViewRepresentable {
         @objc func handleTap(_ gr: UITapGestureRecognizer) {
             guard gr.state == .ended else { return }
             onTap(normalizedX(gr), gr.location(in: gr.view).y)
+        }
+
+        /// 소유 있는 구간 드래그에서만 가장자리 자동 스크롤을 켠다(REQ-015 (2)). 이미 켜져 있으면
+        /// 아무 일도 하지 않는다(멱등) — .began과 .changed 양쪽에서 불려도 링은 하나다.
+        /// @MX:WARN 멈춤 함수가 모든 끝 경로에서 불려야 한다 — 빠지면 손을 뗀 뒤에도 스크롤이 돈다
+        private func startAutoScrollIfNeeded(for gr: UILongPressGestureRecognizer) {
+            guard displayLink == nil, didBegin, autoScrollEligible() else { return }
+            activeRecognizer = gr
+            lastTick = 0
+            dragScrollView = nearestScrollView(from: gr.view)
+            if panLockFallback, let scroll = dragScrollView {
+                // 대체안: 소유 구간 드래그는 scrollDisabled 대신 팬 인식기를 끈다(D-11) —
+                // scrollDisabled가 프로그램 오프셋까지 막는지 확인되지 않아 S-16이 어느 쪽인지
+                // 정한다. 되돌리는 곳은 멈춤 함수뿐이다.
+                scroll.panGestureRecognizer.isEnabled = false
+                panWasDisabled = true
+            }
+            let proxy = AutoScrollProxy()
+            proxy.target = self
+            let link = CADisplayLink(target: proxy, selector: #selector(AutoScrollProxy.tick(_:)))
+            // .common이어야 스크롤 트래킹 중에도 틱이 온다(N5-12) — .default면 트래킹 모드에서 멈춘다.
+            link.add(to: .main, forMode: .common)
+            displayLink = link
+        }
+
+        /// 매 틱: 띠 깊이에 비례한 속도로 오프셋을 옮기고, 손가락 위치를 다시 읽어 같은 onChange로
+        /// 넘긴다. 오버레이가 스크롤 콘텐츠 **안**에 있어 손가락이 멈춰 있어도 콘텐츠가 움직이면
+        /// 같은 손가락의 콘텐츠 좌표가 그만큼 바뀐다 — 위치 재읽기가 보정의 전부이고,
+        /// contentOffset을 onChange에 더하면 두 번 더해진다(D-11).
+        func autoScrollTick(_ link: CADisplayLink) {
+            guard let gr = activeRecognizer, let scroll = dragScrollView else {
+                stopAutoScroll(); return
+            }
+            // 인식기가 드래그 중일 때만 돈다 — 그 밖의 상태는 드래그가 끝났다는 뜻이라 스스로
+            // 멈춘다(앱 내리기 등 시스템 취소도 이 검사가 잡는다).
+            guard gr.state == .began || gr.state == .changed else {
+                stopAutoScroll(); return
+            }
+            if lastTick == 0 { lastTick = link.timestamp; return }
+            let elapsed = CGFloat(max(link.timestamp - lastTick, 0))
+            lastTick = link.timestamp
+            guard elapsed > 0 else { return }
+            // 띠 판정은 보이는 창 기준으로 한다 — UIScrollView의 bounds 원점은 contentOffset과
+            // 같아 location(in: scroll)이 돌려주는 값은 콘텐츠 좌표다. 스크롤이 된 뒤 이를
+            // 보정하지 않으면 화면 한가운데의 손가락이 아래 띠 깊은 곳으로 읽히고, 오프셋이
+            // 커질수록 속도가 더 커지는 되먹임 폭주가 생긴다(D-11).
+            let fingerY = gr.location(in: scroll).y - scroll.contentOffset.y
+            let visible = scroll.bounds.height
+            let band = max(visible * Self.autoScrollBandRatio, Self.autoScrollMinBand)
+            var speed: CGFloat = 0
+            if fingerY < band {
+                speed = -Self.autoScrollMaxSpeed * (1 - fingerY / band)
+            } else if fingerY > visible - band {
+                speed = Self.autoScrollMaxSpeed * (1 - (visible - fingerY) / band)
+            }
+            // 손가락이 스크롤 영역 밖(띠보다 더 위/아래)이면 비례식이 최대 속도를 넘긴다 —
+            // 깊이 ≥ 띠 높이면 최대 속도로 막는다(D-11).
+            speed = min(max(speed, -Self.autoScrollMaxSpeed), Self.autoScrollMaxSpeed)
+            guard speed != 0 else { return }
+            if speed > 0 { scrolledDown = true }
+            // 콘텐츠 맨 위(첫날 0시)와 지금 콘텐츠 끝(연장이 자라면 같이 자란다)에서 멈춘다.
+            let maxOffset = max(0, scroll.contentSize.height - visible)
+            let newOffset = min(max(scroll.contentOffset.y + speed * elapsed, 0), maxOffset)
+            scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: newOffset), animated: false)
+            onChange(gr.location(in: gr.view).y - startY)
+        }
+
+        /// 자동 스크롤을 멈추는 유일한 함수 — .ended·.cancelled/.failed·onBegin 거절·dismantleUIView·
+        /// 창 이탈(onLeaveWindow)·틱 상태 검사, 모든 끝 경로가 여기로 온다(AC-016 G). 링을 끊고,
+        /// 대체안으로 꺼둔 팬 인식기를 되돌리고, 아래로 감기던 중이었다면 연장이 사라져 콘텐츠가
+        /// 줄은 뒤 오프셋이 새 최대를 넘는지 다시 본다 — 시스템이 알아서 당겨주리라는 보장이 없어
+        /// 직접 맞춘다(S-17). 재렌더를 기다리기 위해 한 틱 뒤에 실행한다.
+        func stopAutoScroll() {
+            if panWasDisabled, let scroll = dragScrollView {
+                scroll.panGestureRecognizer.isEnabled = true
+                panWasDisabled = false
+            }
+            let scroll = dragScrollView
+            let wasScrollingDown = scrolledDown
+            displayLink?.invalidate()
+            displayLink = nil
+            activeRecognizer = nil
+            dragScrollView = nil
+            scrolledDown = false
+            guard wasScrollingDown, let scroll else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                let maxOffset = max(0, scroll.contentSize.height - scroll.bounds.height)
+                if scroll.contentOffset.y > maxOffset {
+                    scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: maxOffset), animated: false)
+                }
+            }
         }
 
         // ScrollView의 내부 팬 제스처·이 뷰의 롱프레스/탭 서로가 동시에 인식되도록 허용한다.

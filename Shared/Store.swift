@@ -417,6 +417,33 @@ final class Store: ObservableObject {
         return activities.first { $0.id == id }
     }
 
+    /// 구간의 소유 활동 조회(REQ-004) — 시간표 미리보기와 드롭이 같은 판정을 읽게 한 곳에 둔다
+    /// (계약 5). activity(forLeg:)가 명시 연결만 보는 것과 달리, 드래그 연결은 반복 추정까지 본다.
+    /// (a) 명시 연결이 살아 있으면 그 활동, 매달렸으면 소유 없음. (b) 반복 회차 구간은 그 구간을
+    /// 정방향 조회(linkedLegs — 명시 먼저, 없으면 추정)에 담는 활동이 후보. 둘 이상이면 앵커 시각이
+    /// 구간과 정확히 같은 활동만 남고(가는 편: 구간 도착 = 활동 시작, 오는 편: 구간 출발 = 활동
+    /// 끝 — 출발이 없으면 성립하지 않는다), 정확히 하나일 때만 소유다. 같은 날로 먼저 좁히지
+    /// 않는다 — 자정을 넘긴 오는 편의 소유를 놓치기 때문이다(REQ-016과 같은 정확 대조 규칙).
+    /// (c) 그 밖에는 소유 없음 — 단독 구간으로 지금 동작(REQ-005).
+    /// @MX:ANCHOR fan_in ≥ 3 — 드롭(adjustTravelLeg)·드래그 시작·미리보기가 같이 부른다
+    func owningActivity(of leg: ScheduledEvent) -> ActivityBlock? {
+        if let linkedId = leg.linkedActivityId {
+            return activities.first { $0.id == linkedId }
+        }
+        guard let rid = leg.recurrenceId else { return nil }
+        let candidates = activities.filter { candidate in
+            guard candidate.recurrenceId == rid else { return false }
+            let (outbound, returnLeg) = linkedLegs(for: candidate)
+            return outbound?.id == leg.id || returnLeg?.id == leg.id
+        }
+        guard candidates.count > 1 else { return candidates.first }
+        let exact = candidates.filter { candidate in
+            leg.anchor == .departure ? leg.anchorComparisonTime == candidate.endDate
+                                     : leg.arrivalDate == candidate.startDate
+        }
+        return exact.count == 1 ? exact[0] : nil
+    }
+
     /// 활동에 명시적으로 연결된 구간 수(같은 역할 중복 포함) — 삭제 확인 문구가 읽는다(REQ-014).
     /// 반복 회차의 추정 구간은 세지 않는다(연결이 아니라 추정이므로).
     func explicitLegCount(of activityId: UUID) -> Int {
@@ -433,7 +460,7 @@ final class Store: ObservableObject {
     /// 구간이 있으면 그 **전부**(같은 역할 둘 포함), 없고 반복 회차이면 linkedLegs와 같은 추정에서
     /// 가는 편·오는 편 최대 하나씩. 결과는 넘겨받은 events/activities 안의 id만 담는다.
     // @MX:NOTE 추정은 linkedLegs와 같은 코드(estimatedLegs)이고 배치 묶음에만 쓴다 — 편집·삭제는 쓰지 않는다
-    // @MX:WARN 이 추정은 도착이 다음 날인 오는 편을 놓친다(같은 날 대조) — 이 추정을 삭제에 쓰면 데이터 위험이 된다
+    // @MX:WARN 정확한 앵커 시각 대조만 한다(REQ-016) — 시각이 1초라도 다른 구간(옛 틈 회차)은 짝을 잃고 단독이 된다
     // @MX:REASON 삭제·편집 경로는 legs(of:)(명시적 연결만)를 쓴다 — 잘못된 추정이 구간을 지우는 일을 구조적으로 끊는다
     func packingGroups(events: [ScheduledEvent], activities: [ActivityBlock]) -> [UUID: UUID] {
         let listedIDs = Set(events.map { $0.id })
@@ -517,7 +544,7 @@ final class Store: ObservableObject {
     }
 
     /// 연결 구간의 줄을 고친다(주어진 것만). 앵커 시각은 활동의 **현재** 값에서 다시 유도한다
-    /// (legAnchor) — 오는 편을 끌어 벌어진 틈은 이 저장으로 닫힌다(design §4). 활동이 사라진
+    /// (legAnchor) — 옛 버전에서 오는 편을 끌어 벌어진 틈은 이 저장으로 닫힌다(design §4). 활동이 사라진
     /// 매달린 구간은 유도를 못 하므로 저장된 시각을 그대로 쓴다.
     @discardableResult
     func updateLeg(legId: UUID,
@@ -1381,11 +1408,23 @@ final class Store: ObservableObject {
         save()   // shiftEvent는 저장하지 않는다(아래 주석) — 옮긴 이동 구간을 여기서 한 번에 저장.
     }
 
-    /// 이동 구간(ScheduledEvent) 블록 자체를 드래그했을 때: 활동은 그대로 두고, 활동과 맞닿은 쪽
-    /// (도착형=도착시각, 출발형=출발시각)은 고정한 채 반대쪽(자유단)을 버퍼로 흡수해 옮긴다.
-    /// 반복 그룹 전체(wholeSeries)면 "같은 역할"(같은 anchor + 같은 목적지/출발지)의 회차 전부에 적용.
+    /// 이동 구간(ScheduledEvent) 블록을 드래그해 놓았을 때의 확정. 소유 활동이 있으면 활동
+    /// 가장자리를 함께 옮긴다(REQ-001·002 — 오는 편 Δ는 활동 끝, 가는 편 Δ는 활동 시작.
+    /// 18번 메모 "오는 이동을 아래로 30분 끌면 활동 블록도 30분 추가"). 소유 활동이 없으면 지금
+    /// 동작(활동은 그대로 두고, 맞닿은 쪽은 고정한 채 반대쪽 자유단을 버퍼로 흡수)을 그대로
+    /// 둔다(REQ-005). 반복 그룹 전체(wholeSeries)면 소유 갈래는 "같은 반복·제목·장소" 회차
+    /// 전부(REQ-010), 소유 없는 갈래는 지금처럼 "같은 역할"(같은 anchor + 같은 목적지/출발지)의
+    /// 회차 전부에 적용.
     func adjustTravelLeg(_ event: ScheduledEvent, byMinutes minutes: Int, wholeSeries: Bool) {
         guard minutes != 0 else { return }
+        // 드래그가 시작된 뒤 저장소가 바뀌었을 수 있으니 id로 현재 값을 다시 읽어 판정한다(REQ-008
+        // 드롭 재읽기) — 드래그 시작 때 잡아둔 사본의 시각으로 한계를 정하면 옛 값이 확정에 섞인다.
+        // id가 이미 없으면 소유 여부와 무관하게 아무것도 바꾸지 않는다.
+        guard let current = events.first(where: { $0.id == event.id }) else { return }
+        if let owner = owningActivity(of: current) {
+            applyLinkedLegDrag(current, owner: owner, requestedMinutes: minutes, wholeSeries: wholeSeries)
+            return
+        }
         let anchorKind = event.anchor ?? .arrival
         let roleKey = anchorKind == .arrival ? event.destination.name : (event.origin?.name ?? "")
         let targets: [ScheduledEvent]
@@ -1409,8 +1448,158 @@ final class Store: ObservableObject {
         save()   // 회차마다 저장하면(26주 반복이면 130번) 드래그를 놓을 때 눈에 띄게 멈춘다 — 한 번만.
     }
 
-    /// 같은 반복 그룹(activity의 recurrenceId)에서 그 활동과 같은 날, 그 활동 장소로 향하는(도착형)/
-    /// 그 활동 장소에서 출발하는(출발형) 이동 구간을 찾는다. 명시적 링크 필드 없이 날짜+장소로 추정한다.
+    /// 소유 활동이 있는 구간 드래그의 확정(REQ-001·002·010·011). 유효 Δ는 effectiveDragMinutes
+    /// 한 곳에서 정하고(계약 5), 구간의 평행이동 산식은 shiftEvent가 유일하다 — 여기서 시각
+    /// 산수를 다시 쓰지 않는다. 동기 경로다: 구글 반영도 Task도 없다(REQ-012, 카드 t48).
+    private func applyLinkedLegDrag(_ leg: ScheduledEvent, owner: ActivityBlock,
+                                    requestedMinutes: Int, wholeSeries: Bool) {
+        let isReturnLeg = leg.anchor == .departure
+        if wholeSeries, let rid = leg.recurrenceId {
+            // @MX:WARN 모든 회차의 (활동, 구간, Δ)를 먼저 모은 뒤 한 번씩 옮긴다 — 조회(linkedLegs)와
+            // 이동(shiftEvent)을 회차마다 교차하면 방금 밀린 구간을 다음 회차의 추정 조회가 다시 집어
+            // 두 번 옮긴다(이동량이 회차 간격과 같을 때, N5-1 · AF-018-27).
+            var moves: [(activityId: UUID, legId: UUID, delta: Int)] = []
+            let peers = activities.filter {
+                $0.recurrenceId == rid && $0.title == owner.title && $0.location?.name == owner.location?.name
+            }
+            for occurrence in peers {
+                let (outbound, returnLeg) = linkedLegs(for: occurrence)
+                // 그 회차에 같은 역할 구간이 없으면 건너뛴다(REQ-010) — 활동을 편집하지 않는다.
+                guard let sameRole = isReturnLeg ? returnLeg : outbound else { continue }
+                // 각 회차의 Δ는 그 회차 자신의 한계(활동 길이·나열 범위)로 잘린다 — 드래그한
+                // 회차의 한계를 다른 회차에 덮어쓰지 않는다(AF-018-16: −15·−15·−10).
+                let delta = effectiveDragMinutes(leg: sameRole, owner: occurrence,
+                                                      requestedMinutes: requestedMinutes)
+                if delta != 0 { moves.append((occurrence.id, sameRole.id, delta)) }
+            }
+            guard !moves.isEmpty else { return }
+            var startMoved = false
+            for move in moves {
+                guard let idx = activities.firstIndex(where: { $0.id == move.activityId }) else { continue }
+                if isReturnLeg {
+                    activities[idx].endDate = activities[idx].endDate.addingTimeInterval(Double(move.delta) * 60)
+                } else {
+                    activities[idx].startDate = activities[idx].startDate.addingTimeInterval(Double(move.delta) * 60)
+                    startMoved = true
+                }
+                shiftEvent(move.legId, byMinutes: move.delta)
+            }
+            if startMoved { activities.sort { $0.startDate < $1.startDate } }
+            saveActivities()
+            // 회차 수와 무관하게 이벤트 저장·알림 재예약은 이 한 번으로 끝난다 — 이 함수가 save()까지
+            // 한다(rescheduleNearestNotifications의 64건 상한 재계산도 여기서 다시 걸린다).
+            rescheduleNearestNotifications()
+            return
+        }
+        // 단일 확정(REQ-011): 드래그 시작 때가 아니라 지금 저장된 값으로 유효 Δ를 정한다.
+        let delta = effectiveDragMinutes(leg: leg, owner: owner, requestedMinutes: requestedMinutes)
+        guard delta != 0, let idx = activities.firstIndex(where: { $0.id == owner.id }) else { return }
+        if isReturnLeg {
+            activities[idx].endDate = activities[idx].endDate.addingTimeInterval(Double(delta) * 60)
+        } else {
+            activities[idx].startDate = activities[idx].startDate.addingTimeInterval(Double(delta) * 60)
+            activities.sort { $0.startDate < $1.startDate }
+        }
+        shiftEvent(leg.id, byMinutes: delta)
+        saveActivities()
+        save()   // shiftEvent는 저장하지 않는다 — 여기서 한 번(저장 규율은 moveActivity와 같다).
+    }
+
+    /// 드래그로 만들 수 있는 가장 짧은 활동(REQ-006). 게이트 답변 "애초에 활동 자체를 5분으로도
+    /// 설정할 수 있게" — 폼이 이미 1분 단위라 5분 활동은 존재하며, 드래그가 그 밑으로 줄이지
+    /// 않는다. ContentView의 그리기 바닥(5분 최소 높이)과 같은 값이지만 그리기 전용 상수와
+    /// 구분해 여기 둔다(하나로 묶으면 화면 상수가 Store 격리를 끌어당긴다).
+    nonisolated static let minDraggedActivityMinutes = 5
+
+    /// 드래그 이동량을 묶는 스냅 간격(REQ-008). 제스처의 반올림과 이 한계 함수의 스냅이 같은
+    /// 상수를 읽는다 — 두 곳에 두면 한쪽만 바뀐 채 드래그 중 미리보기와 놓기 결과가 어긋난다.
+    nonisolated static let dragSnapStepMinutes = 5
+
+    /// 소유 활동이 있는 구간 드래그의 유효 Δ(REQ-006~008). 저장된 일정을 다시 찾아보지 않고
+    /// 받은 두 레코드의 시각만으로 정하는 순수 함수다(재읽기 책임은 adjustTravelLeg에 있다).
+    /// 한계는 요청 방향으로만 적용해 유효 Δ가 항상 0과 요청 사이에 둔다 — 양방향 자르기는 옛
+    /// 데이터에서 +15 요청이 −60이 되는 뜻하지 않은 반대 이동을 만든다(progress §E.1).
+    /// @MX:NOTE 끄는 중 미리보기와 드롭이 같은 한계를 읽게 단일 출처로 둔다(계약 5)
+    func effectiveDragMinutes(leg: ScheduledEvent, owner: ActivityBlock, requestedMinutes: Int) -> Int {
+        let step = Self.dragSnapStepMinutes
+        guard requestedMinutes != 0 else { return 0 }
+        // 초 단위 시각은 먼저 0쪽으로 분 잘라 쓴다(REQ-008) — 이동시간 조회가 남긴 초가 0시·자정
+        // 경계 판정을 흔들지 않게. 이후 계산은 전부 잘린 시각으로만 한다.
+        var t = leg
+        t.arrivalDate = Self.truncatedToMinute(t.arrivalDate)
+        t.departureDate = t.departureDate.map(Self.truncatedToMinute)
+        let activityStart = Self.truncatedToMinute(owner.startDate)
+        let activityEnd = Self.truncatedToMinute(owner.endDate)
+        let lengthMinutes = Int(activityEnd.timeIntervalSince(activityStart) / 60)
+        let isReturnLeg = leg.anchor == .departure
+        let calendar = Calendar.current
+
+        // REQ-007의 나열 범위(F·L). 나열 판정은 isListed(반열린 겹침)의 규칙을 그대로 따른다 —
+        // 여기서 다른 규칙을 쓰면 화면 나열과 드래그 한계가 어긋난다(계약 5). 경고 블록(이동시간
+        // 미계산)과 깨진 레코드는 나열 시각(앵커/도착) 하나만 한계에 들어간다(N4-1).
+        let span = t.listedSpan
+        let listingTime = t.failedBlockAnchor ?? t.arrivalDate
+        let firstListed = calendar.startOfDay(for: span?.start ?? listingTime)
+        var lastListed = firstListed
+        if let span {
+            let lastPossible = calendar.startOfDay(for: span.end)
+            var day = firstListed
+            while let next = calendar.date(byAdding: .day, value: 1, to: day), next <= lastPossible {
+                day = next
+                if t.isListed(on: day, calendar: calendar) { lastListed = day }
+            }
+        }
+
+        if requestedMinutes < 0 {
+            // 위로(Δ<0): 줄이는 방향의 한계만 적용한다.
+            var low = requestedMinutes
+            if isReturnLeg {
+                // 오는 편을 위로 끌면 활동 끝이 줄어든다 — 결과 길이가 5분 밑으로 내려가면 안 된다.
+                // 이미 5분 미만인 활동은 min(0, …)이 0이 되어 어떤 줄임도 거절한다(REQ-006).
+                low = max(low, min(0, Self.minDraggedActivityMinutes - lengthMinutes))
+            }
+            if let span {
+                // 나열되는 날이 바뀌지 않아야 한다(REQ-007 위로 넘기기는 첫 나열일 0시에서 멈춤):
+                // 새 출발 ≥ F 시작(비엄격) · 새 도착 > L 시작(엄격 — 0시에 정확히 닿으면 반열린
+                // 규칙에서 그 날 나열이 빠진다).
+                low = max(low, Int(firstListed.timeIntervalSince(span.start) / 60))
+                low = max(low, Int(lastListed.timeIntervalSince(span.end) / 60) + 1)
+            } else {
+                // 경고 블록·깨진 레코드의 위쪽 한계는 비엄격 — 나열 시각이 그 날 0시에 정확히
+                // 닿아도 된다(N5-4).
+                low = max(low, Int(firstListed.timeIntervalSince(listingTime) / 60))
+            }
+            return max(requestedMinutes, low) / step * step
+        }
+
+        // 아래로(Δ>0): 늘리는 방향의 한계만 적용한다.
+        var high = requestedMinutes
+        if !isReturnLeg {
+            // 가는 편을 아래로 끌면 활동 시작이 줄어든다(끝은 고정) — 오는 편과 대칭 산식.
+            high = min(high, max(0, lengthMinutes - Self.minDraggedActivityMinutes))
+        }
+        // 새 (나열) 시각이 끌기 전 첫 나열일 F의 다음 날 끝을 넘지 않아야 한다(REQ-007). 계산된
+        // 구간은 도착이 상한에 정확히 닿아도 되고(AF-018-26: 도착 D+2 00:00), 경고 블록·깨진
+        // 레코드는 엄격(그 전)이다. 상한을 이미 넘은 구간(이틀 넘게 걸친 옛 데이터)은 max(0, …)의
+        // 0에서 멈춘다 — 대칭 자르기처럼 반대 방향으로 넘기지 않는다(AF-018-25).
+        let downwardTime = span?.end ?? listingTime
+        if let dayAfterF = calendar.date(byAdding: .day, value: 1, to: firstListed),
+           let dayEnd = calendar.dateInterval(of: .day, for: dayAfterF)?.end {
+            let strictness = span == nil ? 1 : 0
+            high = min(high, max(0, Int(dayEnd.timeIntervalSince(downwardTime) / 60) - strictness))
+        }
+        return min(requestedMinutes, high) / step * step
+    }
+
+    /// 시각을 0쪽으로 분 단위로 자른다(REQ-008 "초 단위 시각은 먼저 분으로 자른다").
+    /// effectiveDragMinutes가 처음에 한 번만 불러 경계 판정 전에 초를 없앤다.
+    nonisolated private static func truncatedToMinute(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: (date.timeIntervalSince1970 / 60).rounded(.towardZero) * 60)
+    }
+
+    /// 같은 반복 그룹(activity의 recurrenceId)에서 그 활동과 앵커 시각이 정확히 같은, 그 활동
+    /// 장소로 향하는(도착형)/그 활동 장소에서 출발하는(출발형) 이동 구간을 찾는다. 명시적 링크
+    /// 필드 없이 시각+장소로 추정한다(REQ-016 정확 대조).
     private func linkedLegs(for activity: ActivityBlock) -> (arrival: ScheduledEvent?, departure: ScheduledEvent?) {
         // 명시적으로 묶인 구간이 있으면 그걸 쓴다(수동으로 활동+이동을 같이 만든 경우).
         let explicit = explicitLegs(of: activity.id)
@@ -1421,15 +1610,23 @@ final class Store: ObservableObject {
         return estimatedLegs(for: activity)
     }
 
-    /// 옛 반복 일정 데이터는 명시적 연결이 없어 날짜+장소 이름으로 추정한다 — 이 추정 분기를 한
-    /// 곳에 둬 linkedLegs(활동 이동)와 packingGroups(배치 묶음)가 **같은 코드**를 읽게 한다
-    /// (추정 복제 금지, AC-015 (12)).
+    /// 옛 반복 일정 데이터는 명시적 연결이 없어 추정해 짝을 짓는다 — 이 추정 분기를 한 곳에 둬
+    /// linkedLegs(활동 이동)와 packingGroups(배치 묶음)가 **같은 코드**를 읽게 한다(추정 복제
+    /// 금지, AC-015 (12)). 대조는 정확한 앵커 시각뿐이다(REQ-016): 가는 편은 구간 도착 = 활동
+    /// 시작, 오는 편은 구간 출발 = 활동 끝(출발이 없으면 성립하지 않는다). 같은 날 근사 폴백은
+    /// 쓰지 않는다 — 운영자 2차 Q-6("자정을 넘겨도 가는 이동과 오는 이동까지 한 묶음")의 연결은
+    /// 정확 대조로만 유지되고, 시각이 1초라도 다른 구간(옛 틈 회차)은 단독으로 남는 것이 결정된
+    /// 동작이다(0.7.0 정확 대조만 — 카드 t50).
     private func estimatedLegs(for activity: ActivityBlock) -> (arrival: ScheduledEvent?, departure: ScheduledEvent?) {
         guard let rid = activity.recurrenceId, let placeName = activity.location?.name else { return (nil, nil) }
-        let cal = Calendar.current
-        let sameDay = events.filter { $0.recurrenceId == rid && cal.isDate($0.arrivalDate, inSameDayAs: activity.startDate) }
-        let arrivalLeg = sameDay.first { ($0.anchor ?? .arrival) == .arrival && $0.destination.name == placeName }
-        let departureLeg = sameDay.first { $0.anchor == .departure && $0.origin?.name == placeName }
+        let arrivalLeg = events.first {
+            $0.recurrenceId == rid && ($0.anchor ?? .arrival) == .arrival
+                && $0.destination.name == placeName && $0.arrivalDate == activity.startDate
+        }
+        let departureLeg = events.first {
+            $0.recurrenceId == rid && $0.anchor == .departure
+                && $0.origin?.name == placeName && $0.anchorComparisonTime == activity.endDate
+        }
         return (arrivalLeg, departureLeg)
     }
 
@@ -1824,5 +2021,17 @@ final class Store: ObservableObject {
         guard let data = try? Data(contentsOf: eventsURL),
               let decoded = try? JSONDecoder().decode([ScheduledEvent].self, from: data) else { return }
         events = decoded.sorted { $0.arrivalDate < $1.arrivalDate }
+    }
+}
+
+private extension ScheduledEvent {
+    /// 소유 대조(estimatedLegs·owningActivity의 동률 필터)가 읽는 구간의 앵커 쪽 시각. 출발
+    /// 기준은 departureDate ?? arrivalDate다 — 첫 회차 이동시간 추정이 실패하면 addRecurringEvents의
+    /// .departure 갈래가 2회차부터 추정 함수를 부르지 않아 departureDate가 nil로 남고, 그 회차의
+    /// 출발 시각은 arrivalDate에 있다(failedBlockAnchor가 쓰는 규칙과 같다, Models.swift). 이 헬퍼가
+    /// 없으면 그런 회차의 복귀 구간이 영영 짝을 잡지 못해 묶음이 풀린다(t43 fix1-②, sync F3).
+    /// 도착 기준 갈래는 arrivalDate 그대로다.
+    var anchorComparisonTime: Date {
+        (anchor ?? .arrival) == .departure ? (departureDate ?? arrivalDate) : arrivalDate
     }
 }
