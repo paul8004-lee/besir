@@ -265,7 +265,7 @@
 
 ### ③ 파일 · ④ 그대로 두는 것 · ⑤ 확인할 것
 
-`Store`·`ContentView`·`GuardDriver`(고쳐 쓰기 4 · 추가 24) · `spec.md` §3 · 시뮬레이터 S-1~S-11·S-13·S-14·S-16~S-18.
+`Store`·`ContentView`·`GuardDriver`(고쳐 쓰기 5 · 추가 25, T = B + 25 = 523) · `spec.md` §3 · 시뮬레이터 S-1~S-11·S-13·S-14·S-16~S-18.
 
 ## 10. MX 태그 계획
 

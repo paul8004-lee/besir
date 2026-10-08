@@ -10,7 +10,7 @@
 - **범위**: 이 SPEC 디렉터리 밖에는 쓰지 않았다. 코드·빌드·드라이버 실행·커밋을 하지 않았다.
 - **게이트 표식**: `plan.md` §2에 4건(D-3·D-4·D-6·D-8), `research.md` §7에 같은 4건. `spec.md`·`acceptance.md` 0건.
 - **일관성 재독**: 다섯 파일을 한 번 다시 읽고 REQ↔AC 추적(REQ 14개 모두 AC 매트릭스에 1회 이상), 게이트 표식 위치, 시간 추정 없음, 번역투 비유어 없음을 아래 명령으로 확인했다.
-- **plan_status(현재)**: **0.6.3 draft** — 0.6.1이 감사 5회차(FAIL 0.75)를 받았고 0.6.2(N5-1 수리)·0.6.3(문서 수리)은 미감사. 아래 "0.6.3 개정" 절이 현재, 그 앞의 판별 절과 이하 줄은 그 시점 기록.
+- **plan_status(현재)**: **0.7.3 draft** — 0.6.1이 감사 5회차(FAIL 0.75)를 받았고 0.6.2 이후(0.6.3·0.7.0~0.7.3)는 미감사. 아래 "0.7.3 개정" 절이 현재(T = B + 25 = 523), 그 앞의 개정 절과 이하 줄(0.6.3 포함)은 그 시점 기록.
 - **plan_status(0.4.1 기록)**: audit-ready — **0.4.1**(재감사 4회차 차단 결함 N4-1 수리, `.moai/reports/plan-audit/SPEC-UIKIT-012-review-4.md`; 이전: 0.4.0 감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
 
 ### 관측된 증거 — 이 레인이 직접 돌린 명령
@@ -712,6 +712,30 @@ REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의
 | `git diff --stat HEAD -- .moai/specs/SPEC-UIKIT-012`(이 절 쓰기 전) | acceptance 10 · plan 21 · research 8 · spec 12 — 4 files changed |
 
 **검증하지 못한 것**: S-14 기대값(−15)은 나열 규약(반열린 `isListed`)에서 손계산이다 — AF-018-10의 "Δ > −10 → −5" 패턴과 같은 식(Δ > −20 → −15). 실행 확인은 드라이버 격자(AF-018-23·25·26)와 시뮬레이터 S-14가 한다. 드라이버·빌드는 기준(변경 전)만 돌렸다.
+
+### 0.7.3 개정 — fix1: sync 차단·회귀 수리 (2026-10-08, 미감사)
+
+근거: sync 증거 `.moai/reports/t43/sync-verdict.md`(커밋 `183e07f`)가 낸 차단 1(자동 스크롤 띠 좌표 — `ContentView.swift` `autoScrollTick`)·회귀 1(출발 없는 복귀 구간의 짝 상실 — `Store.swift` `estimatedLegs`)·주의 1(활동 span의 초 처리)을 리드가 이 카드에서 수리하기로 했다(지시서 `.moai/reports/t43/fix1-brief.md`). 수리 증거 원문은 `.moai/reports/t43/run-progress.md` §5, 재검증은 `sync-verdict.md` §7(커밋 `ad98079`).
+
+**바꾼 곳**
+- 코드 `954bb68`(① 띠 좌표를 `- scroll.contentOffset.y`로 보이는 창 기준으로·양쪽 띠 속도를 `±autoScrollMaxSpeed`로 자름·`AutoScrollProxy.tick`이 대상 없으면 `link.invalidate()` · ③ 활동 `span`을 분 단위로 내림) · `8bb15cf`(② `anchorComparisonTime` = 출발 기준 `departureDate ?? arrivalDate`·도착 기준 `arrivalDate`, `estimatedLegs`의 출발 대조와 `owningActivity`의 동률 필터가 같은 헬퍼를 읽음 · 드라이버 AF-018-21b 고쳐 쓰기 + AF-018-29 추가).
+- SPEC 0.7.3(`spec.md` HISTORY 0.7.3 행): REQ-004·REQ-016의 대조 시각 문구 · §0 단언 수 · REQ-013 · `plan.md` §5·D-10 표 · `research.md` §10 표(생성 시 첫 회차 추정 실패 행) · `acceptance.md` AC-011·AC-015. 요구 문장의 개수는 그대로다.
+- 이 절 쓰기와 함께(문서만): `plan.md` §9 ③의 단언 수를 현재 수치로, 위 `plan_status(현재)` 줄을 0.7.3으로.
+
+**현재 수치**: REQ **16** · AC **15** · 드라이버 단언 — 고쳐 쓰기 **5**(AF-018-02·03·21b, AF-015-09·11) · 추가 **25**(AF-018-04~27 + **AF-018-29**; 번호 28은 카드 t48 인계 문서가 쓰므로 비운다) · **T = B + 25**(B = 498이면 **523**). 위 0.2.0~0.7.2 개정 절과 §E.2·§E.3의 `B + 24`·522는 그 시점의 기록이다(§E.3의 하한 522는 `ee8b742` 마감 시점 — fix1 뒤 하한은 523, 드라이버 머리 주석에 반영됨).
+
+**관측된 증거** (출처를 갈라 적는다 — 이 레인은 명령을 돌리지 않았고, 아래는 각 증거 파일의 원문 요약이다)
+
+| 무엇 | 출처 | 요지 |
+|---|---|---|
+| 드라이버 523/523 · exit 0 · ✗ 0 | `run-progress.md` §5.4(오케스트레이터 관측, 로그 `.moai/state/verify/t43/fix1/driver-fix1-orchestrator.log`) | CLAUDE.md 블록 그대로, 실제 데이터 대조 통과, 샌드박스 잔여 없음 |
+| 옛 규칙이면 AF-018-29만 실패 | `sync-verdict.md` §7.4(sync 레인 관측) | 실제 드라이버를 옛 규칙 Store 사본에 독립 경로로 돌려 `522/523`·✗ AF-018-29 하나 |
+| 좌표 하네스(고친 식) | `sync-verdict.md` §7.1(sync 레인 관측) · `run-progress.md` §5.1 | offset 448 가운데 1833 → 0, 아래 가장자리 4250 → 516.67, 영역 밖 ±600 |
+| F3 · 동률 · 밤샘 모양 | `sync-verdict.md` §7.2 | 수리 Store에서 `owner=true packed=true`·+1800초, 옛 규칙 사본에서는 실패 |
+| 활동 span 항등 | `sync-verdict.md` §7.3 | 초 0 데이터 5,174,850건 기준(`b59fcaa`)과 불일치 0 |
+| iOS 빌드 · 해시 | `run-progress.md` §5.4 | `BUILD SUCCEEDED` · 경고 필터 뒤 0건 · `moveActivity` `ab65d72c…`·`realignReturnLeg` `a6ca6f17…` 무변경 |
+
+**검증하지 못한 것**: 시뮬레이터·실기기 관측 전부(S-1~S-18 — 특히 S-16은 **스크롤한 뒤에** 끄는 경우를 본다) · 끌리는 구간 자신의 미리보기 `span`이 초를 소수 분으로 쓰는 비대칭(초가 0이 아닌 데이터에서만, 1pt 미만 — `sync-verdict.md` §7.6, 고치지 않음) · 드라이버가 "출발 nil · arrival == 끝 · 동률" 모양을 고정하지 않는 것(동작은 확인됨, 단언 없음 — 같은 곳).
 
 ## §E.2 Run-phase Evidence
 
