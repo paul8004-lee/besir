@@ -10,7 +10,8 @@
 - **범위**: 이 SPEC 디렉터리 밖에는 쓰지 않았다. 코드·빌드·드라이버 실행·커밋을 하지 않았다.
 - **게이트 표식**: `plan.md` §2에 4건(D-3·D-4·D-6·D-8), `research.md` §7에 같은 4건. `spec.md`·`acceptance.md` 0건.
 - **일관성 재독**: 다섯 파일을 한 번 다시 읽고 REQ↔AC 추적(REQ 14개 모두 AC 매트릭스에 1회 이상), 게이트 표식 위치, 시간 추정 없음, 번역투 비유어 없음을 아래 명령으로 확인했다.
-- **plan_status**: audit-ready — **0.4.1**(재감사 4회차 차단 결함 N4-1 수리, `.moai/reports/plan-audit/SPEC-UIKIT-012-review-4.md`; 이전: 0.4.0 감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
+- **plan_status(현재)**: **0.5.0 draft, 미감사** — 아래 "0.5.0 개정" 절과 §G. 이하 줄은 0.4.1 시점 기록.
+- **plan_status(0.4.1 기록)**: audit-ready — **0.4.1**(재감사 4회차 차단 결함 N4-1 수리, `.moai/reports/plan-audit/SPEC-UIKIT-012-review-4.md`; 이전: 0.4.0 감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
 
 ### 관측된 증거 — 이 레인이 직접 돌린 명령
 
@@ -260,6 +261,100 @@
 | `ls .moai/specs/SPEC-UIKIT-012` | `acceptance.md plan.md progress.md research.md spec.md` | 임시 스크립트를 남기지 않았다 |
 
 **검증하지 못한 것**: 스크립트는 술어를 옮겨 적은 것이라 앱 코드 자체를 실행하지 않았다(드라이버·빌드 미실행). 최소 길이 한계(REQ-006)는 이 격자에 넣지 않았다 — 소유 활동 없이 자정 한계만 쟀다.
+
+### 0.5.0 개정 — 운영자 게이트 답변 반영 (2026-10-08, 미감사)
+
+**plan_status: draft — 0.5.0 미감사(독립 감사 없음).** 게이트 4건은 답변됨(표식 제거), 새 열린 질문 Q-1~Q-9는 착수 승인 몫. 현재 수치: REQ 16 · AC 15 · AF-018-01~28 + AF-015-09·11 고쳐 쓰기 · **T = B + 25**(B = 498이면 523). 위 절들의 `B + 22` 등은 그 시점 기록이다.
+
+#### 0.5.0 실측 표
+
+| 명령 | 관측된 출력 | 쓰인 곳 |
+|---|---|---|
+| `git rev-parse --short HEAD` | `6cabc93`(코드는 `b59fcaa`와 같음 — 아래 `shasum` 동일) | 기준 |
+| `ID="SPEC-UIKIT-012"; [[ "$ID" =~ ^SPEC(-[A-Z][A-Z0-9]*)+-[0-9]{3}$ ]] && echo PASS \|\| echo FAIL` | `PASS` | frontmatter |
+| `wc -l Shared/ContentView.swift Shared/Store.swift Tools/GuardDriver.swift Shared/Models.swift Shared/GoogleCalendarService.swift` | `972` · `1828` · `5366` · `707` · `442` | spec §0 |
+| `grep -n '1440\|ForEach(0..<24\|24 \* hourHeight\|scrollDisabled\|class ScrollTouchFixView\|struct RescheduleOverlay\|…' Shared/ContentView.swift` | 클립 `:549`·`:578` · 눈금 `:420`·`:429` · 높이 `:483`·`:485` · 잠금 `:494`·`:408` · `:854` · `:877` · `ScrollViewReader`/`scrollTo` 0건 | REQ-009·015 · D-11 |
+| `awk '/func span\(for activity/,/^    }$/' … \| grep -v '^ *//' \| grep -c '1440'` · 같은 꼴 `span(for event` | `1` · `1` | AC-007 양성 대조 |
+| `grep -c 'ForEach(0..<24' Shared/ContentView.swift` · `grep -c '24 \* hourHeight' …` | `2` · `2` | AC-013 양성 대조 |
+| `awk '/func updateRecurringSeries/,/^    }$/' Shared/Store.swift \| grep -n 'googleEventId = nil\|removeFromCalendar(\|enqueueCalendarUpload(\|if googleConnected'` | `50: if googleConnected` · `57: … googleEventId = nil` · `59: await removeFromCalendar(gids)` · `61: enqueueCalendarUpload(eventIDs: ids)` | AC-014 순서 양성 대조 |
+| `awk '/func updateActivity\(/,/^    }$/' … \| grep -c 'Task {'` · 같은 꼴 `adjustTravelLeg` | `1` · `0` | AC-014 |
+| `git show b59fcaa:Shared/ContentView.swift \| awk '/private func offsetY/,…/' \| shasum` · 작업 트리 같은 꼴 · `finalizeDrag` 둘 | `2cd32a58…` · `2cd32a58…` · `3027e8ee…` · `3027e8ee…` | AC-007(N4-7 — `diff <(…)` 대체) |
+| `awk '/private func estimatedLegs/,/^    }$/' Shared/Store.swift \| grep -c 'inSameDayAs'` · 같은 범위 `grep -c 'arrivalDate == activity.startDate\|departureDate == activity.endDate'` | `1` · `0` | AC-015 양성 대조 |
+| `awk 'NR==1073\|\|NR==1080\|\|NR==1082\|\|NR==1084\|\|NR==1434' Shared/Store.swift` | `if googleConnected {` · gid 비우기 · `await removeFromCalendar(gids)` · `enqueueCalendarUpload(eventIDs: ids)` · `}` | spec §1.2 · D-6 |
+| `sed -n 1172,1233p Shared/Store.swift` · `sed -n 52,72p Shared/SettingsView.swift` | 업로드 실패 `.failed`(`:1199`·`:1224`) · 설정 "캘린더에 못 올린 항목 N건"·"다시 시도"(`:61-64`) | REQ-012 |
+| `grep -n 'googleConnected\|AF-015-11' Tools/GuardDriver.swift` | `:1490` 주석 · `:1497` `!store.googleConnected` 단언 · `:4321` | AC-014 · D-10 |
+| `sed -n 4268,4299p Tools/GuardDriver.swift` | L 오는 편 출발 = L 끝(`:4291-4294`), AF-015-09 집합 `:4295-` | D-10 (A) 핀 뒤집힘 |
+| `sed -n 150,175p Shared/AddActivityView.swift` | 종료 ≤ 시작이면 거절, 그 밖 허용 | REQ-006 |
+| `sed -n 140,150p /Users/iseongmin/Projects/besir/.claude/rules/moai/workflow/spec-workflow.md` | Tier M 요구 16 · 수락 기준 16(서로 독립) | Tier |
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` · `grep -o 'AF-018-[0-9][0-9]' plan.md \| sort -u \| wc -l` | `16` · `15` · `28` | REQ-013 |
+| `grep -c 'NEEDS CLARIFICATION'` spec · acceptance · plan · research | `0` · `0` · `9` · `9` | 열린 질문 위치 |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md \| sort \| uniq -c` | spec 2 · plan 2 · acceptance 1, 모두 `B + 25` | T 일치 |
+| `grep -c '축\|기둥'`(네 파일) | 모두 `0` | 문체 |
+| `wc -l *.md`(SPEC 디렉터리) | acceptance 231 · plan 361 · progress(이 절 전) 274 · research 126 · spec 252 | 보고 |
+
+**자가 점검 스크립트**: `/private/tmp/claude-501/-Users-iseongmin-Projects-besir/a2ac6679-46a7-4926-9b74-35c2f672850f/scratchpad/v050/check.swift`. 앱 술어(`Store.overlapsDay`, `failedBlockAnchor`, `listedSpan`, `isListed(on:)`)를 옮겨 적고 0.5.0 한계(`plan.md` D-3·D-4)와 양성 대조 두 규칙(대칭 자르기, 아래 상한 없음)을 구현했다. 달력 Asia/Seoul. SPEC 디렉터리에 썼다가 `mv`로 scratchpad로 옮긴 뒤 `swiftc -o …/check …/check.swift`(출력 없음) → 실행:
+
+```text
+(c) AF 기대값
+  AF-018-06 1h 오는 편 -60 -> -55
+  AF-018-07 3분 활동 가는 편 +5 -> 0 | -15 -> -15
+  AF-018-08 22:00-23:00 오는 편 23:00->23:20 +90 -> 90
+     드롭 뒤 구간 나열 D/D+1: false true | 활동(22:00-다음날 00:30) 나열 D/D+1: true true
+  AF-018-09 가는 편 00:20->00:40 -30 -> -20
+  AF-018-10 걸친 오는 편 +15 -> 15 | 새 픽스처 -15 -> -5 | 밤샘 가는 편 21:40->22:00 -30 -> -30
+  AF-018-16 길이 60/60/15 오는 편 -15 -> [-15, -15, -10]
+  AF-018-24 사본 -45 -> 끄는 값 -30 | 현재 값으로 드롭 -20 | 사본 기준이었다면 -30
+  AF-018-25 (a) 이틀 넘는 오는 편 +15 -> 0 | -15 -> -15 | 대칭 자르기였다면 +15 -> -60 , -5 -> -60
+  AF-018-25 (b) 경고 블록(출발 23:50·옛 도착 00:10) +15 -> 15 | -15 -> -15
+  AF-018-26 오는 편 23:00->23:20 +1500 -> 1480
+     드롭 뒤 나열 D/D+1/D+2: false true false
+  AF-018-14 경고 가는 편(정오) +15/-15 -> 15 -15
+  S-14 2시간 활동(21:40-23:40), 오는 편 23:40->다음날 00:B, 1시간 위: ["B=1 e=0 도착 0:01", "B=5 e=0 도착 0:05", "B=7 e=-5 도착 0:02", "B=10 e=-5 도착 0:05", "B=25 e=-20 도착 0:05"]
+(b) v050 격자 522720건: downBeyond=0 minLen=0 opposite=0 overshoot=0 upChanged=0
+(b) symmetric 격자 522720건: downBeyond=0 minLen=30888 opposite=35640 overshoot=55660 upChanged=34920
+(b) noCap 격자 522720건: downBeyond=33748 minLen=0 opposite=0 overshoot=0 upChanged=0
+```
+
+격자: 출발 분 11개 × 도착 날 {0,1,2} × 도착 분 11개 × 이동시간 {있음, 없음} × 앵커 2 × 활동 길이 {3,5,20,60,180} × 요청 ±5…±180(5분 간격). 0.5.0은 다섯 성질(반대 부호·요청 초과·위로 나열 변경·아래로 F+1 초과·최소 길이 위반) 모두 0건이고, 같은 격자가 대칭 자르기와 상한 없음 규칙의 위반을 잡는다(양성 대조). AF-018-27·28과 AF-015-09·11은 Store 함수를 부르므로 이 스크립트 밖이다(코드 읽기로 기대를 정했다). 스크립트는 SPEC 디렉터리에 남기지 않았다(`ls` → 다섯 파일).
+
+## §G 0.5.0 개정 요약
+
+### G.1 사라진 것 · 새로 생긴 것 · 바뀐 것
+
+명령(이 레인 실행): `git show HEAD:<파일>`로 0.4.1 본문을 임시 파일로 떨어뜨리고 `grep -o '^- \*\*REQ-[0-9]*'`·`'^## AC-[0-9]*'`·`'^| AF-01[58]-[0-9]*'`·`'^| S-[0-9]*'`로 식별자를 뽑아 `comm`으로 비교한 뒤 임시 파일을 지웠다. 출력:
+
+```text
+== req old=14 new=16 removed: (없음) added: REQ-015 REQ-016
+== ac old=12 new=15 removed: (없음) added: AC-013 AC-014 AC-015
+== af old=25 new=30 removed: (없음) added: AF-015-09 AF-015-11 AF-018-26 AF-018-27 AF-018-28
+== s old=14 new=15 removed: (없음) added: S-15
+```
+
+(AF-015-09·11은 단언 수로는 새 것이 아니라 기존 핀의 제자리 고쳐 쓰기다 — 표에 새로 오른 것.) **번호가 사라진 것은 0건**이고, 내용이 뒤집히거나 다시 쓰인 것은 다음과 같다(손 분류, `plan.md` §11·`spec.md` §1.5):
+
+| 구분 | 목록 | 수 |
+|---|---|---|
+| 다시 씀(뜻이 바뀜) | REQ-006·007·008·012 · AC-004·005·009 · AF-018-06·07·08·23·25 · S-5·6·12·13·14 | 4 · 3 · 5 · 5 |
+| 바뀜(일부) | REQ-003·004·005·009·013·014 · AC-006·007·010·011·012 · AF-018-10·16·24 · AF-015-09·11 | 6 · 5 · 5 |
+| 유지 | REQ-001·002·010·011 · AC-001·002·003·008 · AF-018-01~05·09·11~15·17~22 · S-1~4·7~11 | 4 · 4 · 18 · 9 |
+| 새로 | REQ-015·016 · AC-013·014·015 · AF-018-26·27·28 · S-15 | 2 · 3 · 3 · 1 |
+| 뒤집힌 대조 | 0.4.1 AC-010 "adjustTravelLeg 안 구글 호출 0" → AC-014 "`Task` 1 · `removeFromCalendar(` 1 · `enqueueCalendarUpload(` 1 · 순서" | 1 |
+
+### G.2 규모와 분할
+
+Tier M 유지(REQ 16 · AC 15 — 각각 상한 16, 서로 독립). 파일 3개(Store · ContentView · GuardDriver), `GoogleCalendarService.swift` 무변경. 분할 비교 표는 `plan.md` §12 — X 한 장(16·15, 버리는 코드 없음, 상한 끝) / Y 두 장(①15·14 ②3·3, 버리는 것 대조 한 줄) / Z 세 장(0.4.1 막기 규칙을 구현하고 버림). 이 레인의 기울기는 Y(권고만, 결정은 운영자 — Q-8).
+
+### G.3 열린 질문과 〔가정〕
+
+열린 질문(`plan.md` §2 끝 · `research.md` §8): Q-1 그리기 높이 · Q-2 폼 분 간격 · Q-3 위로 대칭 연장 · Q-4 자동 스크롤 · Q-5 연장 상한 · Q-6 넘긴 추정 구간 · Q-7 구글 반복과 호출 수 · Q-8 분할 · Q-9 연장 대상.
+
+〔가정〕: D-3 드래그 최소 = 5분, 그리기 20분 유지 · D-4 해석 (1)~(3) · 위로는 나열 불변 · 아래 상한 = F 다음 날 끝 · 경고 블록은 나열 시각 하나 · D-6 반복 "전체" 포함 · 재등록은 gid 있던 레코드만(`updateActivity`처럼 autoAdd 무관) · D-11 자동 스크롤 없음(리드 지시) · 연장은 연결된 구간 드래그만 · "드롭당 추적 `Task`" = 실패가 묘비·`.failed`로 남는 `Task` 하나(별도 보관 속성은 요구하지 않음).
+
+### G.4 실행한 검증 · 못 한 검증
+
+실행: 위 0.5.0 실측 표의 명령 전부, 자가 점검 스크립트(AF 기대값 + 격자 522,720건 × 세 규칙), 식별자 `comm` 비교, 인용 줄 점검(`awk 'NR==…'`로 새로 단 인용을 읽어 `:469`·`:4291-4294`를 고쳤다).
+
+못 한 것: 드라이버·iOS 빌드·시뮬레이터(코드 무변경 단계). 구글 연결 갈래의 실제 동작·호출 수·할당량(구글 할당량 수치는 조회하지 않았다). 끄는 중 손가락이 스크롤 영역 밖에서도 위치를 보고하는지, `scrollDisabled` 상태의 프로그램 스크롤(〔가설〕). 폼의 분 간격(Q-2). AF-018-27·28·AF-015-09·11의 기대는 코드 읽기다. 독립 감사 없음.
 
 ## §E.2 Run-phase Evidence
 

@@ -92,11 +92,35 @@
 
 SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 
-## 7. 열린 질문 (plan.md §2와 같은 목록)
+## 7. 0.5.0 추가 조사 (게이트 답변 반영)
 
-- [NEEDS CLARIFICATION: 최소 활동 길이 — 권장 20분(대안 5분이면 그리기 최소 높이 20은 그리기 전용 상수로 따로 둔다)]
-- [NEEDS CLARIFICATION: 자정 넘기기 — 권장 막기(나열되는 날 집합 불변 — 예: 23:00 끝 + 귀가 40분이면 최대 +15, 셋째 안 "반복 추정 구간만 막기"는 규칙이 둘이 된다)]
-- [NEEDS CLARIFICATION: 구글 캘린더 반영 — 권장 반영하지 않음, 별도 카드]
-- [NEEDS CLARIFICATION: 동결된 SPEC-UIKIT-009 처리 — 권장 파일 무수정, 이 SPEC이 대체 기록]
+0.4.1의 게이트 4건은 운영자가 답했다(`plan.md` D-3·D-4·D-6·D-8). 아래는 답변이 새로 닿게 한 코드다. 앞 절(§2~§6)은 0.4.1 시점 기록이고, §5의 "구글에 올리지 않는다"는 0.5.0에서 뒤집혔다.
+
+| 사실 | 자리 | 쓰인 곳 |
+|---|---|---|
+| 그리는 날 끝이 리터럴 `1440` | `ContentView.swift:549`·`:578` | REQ-009·015 |
+| 하루 높이·눈금이 24시간 고정 | `ForEach(0..<24)` `:420`·`:429`, `24 * hourHeight` `:483`·`:485` | REQ-015 |
+| 드래그 중 스크롤·날짜 넘김 잠금, 자동 스크롤 없음 | `:494` · `:408` · `ScrollViewReader`/`scrollTo` 0건 | D-11 |
+| 손가락 이동량 → 분(시작점 대비) | `:463-466`, 오버레이 `:877-970`, `hourHeight = 56` `:37` | D-11 도달성 |
+| 조상 `UIScrollView`를 찾는 유일한 자리 | `ScrollTouchFixView` `:854-863` | D-11 (ii) |
+| 추정 대조가 같은 날만 | `estimatedLegs` `Store.swift:1427-1434`(`:1430`), `@MX:WARN` `:436`, 핀 AF-015-09·11 `Tools/GuardDriver.swift:4295-4323` | D-10 |
+| AF-015 L 오는 편은 출발 == L 끝 | `Tools/GuardDriver.swift:4291-4294` | D-10 (A)가 핀을 뒤집는 근거 |
+| 구글 선례 | `removeFromCalendar` `Store.swift:97-103`(묘비 먼저) · `updateRecurringSeries` `:1073-1085`(gid 모으기·먼저 비우기·삭제 한 번·큐 한 번) · `updateActivity` `:282-299` · `enqueueCalendarUpload` `:1113-1148` · 실패 `.failed` `:1196-1201`·`:1222-1226` · 설정 `SettingsView.swift:61-64` | D-6 |
+| 드라이버는 구글 미연결 | `Tools/GuardDriver.swift:1490-1497`, `googleConnected` 계산 속성 `Store.swift:790` | AC-014 |
+| 폼은 종료 > 시작만 요구 | `AddActivityView.swift:150-158` | D-3 |
+
+자가 점검 스크립트와 그 출력은 `progress.md` §E.1 0.5.0 표.
+
+## 8. 열린 질문 (plan.md §2 끝과 같은 목록)
+
+- [NEEDS CLARIFICATION: Q-1 그리기 최소 높이 20분 유지(〔가정〕) / 5분으로 줄임]
+- [NEEDS CLARIFICATION: Q-2 폼의 분 간격이 5분 단위인지 — 미확인]
+- [NEEDS CLARIFICATION: Q-3 위로 넘기기의 대칭 연장]
+- [NEEDS CLARIFICATION: Q-4 끄는 중 자동 스크롤 (i)/(ii)/(iii) — (i)은 "보이도록"을 채우지 못한다]
+- [NEEDS CLARIFICATION: Q-5 연장 상한 — 끄는 날 다음 날 끝(〔가정〕)]
+- [NEEDS CLARIFICATION: Q-6 넘긴 반복 추정 구간 (A)/(B)/(C)]
+- [NEEDS CLARIFICATION: Q-7 구글 반복 "전체" 적용과 최악 520회 호출]
+- [NEEDS CLARIFICATION: Q-8 카드 분할 X/Y/Z]
+- [NEEDS CLARIFICATION: Q-9 활동 드래그·연결 없는 구간의 연장 여부]
 
 🗿 MoAI
