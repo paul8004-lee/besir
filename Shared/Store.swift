@@ -438,7 +438,7 @@ final class Store: ObservableObject {
         }
         guard candidates.count > 1 else { return candidates.first }
         let exact = candidates.filter { candidate in
-            leg.anchor == .departure ? leg.departureDate == candidate.endDate
+            leg.anchor == .departure ? leg.anchorComparisonTime == candidate.endDate
                                      : leg.arrivalDate == candidate.startDate
         }
         return exact.count == 1 ? exact[0] : nil
@@ -1625,7 +1625,7 @@ final class Store: ObservableObject {
         }
         let departureLeg = events.first {
             $0.recurrenceId == rid && $0.anchor == .departure
-                && $0.origin?.name == placeName && $0.departureDate == activity.endDate
+                && $0.origin?.name == placeName && $0.anchorComparisonTime == activity.endDate
         }
         return (arrivalLeg, departureLeg)
     }
@@ -2021,5 +2021,17 @@ final class Store: ObservableObject {
         guard let data = try? Data(contentsOf: eventsURL),
               let decoded = try? JSONDecoder().decode([ScheduledEvent].self, from: data) else { return }
         events = decoded.sorted { $0.arrivalDate < $1.arrivalDate }
+    }
+}
+
+private extension ScheduledEvent {
+    /// 소유 대조(estimatedLegs·owningActivity의 동률 필터)가 읽는 구간의 앵커 쪽 시각. 출발
+    /// 기준은 departureDate ?? arrivalDate다 — 첫 회차 이동시간 추정이 실패하면 addRecurringEvents의
+    /// .departure 갈래가 2회차부터 추정 함수를 부르지 않아 departureDate가 nil로 남고, 그 회차의
+    /// 출발 시각은 arrivalDate에 있다(failedBlockAnchor가 쓰는 규칙과 같다, Models.swift). 이 헬퍼가
+    /// 없으면 그런 회차의 복귀 구간이 영영 짝을 잡지 못해 묶음이 풀린다(t43 fix1-②, sync F3).
+    /// 도착 기준 갈래는 arrivalDate 그대로다.
+    var anchorComparisonTime: Date {
+        (anchor ?? .arrival) == .departure ? (departureDate ?? arrivalDate) : arrivalDate
     }
 }

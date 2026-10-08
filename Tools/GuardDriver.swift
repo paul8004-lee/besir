@@ -28,8 +28,10 @@
 // 관측(②). 판정·재시도·병합은 전부 결정적 함수라 주입된 결과 목록으로 검증한다.
 //
 // t43절(2026-10-08) — SPEC-UIKIT-012 연결된 구간 드래그: AF-018-02·03·AF-015-09·11 고쳐 쓰기
-// 4 · AF-018-04~27 추가 24. 마감 하한은 **522**(기준 B 498 + 24, 둘 다 이 트리에서 실측 —
-// .moai/reports/t43/run-progress.md §1.1) — 단언을 지우면 하한 밑으로 떨어진다.
+// 4 · AF-018-04~27 추가 24 · fix1-② AF-018-29 추가 1(출발 없는 복귀 짝 — 28은 t48 구글
+// 인계 문서가 쓰는 번호라 비켰다). 마감 하한은
+// **523**(기준 B 498 + 25, 둘 다 이 트리에서 실측 — .moai/reports/t43/run-progress.md §1.1) —
+// 단언을 지우면 하한 밑으로 떨어진다.
 
 
 var drvPass = 0, drvFail = 0
@@ -4347,7 +4349,7 @@ struct Drv {
         store.events = []
         store.activities = []
 
-        // ── AF-018(t43) — SPEC-UIKIT-012 연결된 구간 드래그(04~27, AF-015-09·11 고쳐 쓰기는 위 절).
+        // ── AF-018(t43) — SPEC-UIKIT-012 연결된 구간 드래그(04~27·29, AF-015-09·11 고쳐 쓰기는 위 절).
         //        번호 하나 = 무조건 실행되는 drvCheck 하나(복합 기대는 &&). 하위 사례마다 새
         //        픽스처이고(do 블록이 이름 충돌을 막는다) 구간은 afInjectedLeg·활동은 ActivityBlock
         //        값으로 직접 만든다(추정 대기 없음, AC-011 3). 기준일은 af15d0 양식(오늘+60일) —
@@ -4697,7 +4699,8 @@ struct Drv {
                           "소유 없음=\(noOwner)")
         }
 
-        // AF-018-21 — 동률: (a) 같은 끝 활동 둘 → 소유 없음. (b) 출발 없는 오는 편은 동률조차 성립하지 않는다.
+        // AF-018-21 — 동률: (a) 같은 끝 활동 둘 → 소유 없음. (b) 출발 없는 오는 편은 대조 시각(arrival)이
+        //        활동 끝과 다르면 소유 없음(fix1-② — 대조 시각이 같으면 짝이 성립하는 쪽으로 바뀌었다).
         do {
             let ridA = UUID()
             let aa = af18Act("AF01821a 체류", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600), ridA)
@@ -4716,14 +4719,14 @@ struct Drv {
             let ba = af18Act("AF01821b 체류", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), ridB)
             let bb = af18Act("AF01821b 점심", d2.addingTimeInterval(12 * 3600), d2.addingTimeInterval(13 * 3600), ridB)
             let legB = afInjectedLeg(title: "AF01821b 오는편", anchor: .departure,
-                                     arrival: ba.endDate, departure: nil,
+                                     arrival: ba.endDate.addingTimeInterval(1200), departure: nil,
                                      origin: afOffice, destination: afHome, linked: nil, recurrence: ridB)
             store.activities.append(contentsOf: [ba, bb]); store.events.append(legB)
             let noDepNil = store.owningActivity(of: legB) == nil
             store.adjustTravelLeg(legB, byMinutes: 15, wholeSeries: false)
             let b = store.events.first { $0.id == legB.id }!
             let baA = store.activities.first { $0.id == ba.id }!, bbA = store.activities.first { $0.id == bb.id }!
-            afAi.drvCheck("AF-018-21 동률: 같은 끝 활동 둘 → 소유 없음 && 출발 없는 오는 편도 소유 없음(활동 불변, REQ-004)",
+            afAi.drvCheck("AF-018-21 동률: 같은 끝 활동 둘 → 소유 없음 && 출발 없는 오는 편은 대조 시각(arrival ≠ 끝)이면 소유 없음(활동 불변, REQ-004)",
                           caseA && noDepNil
                               && b.departureDate == nil
                               && b.arrivalDate == legB.arrivalDate.addingTimeInterval(15 * af18m)
@@ -4914,6 +4917,27 @@ struct Drv {
                               && f3.arrivalDate == e3.arrivalDate.addingTimeInterval(1800)
                               && afLegBytes(f4) == afLegBytes(e4),
                           "묶음=\(packed), #4 소유=\(String(describing: groups2[e4.id] != nil))")
+        }
+
+        // AF-018-29 — 출발 없는 복귀 구간의 짝(fix1-②, sync F3): 첫 회차 추정 실패로 departureDate가
+        //        nil로 남은 회차는 출발 시각이 arrivalDate에 있다 — 대조 시각(departureDate ?? arrivalDate)이
+        //        활동 끝과 같으면 묶음이 성립한다(anchorComparisonTime).
+        do {
+            let rid = UUID()
+            let act = af18Act("AF01828", af18d0.addingTimeInterval(12 * 3600), af18d0.addingTimeInterval(13 * 3600), rid)
+            let leg = afInjectedLeg(title: "AF01828 오는편", anchor: .departure,
+                                    arrival: act.endDate, departure: nil,
+                                    origin: afOffice, destination: afHome, linked: nil, recurrence: rid)
+            store.activities.append(act); store.events.append(leg)
+            let owned = store.owningActivity(of: leg)?.id == act.id
+            let grouped = store.packingGroups(events: [leg], activities: [act])[leg.id] == act.id
+            store.moveActivity(act, byMinutes: 30, wholeSeries: false)
+            let after = store.events.first { $0.id == leg.id }!
+            afAi.drvCheck("AF-018-29 출발 nil 복귀 구간(대조 시각 = arrival = 활동 끝) → 소유 성립·배치 묶음 && 활동 +30에 arrival도 +30(departure는 nil 유지)",
+                          owned && grouped
+                              && after.arrivalDate == leg.arrivalDate.addingTimeInterval(1800)
+                              && after.departureDate == nil,
+                          "소유=\(owned), 묶음=\(grouped), arrival 변위=\(after.arrivalDate.timeIntervalSince(leg.arrivalDate))s")
         }
 
         store.events = []
