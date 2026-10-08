@@ -10,7 +10,7 @@
 - **범위**: 이 SPEC 디렉터리 밖에는 쓰지 않았다. 코드·빌드·드라이버 실행·커밋을 하지 않았다.
 - **게이트 표식**: `plan.md` §2에 4건(D-3·D-4·D-6·D-8), `research.md` §7에 같은 4건. `spec.md`·`acceptance.md` 0건.
 - **일관성 재독**: 다섯 파일을 한 번 다시 읽고 REQ↔AC 추적(REQ 14개 모두 AC 매트릭스에 1회 이상), 게이트 표식 위치, 시간 추정 없음, 번역투 비유어 없음을 아래 명령으로 확인했다.
-- **plan_status(현재)**: **0.5.0 draft, 미감사** — 아래 "0.5.0 개정" 절과 §G. 이하 줄은 0.4.1 시점 기록.
+- **plan_status(현재)**: **0.6.0 draft, 미감사** — 아래 "0.6.0 개정" 절과 §H. "0.5.0 개정" 절·§G와 이하 줄은 그 시점 기록.
 - **plan_status(0.4.1 기록)**: audit-ready — **0.4.1**(재감사 4회차 차단 결함 N4-1 수리, `.moai/reports/plan-audit/SPEC-UIKIT-012-review-4.md`; 이전: 0.4.0 감사 1~3회차 반영: `.moai/reports/plan-audit/SPEC-UIKIT-012-review-1.md`·`-review-2.md`·`-review-3.md`; 감사 상한 도달, 재감사 없음 — 고친 대조는 0.4.0 표의 실행 출력으로 입증). **게이트 표식 4건(`plan.md` D-3·D-4·D-6·D-8)은 착수 승인에서 운영자가 답하도록 일부러 남겼다 — 재감사의 MP-7 FAIL은 예상된 결과다.** 감사 D-15가 더하라고 한 결정(옛 틈·반복 범위·밤샘 활동·미리보기 배치)은 오케스트레이터 지시로 새 게이트 없이 〔제안〕으로 적용하고 `plan.md` §9 ②에 나열했다.
 
 ### 관측된 증거 — 이 레인이 직접 돌린 명령
@@ -355,6 +355,92 @@ Tier M 유지(REQ 16 · AC 15 — 각각 상한 16, 서로 독립). 파일 3개(
 실행: 위 0.5.0 실측 표의 명령 전부, 자가 점검 스크립트(AF 기대값 + 격자 522,720건 × 세 규칙), 식별자 `comm` 비교, 인용 줄 점검(`awk 'NR==…'`로 새로 단 인용을 읽어 `:469`·`:4291-4294`를 고쳤다).
 
 못 한 것: 드라이버·iOS 빌드·시뮬레이터(코드 무변경 단계). 구글 연결 갈래의 실제 동작·호출 수·할당량(구글 할당량 수치는 조회하지 않았다). 끄는 중 손가락이 스크롤 영역 밖에서도 위치를 보고하는지, `scrollDisabled` 상태의 프로그램 스크롤(〔가설〕). 폼의 분 간격(Q-2). AF-018-27·28·AF-015-09·11의 기대는 코드 읽기다. 독립 감사 없음.
+
+### 0.6.0 개정 — 운영자 2차 답변 반영 (2026-10-08, 미감사)
+
+**plan_status: draft — 0.6.0 미감사(독립 감사 없음).** 현재 수치: REQ 16 · AC 15 · AF-018-01~27 + AF-015-09·11 고쳐 쓰기 · **T = B + 24**(B = 498이면 522). 인계 파일 `.moai/reports/t43/google-card-handoff.md`(이 워크트리, 새 파일).
+
+#### 0.6.0 실측 표
+
+| 명령 | 관측된 출력 | 쓰인 곳 |
+|---|---|---|
+| `grep -n 'return ScrollView {' Shared/ContentView.swift` · `grep -n 'let y = gr.location'` · `awk 'NR==456\|\|NR==457\|\|NR==479'` | `:417` · `:939` · 오버레이 `.overlay(`·`RescheduleOverlay(` `:456-457`, 닫힘 `:479` | D-11 — 오버레이가 스크롤 콘텐츠 안 |
+| `grep -n 'let view = ScrollTouchFixView()\|HStack(spacing: 0) {\|private struct SwipePager'` | `:893` · `:804` · `:791` | D-11 — 조상 스크롤 뷰 찾기, 페이저는 스크롤 뷰가 아님 |
+| `grep -c 'setContentOffset\|stopAutoScroll\|dismantleUIView' Shared/ContentView.swift` · `grep -c 'CADisplayLink(\|Timer.scheduledTimer\|\.invalidate()'` | `0` · `0` | AC-016 기준(패턴 없음) |
+| `printf 'let l = CADisplayLink(target: p, selector: #selector(tick))\n' \| grep -c 'CADisplayLink('` · `printf 'func stopAutoScroll() { link?.invalidate(); link = nil }\n' \| grep -c 'invalidate()'` · `printf 'func tick() { … setContentOffset … onChange(gr.location(in: gr.view).y - startY) }\n' \| grep -c 'setContentOffset'` | `1` · `1` · `1` | AC-016 양성 대조 |
+| `awk '/func updateActivity\(/,/^    }$/' Shared/Store.swift \| grep -c 'Task {\|removeFromCalendar\|enqueueCalendarUpload\|googleEventId'` · 같은 패턴 `adjustTravelLeg` | `6` · `0` | AC-010 구글 0건 대조 양성 대조 · 회귀선 |
+| `grep -c 'minActivityMinutes: CGFloat = 5$'` · `'= 20'` · `'minTravelMinutes: CGFloat = 16'` (ContentView) | `0` · `1` · `1` | AC-004 양성 대조 · 회귀선 |
+| `grep -rln 'DatePicker' Shared/` · `grep -rn 'minuteInterval' Shared/` · `grep -rn 'UIDatePicker' Shared/` · `sed -n 215,245p Shared/EditCardView.swift` | 7개 파일 · 0건 · 0건 · `DatePicker("날짜·시각", …)` `:227`, `.graphical` `:231` | spec §1.2 분 간격 사실 |
+| WebFetch `…/uikit/uidatepicker/minuteinterval.json` | "The default and minimum values are 1; the maximum value is 30." | 〃 |
+| WebFetch `…/uikit/uiscrollview/isscrollenabled.json` | "Setting the value to false disables scrolling." "When scrolling is disabled, the scroll view doesn’t accept touch events; it forwards them up the responder chain." — 프로그램 오프셋 언급 없음 | D-11 〔가설〕 유지 |
+| WebFetch `…/quartzcore/cadisplaylink/init(target:selector:).json` | "The newly constructed display link retains the target." — 무효화 언급 없음 | D-11 타이머 |
+| WebFetch `…/uikit/uigesturerecognizer/location(in:).json` | "Returns the point computed as the location in a given view of the gesture …" | D-11 위치 재읽기 |
+| `sed -n 85,110p Shared/EventDetailView.swift` · `grep -rn 'activity(forLeg' Shared/` | 편집 시트 `:91-98`(`activity(forLeg:)` 있으면 활동 편집, 없으면 `AddEventView`) · 호출 `ContentView.swift:662`·`EventDetailView.swift:94` | Q-10 |
+| `sed -n 306,365p;575,600p;1547,1560p;1626,1640p Shared/Store.swift` · `grep -n 'if let newStart {\|let listedIDs\|…'` | `modifyActivity` 시작 `:325`, 끝 재정렬 `:339-344`, `realignReturnLeg` `:352-359`(명시만 `:353`), `realignLegs` 명시 `:587`, `listedIDs` `:439`, `removeExplicitLegs` `:1630-1642`(13줄) | research §9 |
+| `grep -rn 'F12' …SPEC-UIKIT-009/*.md` | `spec.md:90`(정의) · `:197`(범위 밖) · `research.md:41-42` | 인계 §7 |
+| 자가 점검 바이너리 재실행(`…/scratchpad/v050/check`) | 첫 줄 `AF-018-06 … -55` · `AF-018-07 … 0 \| -15` · `AF-018-08 … 90` — 0.5.0과 같음(한계 규칙 무변경, 드래그 최소 5분 무변경) | plan §5 |
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` | `16` · `15` | Tier |
+| `grep -c 'NEEDS CLARIFICATION'` spec · acceptance · plan · research | `0` · `0` · `6` · `6` | 열린 질문 위치 |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md \| sort \| uniq -c` | spec 2 · plan 2 · acceptance 1, 모두 `B + 24` | T 일치 |
+| `grep -c '축\|기둥'`(네 파일) | 모두 `0` | 문체 |
+| `grep -n 'removeFromCalendar\|enqueueCalendarUpload\|googleConnected\|AF-018-28\|S-15\|S-12' spec.md acceptance.md` | acceptance `:122`(구글 0건 대조 자체) · `:138`(이관 표기) · spec HISTORY `:31` · 대응표 `:129` — 그 밖 0 | 구글 서술 이관 확인 |
+| `wc -l *.md` | acceptance 222 · plan 274 · progress(이 절 전) 369 · research 149 · spec 248 | 보고 |
+
+## §H 0.6.0 개정 요약
+
+### ① 사라진 것 · 새로 생긴 것 · 바뀐 것
+
+명령: 0.5.0 판(작업 트리, 커밋 전)을 SPEC 디렉터리에 `cp`로 떠 두고 `grep -o`로 식별자를 뽑아 `comm`으로 비교한 뒤 사본을 지웠다(`ls` → 다섯 파일). 출력:
+
+```text
+== REQ old=16 new=16  removed: (없음)  added: (없음)
+== AC  old=15 new=15  removed: AC-014  added: AC-016
+== S   old=15 new=16  removed: S-12 S-15  added: S-16 S-17 S-18
+== AF(표의 행 머리) old=30 new=23  removed: AF-018-03 05 12 13 19 20 21 22  added: ~~AF-018-28
+```
+
+AF 줄은 표 모양 탓에 숫자가 어긋난다 — 0.6.0 표가 같은 기대의 행을 합쳤다(`AF-018-02·03`, `04·05`, `11~13`, `18~22`). 계수 규칙(번호 하나 = `drvCheck` 하나)으로 센 실제 변화는 **AF-018-28 하나가 빠진 것**이고(인계 파일), 번호 집합은 AF-018-01~27 + AF-015-09·11이다.
+
+| 구분 | 목록 | 수 |
+|---|---|---|
+| 사라짐(→ t48 인계) | AC-014 · AF-018-28 · S-12 · S-15 · Q-7 · 0.5.0 REQ-012 구글 본문 | 1 · 1 · 2 |
+| 새로 | AC-016 · S-16·17·18 · Q-10·11·12 · `research.md` §9 | 1 · 3 · 3 |
+| 다시 씀 | REQ-012(0.4.1 형태로 되돌림) · REQ-015(자동 스크롤 본 요구) · D-11 · S-6 · AC-010(구글 0건 대조 복원) | — |
+| 바뀜 | REQ-003·006·009·013·016 · AC-004·012·013·015 · AF-018-27 · AF-015-09·11(근거 = 운영자 2차 Q-6) · S-5·13·14 · D-3·D-4(정정)·D-6·D-10 | — |
+| 닫힌 질문 | Q-1(답변) · Q-2(사실 — 1분) · Q-4(답변) · Q-6(답변) · Q-8(답변) · Q-7(이관) | 6 |
+
+### ② 수치 · Tier · T
+
+REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의 "합 25"는 규칙과 다르다). 자동 스크롤은 REQ-015 둘째 조항으로 접었다 — 따로 세우면 REQ 17로 Tier M 초과(Q-12, 리드 판단). 드라이버 고쳐 쓰기 4 · 추가 24 → **T = B + 24**(B = 498이면 522).
+
+### ③ 자동 스크롤 설계 요지
+
+- 오버레이는 `ScrollView` 안이라 손가락 위치가 콘텐츠 좌표다 → 보정은 매 틱 `location(in:)`을 다시 읽는 것으로 충분, 오프셋을 더하면 두 번 더해진다. 분 변환은 `onChange` 한 곳.
+- 손가락이 멈추면 인식기 이벤트가 없으므로 `CADisplayLink` 틱이 위치를 다시 읽고 `onChange`를 부른다.
+- 띠 12%·최소 44pt, 깊이 비례 최대 600pt/초〔제안〕. 위는 콘텐츠 맨 위에서, 아래는 콘텐츠 끝에서 멈춘다. 놓으면 연장이 사라져 화면이 하루 끝으로 튀어 오른다(S-17).
+- 멈춤 함수 하나를 `.ended`·`.cancelled/.failed`·`onBegin` 거절·`dismantleUIView`·창에서 빠짐·틱 안 상태 검사가 부른다. 대상은 약한 대리 객체(문서: 디스플레이 링크는 대상을 붙잡는다).
+- **확인한 것**: 코드 구조(오버레이 위치·좌표·분 변환·조상 스크롤 뷰 찾기), Apple 문서 세 건(위 표). **못 한 것**: `scrollDisabled` 중 `setContentOffset`이 먹는지(문서는 터치만 언급 — 〔가설〕, 대체안: 잠금 대신 팬 인식기 끄기), SwiftUI `.scrollDisabled`가 `isScrollEnabled`를 쓰는지, 백그라운드 전환 시 `.cancelled` 수신, 스크롤 영역 밖 손가락 위치 보고, `CADisplayLink`의 격리 경고, 감각 매개값.
+
+### ④ 열린 질문 · 〔가정〕 · 착수 승인 설명
+
+열린 질문(plan §2 끝 · research §8): Q-3 위로 넘기기 · Q-5 연장 상한 · Q-9 연장 대상 · Q-10 짧은 활동 탭 경로 · Q-11 편집 끝 변경의 추정 복귀 구간 · Q-12 Tier.
+
+〔가정〕: 그리기 바닥 5분(5분 이상은 실제 길이) · 이동 최소 높이 16분 유지 · "같은 블록" = 활동 + 가는 편 + 오는 편 묶음 연결 유지(정정 — 0.5.0의 "레코드 하나가 날짜별로 보임" 해석을 고침) · 위로는 첫날 0시에서 멈춤 · 아래 상한은 끄는 날 다음 날 끝 · 경고 블록은 나열 시각 하나 · 연장·자동 스크롤은 연결된 구간 드래그만 · 자동 스크롤 매개값.
+
+착수 승인 설명은 `plan.md` §9(①의 전후 그림 — 자정 넘기기 + 자동 스크롤 + 한 묶음 + 짧은 활동 높이, ②의 확인 목록).
+
+### ⑤ 실행한 검증 · 못 한 검증
+
+실행: 위 0.6.0 실측 표 전부, Apple 문서 WebFetch 4건(JSON 엔드포인트 — HTML 페이지는 본문이 비어 JSON으로 다시 받았다), 자가 점검 바이너리 재실행, 식별자 `comm`, 새 인용 줄 재측정(`:417`·`:939`·`:893`·`:804`·`:325`·`:339`·`:439`·`:587`·`:1630-1642`를 고쳤다).
+
+못 한 것: 드라이버·iOS 빌드·시뮬레이터, 자동 스크롤의 모든 실제 동작(③의 〔가설〕), 5분 블록의 실제 탭 가능성, 구글 관련 전부(t48), 독립 감사.
+
+### ⑥ 5~19분 활동의 탭 경로
+
+- 히트 범위는 그리기와 같은 `span`이라 실제 길이로 줄어든다 — 5분 ≈ 4.7pt, 10분 ≈ 9.3pt, 19분 ≈ 17.7pt(56pt/시간). 지금은 20분 바닥 ≈ 18.7pt.
+- 운영자 근거("가는 이동을 눌러도 같은 창")는 **명시 연결 구간에서만** 성립한다 — `EventDetailView.swift:94`가 `activity(forLeg:)`(명시만)로 활동 편집을 고르고, 반복 회차의 추정 구간은 이동 일정 폼(`AddEventView`)을 연다.
+- 대체 경로가 없는 경우: 구간 없는 활동, 반복 회차 활동(구간이 추정). Q-10에서 (a) 그대로 · (b) 히트 범위만 최소 보장(계약 5의 한 곳 계산이 두 값을 냄) · (c) 추정 구간 탭 라우팅 확장(범위 밖 파일)을 물으며, 이 레인의 기울기는 (a) + S-18 관찰 후 결정.
+- 반폭 분할은 줄어든다(바로 붙은 오는 편과 겹치지 않음).
 
 ## §E.2 Run-phase Evidence
 

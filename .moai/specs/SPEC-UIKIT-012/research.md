@@ -94,7 +94,7 @@ SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 
 ## 7. 0.5.0 추가 조사 (게이트 답변 반영)
 
-0.4.1의 게이트 4건은 운영자가 답했다(`plan.md` D-3·D-4·D-6·D-8). 아래는 답변이 새로 닿게 한 코드다. 앞 절(§2~§6)은 0.4.1 시점 기록이고, §5의 "구글에 올리지 않는다"는 0.5.0에서 뒤집혔다.
+0.4.1의 게이트 4건은 운영자가 답했다(`plan.md` D-3·D-4·D-6·D-8). 아래는 답변이 새로 닿게 한 코드다. 앞 절(§2~§6)은 0.4.1 시점 기록이고, §5의 "구글에 올리지 않는다"는 0.5.0에서 뒤집혔다가 0.6.0에서 다시 이 카드의 동작이 됐다 — 구글 반영 재료(선례·검증 한계)는 `.moai/reports/t43/google-card-handoff.md` §4·§5로 옮겼다(카드 t48).
 
 | 사실 | 자리 | 쓰인 곳 |
 |---|---|---|
@@ -105,22 +105,45 @@ SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 | 조상 `UIScrollView`를 찾는 유일한 자리 | `ScrollTouchFixView` `:854-863` | D-11 (ii) |
 | 추정 대조가 같은 날만 | `estimatedLegs` `Store.swift:1427-1434`(`:1430`), `@MX:WARN` `:436`, 핀 AF-015-09·11 `Tools/GuardDriver.swift:4295-4323` | D-10 |
 | AF-015 L 오는 편은 출발 == L 끝 | `Tools/GuardDriver.swift:4291-4294` | D-10 (A)가 핀을 뒤집는 근거 |
-| 구글 선례 | `removeFromCalendar` `Store.swift:97-103`(묘비 먼저) · `updateRecurringSeries` `:1073-1085`(gid 모으기·먼저 비우기·삭제 한 번·큐 한 번) · `updateActivity` `:282-299` · `enqueueCalendarUpload` `:1113-1148` · 실패 `.failed` `:1196-1201`·`:1222-1226` · 설정 `SettingsView.swift:61-64` | D-6 |
-| 드라이버는 구글 미연결 | `Tools/GuardDriver.swift:1490-1497`, `googleConnected` 계산 속성 `Store.swift:790` | AC-014 |
 | 폼은 종료 > 시작만 요구 | `AddActivityView.swift:150-158` | D-3 |
 
 자가 점검 스크립트와 그 출력은 `progress.md` §E.1 0.5.0 표.
 
-## 8. 열린 질문 (plan.md §2 끝과 같은 목록)
+## 8. 열린 질문 (0.6.0 — plan.md §2 끝과 같은 목록)
 
-- [NEEDS CLARIFICATION: Q-1 그리기 최소 높이 20분 유지(〔가정〕) / 5분으로 줄임]
-- [NEEDS CLARIFICATION: Q-2 폼의 분 간격이 5분 단위인지 — 미확인]
-- [NEEDS CLARIFICATION: Q-3 위로 넘기기의 대칭 연장]
-- [NEEDS CLARIFICATION: Q-4 끄는 중 자동 스크롤 (i)/(ii)/(iii) — (i)은 "보이도록"을 채우지 못한다]
-- [NEEDS CLARIFICATION: Q-5 연장 상한 — 끄는 날 다음 날 끝(〔가정〕)]
-- [NEEDS CLARIFICATION: Q-6 넘긴 반복 추정 구간 (A)/(B)/(C)]
-- [NEEDS CLARIFICATION: Q-7 구글 반복 "전체" 적용과 최악 520회 호출]
-- [NEEDS CLARIFICATION: Q-8 카드 분할 X/Y/Z]
-- [NEEDS CLARIFICATION: Q-9 활동 드래그·연결 없는 구간의 연장 여부]
+0.5.0의 Q-1·Q-2·Q-4·Q-6·Q-7·Q-8은 답변·사실 확인·t48 이관으로 닫혔다(plan §2 끝).
+
+- [NEEDS CLARIFICATION: Q-3 위로 넘기기의 대칭 연장 — 〔가정〕 기본 첫날 0시에서 멈춤]
+- [NEEDS CLARIFICATION: Q-5 연장 상한 — 〔가정〕 기본 끄는 날 다음 날 끝]
+- [NEEDS CLARIFICATION: Q-9 연장·자동 스크롤 대상 — 〔가정〕 기본 연결된 구간 드래그만]
+- [NEEDS CLARIFICATION: Q-10 짧은 활동의 탭 경로 — 운영자 근거는 명시 연결 구간에서만 성립]
+- [NEEDS CLARIFICATION: Q-11 활동 편집에서 끝을 바꿀 때 추정 복귀 구간이 따라오지 않는 기존 갭]
+- [NEEDS CLARIFICATION: Q-12 Tier — 자동 스크롤을 REQ-015에 접어 Tier M 유지 / 분리해 Tier L]
+
+## 9. 활동 ↔ 구간 연결을 쓰는 모든 자리 (0.6.0, Q-6 (A)가 "한 묶음"을 채우는지)
+
+기준 트리 `b59fcaa`에서 잰 줄. "(A) 영향"은 `estimatedLegs`를 정확한 앵커 대조 우선으로 바꿨을 때다. "자정 넘김 뒤"는 활동 끝·오는 편 출발이 같은 채로 오는 편 도착(또는 활동 끝)이 다음 날로 간 상태다.
+
+| 자리 | 연결 종류 | (A) 영향 | 자정 넘김 뒤 동작 |
+|---|---|---|---|
+| `estimatedLegs` `Store.swift:1427-1434` | 추정 | 바뀜 | 정확한 대조로 묶음 유지(가는 편 도착 == 시작, 오는 편 출발 == 끝). 틈 있는 옛 구간은 같은 날 폴백이라 여전히 놓친다 |
+| `linkedLegs` `:1414-1422` | 명시 우선, 없으면 추정 | (A)를 따른다 | 묶음 유지 |
+| `packingGroups` `:438-452` | 명시 우선, 반복이면 추정(`:446`) | (A)를 따른다 | 화면 묶음 유지 — 날짜마다 그 날 목록 안에서 짝짓는다(`listedIDs` `:439`) |
+| `moveActivity` `:1361-1382` | `linkedLegs`(`:1371`) | (A)를 따른다 | 활동을 옮기면 넘긴 구간도 따라온다 |
+| `modifyActivity` 시작 변경 `:325-331` | `moveActivity` 경유 | (A)를 따른다 | 따라온다 |
+| `modifyActivity` 끝 변경 → `realignReturnLeg` `:339-344`·`:352-359` | **명시만**(`linkedActivityId` `:353`) | 없음 | **추정 복귀 구간은 자정과 무관하게 지금도 안 따라온다** — 기존 갭, 범위 밖(plan Q-11) |
+| 새 소유 조회(REQ-004) | 명시 → `linkedLegs` | (A)를 따른다 | 넘긴 구간을 다시 끌면 활동이 움직인다 |
+| `adjustTravelLeg` 소유 없음 "전체" 역할 필터 `:1392-1395` | 연결 아님(반복 + 역할 이름) | 없음 | 날짜를 보지 않아 영향 없음 |
+| `legs(of:)` `:407-411` · `explicitLegs` `:400-402` · `activity(forLeg:)` `:415-418` | 명시만(의도 — `@MX:REASON` `:437`, 삭제 안전) | 없음 | 명시 구간은 날짜와 무관하게 이어진다. 추정 구간은 원래부터 여기 안 든다 |
+| 구간 탭 → 편집 `EventDetailView.swift:91-98` | `activity(forLeg:)` 명시만 | 없음 | 추정 구간은 이동 일정 폼 — 자정과 무관(plan Q-10) |
+| 구간 블록 제목 `ContentView.swift:662` | `activity(forLeg:)` 명시만 | 없음 | 무관 |
+| `removeExplicitLegs` `:1630-1642` · 활동 삭제 `:677-679` | 명시만 | 없음 | 추정 구간은 반복 삭제 몫 — 무관 |
+| `realignLegs` `:581-` (비동기) | 명시만(`:587`) | 없음 | 무관 |
+| `addLeg` 반복 회차 거절 `:481-482` | 명시 유무 | 없음 | 무관 |
+| `refreshUpcomingEstimates` `:1547-` | 연결 안 씀(시각만 재추정) | 없음 | 출발 기준 구간은 출발이, 도착 기준 구간은 도착이 고정이라 앵커 시각이 그대로 → 정확한 대조가 깨지지 않는다〔조사 — 재추정 함수 `:1316-1330`은 자유단만 바꾼다〕 |
+| `AIAssistant` 경로 `:2127`·`:2146` · 반복 `:2188`·`:2394` · `updateRecurringSeries` | 명시 필터 또는 `recurrenceId` | 없음 | 무관 |
+| 히트 테스트 `block(atX:y:)` `ContentView.swift:753` | `span`이 만든 배치 | 간접(`packingGroups` 경유 묶음 키) | 묶음 유지로 넘긴 구간과 활동이 같은 묶음 |
+
+**결론**: (A)는 드래그·활동 이동·화면 묶음·새 소유 조회에서 운영자의 "한 묶음"을 채운다. 채우지 못하는 두 자리(편집 끝 변경, 추정 구간 탭)는 명시 연결만 보도록 일부러 설계된 자리이거나 기존 갭이고, 자정과 무관하게 지금도 같다.
 
 🗿 MoAI
