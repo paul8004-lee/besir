@@ -1,6 +1,6 @@
 # SPEC-UIKIT-012 — acceptance.md
 
-수락 기준(0.7.0 — 0.6.1이 감사 5회차를 받았고, 0.6.2 이후 판은 미감사). 검증 수단은 셋이다.
+수락 기준(0.7.2 — 0.6.1이 감사 5회차를 받았고, 0.6.2 이후 판은 미감사). 검증 수단은 셋이다.
 
 - **D — 드라이버(결정적, 네트워크 없음)**: `Tools/GuardDriver.swift` AF-018·AF-015 절. 구간은 `afInjectedLeg`(`:3806-3817`), 활동은 `ActivityBlock` 값. 하위 사례마다 새 픽스처. 종료 코드 0 · 1 · 2 · 3 · 124.
 - **G — 구조 대조**: `grep`·`awk`·`shasum`. `diff <(…)`는 워크트리 가드가 거부하므로 쓰지 않는다. 기준 트리 `b59fcaa`에서 다른 값이면 양성 대조, 같으면 회귀선. 기준 트리에 패턴이 아예 없는 대조는 손으로 만든 입력(`printf … | grep -c`)으로 명령이 작동함을 보인다.
@@ -183,7 +183,7 @@ grep -c 'func dismantleUIView' Shared/ContentView.swift
 awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop>()'
 ```
 
-기대: 생성 **1** · `invalidate()` **1**(멈춤 함수 안) · `handleLongPress` 안 멈춤 호출이 `.ended`·`.cancelled/.failed`·`onBegin` 거절 셋을 덮어 **3 이상** · `dismantleUIView` **1** · 그 안 멈춤 호출 **1**. 창에서 빠질 때(`didMoveToWindow`의 `window == nil`)와 틱 안 상태 검사 자리는 읽기 판정으로 줄번호를 §E.2에. 기준 트리는 다섯 명령 모두 **0**(패턴이 지금 없다 — 이 레인 실측: `grep -c 'setContentOffset\|stopAutoScroll\|dismantleUIView' Shared/ContentView.swift` → 0). **양성 대조**: `printf 'func stopAutoScroll() { link?.invalidate(); link = nil }\n' | grep -c 'invalidate()'` → 1, `printf 'let l = CADisplayLink(target: p, selector: #selector(tick))\n' | grep -c 'CADisplayLink('` → 1(이 레인 실측).
+기대: 생성 **1** · `invalidate()` **1**(멈춤 함수 안) · `handleLongPress` 안 멈춤 호출이 `.ended`·`.cancelled/.failed`·`onBegin` 거절 셋을 덮어 **3 이상** · `dismantleUIView` **1** · 그 안 멈춤 호출 **1**. 런루프 등록 대조(N5-12): `grep -c 'forMode: .common' Shared/ContentView.swift` 기대 **1**. 창에서 빠질 때(`didMoveToWindow`의 `window == nil`)와 틱 안 상태 검사 자리는 읽기 판정으로 줄번호를 §E.2에. 기준 트리는 다섯 명령 모두 **0**(패턴이 지금 없다 — 이 레인 실측: `grep -c 'setContentOffset\|stopAutoScroll\|dismantleUIView' Shared/ContentView.swift` → 0). **양성 대조**: `printf 'func stopAutoScroll() { link?.invalidate(); link = nil }\n' | grep -c 'invalidate()'` → 1, `printf 'let l = CADisplayLink(target: p, selector: #selector(tick))\n' | grep -c 'CADisplayLink('` → 1(이 레인 실측).
 - **G — 오프셋을 두 번 더하지 않는다**: 틱 함수 본문에서 `setContentOffset` 1, 그리고 `onChange`로 넘기는 값이 `location(in:` 재읽기에서 나온다(읽기 판정). `contentOffset.y`를 `onChange` 인자에 더하는 식이 없다. 양성 대조: `printf 'func tick() { let off = scroll.contentOffset.y + v * dt; scroll.setContentOffset(CGPoint(x: 0, y: off), animated: false); onChange(gr.location(in: gr.view).y - startY) }\n' | grep -c 'setContentOffset'` → 1.
 - **G — 막힘 없는 루프·새 `Task` 없음**: 오버레이 코디네이터 안 `while`·`Task {` 0건(기준 0 — 회귀선).
 - **S**: S-6 · S-16 · S-17.
@@ -205,8 +205,8 @@ awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop
 | S-9 | S-7 반복 삭제 → `… 점심은 12시부터 1시까지 <즐겨찾기 식당>. 제목은 S9 점심 …` → 수요일 출근 30분 위로 "전체" | 체류 시작만 당겨지고 점심 쪽 그대로 |
 | S-10 | 연결 없는 단발 이동(`내일 오후 3시까지 회사 가야 해. 제목은 S10 단발 …`) 30분 아래로 | 지금과 같다(여유 10 → 0). 연장·자동 스크롤 없음 |
 | S-11 | S-1·S-3을 다시 하고 상세를 연다 | 출발 시각 30분 이동, 알림은 "출발 − N분 전"(`Shared/EventDetailView.swift:352`) |
-| S-13 | 새 활동 `자정`(내일 21:40–23:40)에 오는 편, 도착 B(모레 0시 이후). 오는 이동을 아래 가장자리로 끌어 1시간쯤 내려간 자리에서 뗀다 → 모레 화면. 이어 모레 화면에서 `자정`을 30분 아래로 끈다(활동 블록 드래그) | 내일 화면에 하루 전체 높이 블록이 생기지 않는다. 내일 `자정` 21:40–24:00, 모레 `자정` 00:00–00:40과 오는 이동. **활동을 끌면 오는 이동도 함께 30분 내려간다**(한 묶음). S-7 반복의 회차로 같은 일을 해도 같다 |
-| S-14 | S-13 직후(활동을 끌기 전 상태로 되돌린 뒤) 모레 화면에서 오는 이동을 1시간 위로 → 뗀다 | 도착이 모레 00:01~00:05에서 멈추고 블록이 모레 화면에 남는다 |
+| S-13 | 새 활동 `자정`(내일 21:40–23:40)에 오는 편, 도착 모레 00:30(이동시간 50분). 오는 이동을 아래 가장자리로 끌어 1시간쯤 내려간 자리에서 뗀다 → 모레 화면. 이어 모레 화면에서 `자정`을 30분 아래로 끈다(활동 블록 드래그) | 내일 화면에 하루 전체 높이 블록이 생기지 않는다. 내일 `자정` 21:40–24:00, 모레 `자정` 00:00–00:40과 오는 이동. **활동을 끌면 오는 이동도 함께 30분 내려간다**(한 묶음). S-7 반복의 회차로 같은 일을 해도 같다 |
+| S-14 | 새 활동 `새벽`(내일 22:50–23:50)에 오는 편(도착 모레 00:20, 이동시간 30분)을 붙인다. 모레 화면에서 오는 이동을 길게 눌러 1시간 위로 → 뗀다 | 도착이 모레 00:05에서 멈춘다(요청 −60 → 유효 −15 — 도착이 다음 나열일 시작을 지나야 해서). 출발 내일 23:35. 블록이 모레 화면에 남는다. N5-6 — S-13 상태와 무관한 독립 픽스처 |
 | S-16 | S-6 상태에서 오는 이동을 다시 길게 눌러 아래 가장자리에 두고 시간표가 움직이는 동안 ① 뗀다 ② 다시 해서 홈 제스처로 앱을 내린 뒤 돌아온다 ③ 다시 해서 손가락을 가장자리에서 가운데로 옮긴다 ④ 다시 해서 **위** 가장자리로 끈다 | ① 떼는 즉시 스크롤이 멈춘다 ② 돌아왔을 때 화면이 혼자 움직이지 않는다 ③ 가운데로 오면 멈춘다 ④ 위로 스크롤되다 내일 0시(맨 위)에서 멈춘다. 어느 경우에도 손을 뗀 뒤 화면이 계속 미끄러지면 "다름" |
 | S-17 | S-6처럼 다음 날 칸까지 내려간 상태에서 뗀다 | 연장이 사라지며 화면이 내일의 끝(24:00 아래)으로 한 번 튀어 오른다 — 튀는 정도를 메모 |
 | S-18 | 구간 없는 활동 `짧음`(내일 10:00–10:05)과 `열분`(10:30–10:40)을 만들고 각각 탭한다. 이어 S-7 같은 반복의 체류를 10분짜리로 만든 회차에서 그 체류와 출근 이동을 각각 탭한다 | 5분 블록·10분 블록이 눌러지는지, 몇 번 만에 눌리는지 메모 — 결정된 수용 위험의 확인 단계, 불편하면 후속 카드(`plan.md` Q-10 닫음). 반복 출근 이동을 누르면 활동 편집이 아니라 이동 일정 폼이 열린다 — 운영자 근거와 다른 경로임을 확인 |
@@ -236,6 +236,6 @@ awk '/func dismantleUIView/,/^    }$/' Shared/ContentView.swift | grep -c '<stop
 - AC-001~011·013·015·016의 D·G 전부 ✅(원문 출력과 함께 §E.2).
 - AC-012·013·016의 S와 AC-004 S는 운영자 시뮬레이터 결과로 판정한다.
 - 하네스: `swift-impl`·`ui-design`(구현), `code-safety`(판정).
-- `plan.md` §2의 열린 질문 Q-3·5·9가(Q-10·11·12는 0.6.1, Q-13은 0.7.1에서 닫힘) 착수 승인에서 닫힌 뒤 run.
+- 질문은 전부 닫혔다 — Q-3·5·9는 착수 승인(2026-10-08, "위 설명대로 착수")에서, Q-10·11·12는 0.6.1에서, Q-13은 0.7.1에서.
 
 🗿 MoAI

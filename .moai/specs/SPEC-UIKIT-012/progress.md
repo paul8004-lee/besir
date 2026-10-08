@@ -693,6 +693,26 @@ REQ **16** · AC **15**(Tier M 상한 각 16, 서로 독립 — 리드 안내의
 
 **`git diff HEAD` 읽기**: 모든 덩어리가 1(Q-13 닫기·표식 제거)·2(착수 목록 정리, spec t49 줄)·3(version·HISTORY)·4(Q-13 낡은 줄 — acceptance 완료 정의)에 속한다. 범위 밖 줄 0. Q-3·Q-5·Q-9 표식과 문구는 그대로다.
 
+### 0.7.2 개정 — run M0: 표식 닫기·경미 9건·기준 측정 (2026-10-08, 미감사)
+
+작성: run 레인. 근거: 리드 run-brief §2·§4 — Q-3·5·9는 착수 승인(2026-10-08, "위 설명대로 착수")으로 닫혔고 표식은 run M0이 닫는다.
+
+**바꾼 곳**: Q-3·5·9 표식 닫음 — plan §2(제목 "착수 승인에서 닫힘"·세 표식 → 닫힘 기록)·plan §9 ②(열린 질문 줄·〔가정〕 줄)·research §8(제목·세 표식)·acceptance 완료 정의·spec §1.1 경계 행 출처. 경미 수리 — N5-4(REQ-007 위쪽 비엄격 명시)·N5-5(REQ-015 "옮기는 쪽의 끝" 한정)·N5-6(S-13 도착 고정 모레 00:30·S-14 독립 픽스처 `새벽` 22:50–23:50, 기대 −15)·N5-7(plan §5 AF-018-23 셋째 픽스처 이틀 넘는 오는 편 + 역할 분담 문구)·N5-9(REQ-012 "드롭 경로의 새 코드" 한정)·N5-10(plan D-11 대체안 소유 구간 한정 + spec §3 잠금 불변 줄)·N5-11(plan D-11 〔가설〕 표시 + 오프셋 직접 맞춤)·N5-12(plan D-11 `add(to: .main, forMode: .common)` + AC-016 G 대조 줄)·N5-13(plan §5 AF-015-12 라벨 행 — 드라이버 라벨 문구는 드라이버 마감 단계에서 고친다). 공통: spec frontmatter `version`·HISTORY 0.7.2 행·이 절.
+
+#### 0.7.2 실측 표 (run 레인이 워크트리 `9f05c7a`, 코드 변경 없는 상태에서 직접 돌림)
+
+| 명령 | 관측된 출력 |
+|---|---|
+| 드라이버 블록(CLAUDE.md 명령 그대로 — 원문 로그 `.moai/state/verify/t43/baseline-driver.log`, 584줄) | 요약 줄 `498/498 통과` · `[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다` · exit 0 — **B = 498**(기대와 같다) |
+| `xcodebuild -scheme besir-iOS -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -derivedDataPath build build`(원문 로그 `.moai/state/verify/t43/baseline-build-ios.log`) | exit 0 · `grep -c "BUILD SUCCEEDED"` → 1 · `grep "warning:" … \| grep -v appintentsmetadataprocessor \| sort -u` → 빈 출력 — **무경고 기준 성립** |
+| `ls -d $TMPDIR/besir-gd-*`(드라이버 실행 뒤) | 없음(정상 종료분 자기 청소) |
+| `grep -c '^- \*\*REQ-' spec.md` · `grep -c '^## AC-' acceptance.md` | `16` · `15` |
+| `grep -c 'NEEDS CLARIFICATION'` spec · acceptance · plan · research | `0 · 0 · 0 · 0`(0.7.1: plan 3 · research 3 — 표식 닫힘 확인) |
+| `grep -o 'B + 2[0-9]' spec.md plan.md acceptance.md \| sort \| uniq -c` | acceptance 1 · plan 2 · spec 7(HISTORY 행 포함), 전부 `B + 24` |
+| `git diff --stat HEAD -- .moai/specs/SPEC-UIKIT-012`(이 절 쓰기 전) | acceptance 10 · plan 21 · research 8 · spec 12 — 4 files changed |
+
+**검증하지 못한 것**: S-14 기대값(−15)은 나열 규약(반열린 `isListed`)에서 손계산이다 — AF-018-10의 "Δ > −10 → −5" 패턴과 같은 식(Δ > −20 → −15). 실행 확인은 드라이버 격자(AF-018-23·25·26)와 시뮬레이터 S-14가 한다. 드라이버·빌드는 기준(변경 전)만 돌렸다.
+
 ## §E.2 Run-phase Evidence
 
 _<pending run-phase>_
