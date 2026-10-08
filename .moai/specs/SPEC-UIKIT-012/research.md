@@ -164,6 +164,7 @@ SPEC-UIKIT-009는 `status: completed`(`spec.md:5`)다.
 |---|---|---|---|---|
 | AI 반복 생성 | `create_recurring_schedule` | 성립 | 짝 유지 | (a1) 고아 0 |
 | 재추정 실패 — 출발 기준 | `applyDepartureAnchoredEstimate` 실패(`:1321`·`:1327` — 출발 유지, 옛 도착) | 성립(출발 = 앵커) | 짝 유지 | (a2) 고아 0 |
+| **생성 시 첫 회차 추정 실패(2회차+ 출발 nil)** | `addRecurringEvents` `.departure` 갈래 — 첫 회차만 `applyDepartureAnchoredEstimate`를 부르고 `cachedTravelSeconds == nil`이면 2회차부터 추정을 건너뛰어 `departureDate`가 nil로 남는다(출발 시각은 arrivalDate에 — sync §3.2, `Store.swift:993-1001`) | 0.7.2까지 **깨짐** → 0.7.3 수리로 성립(대조 시각 = `departureDate ?? arrivalDate`) | 기준 트리는 짝 지었다(같은 날 규칙) → 0.7.3 수리로 짝 유지 회복 | sync §3.2 재현(F3) · AF-018-29 |
 | 재추정 — 도착 기준(성공·실패) | `applyEstimate`(`:1291-1311` — 도착 유지, 출발만) | 성립 | 짝 유지 | (a2) 고아 0 |
 | `refreshUpcomingEstimates` | `:1547-1573` — 위 두 함수를 다시 부름 | 성립 | 짝 유지 | 코드 열람 |
 | 옛 가는 편 드래그 | t43 이전 `adjustBuffer`(도착 고정) | 성립 | 짝 유지 | (a2) 고아 0 |

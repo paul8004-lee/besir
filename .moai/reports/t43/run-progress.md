@@ -149,4 +149,58 @@ $ ls -d $TMPDIR/besir-gd-* → 없음                          (AC-011 6)
 - **시뮬레이터·실기기 관측 전무** — S-1~S-11·S-13·S-14·S-16~S-18은 운영자 몫(AC-012). 특히 S-16(`scrollDisabled` 중 프로그램 스크롤 〔가설〕 — 대체안 스위치 `usesPanLockFallbackForOwnedLegDrag` 상수 하나로 전환), S-17(연장 축소 시 오프셋 클램프), S-18(5분 블록 탭).
 - code-safety가 재실행하지 않은 것: iOS 무경고 빌드(오케스트레이터 §3.2 관측으로 대체)·5-1의 실행 재현(경로만 코드 실증).
 - 구글 반영 없음(카드 t48)·활동 끝 편집 추정 복귀 갭(t49)·옛 틈 회차 연결 상실(t50) — 결정된 수용 위험 그대로.
-- spec §6의 루트 문서 수리(CHECKLIST K13·D8·K7·루트 plan.md:190·드라이버 AF-018 머리 주석은 반영·Store.swift:520)는 **sync 몫**(plan §6) — 이 run은 SPEC 문서만 고쳤다.
+- spec §6의 루트 문서 수리(CHECKLIST K13·D8·K7·`:313`, 루트 `plan.md:190`·하한 줄, `Models.swift:391`(기록만), 드라이버 AF-018 머리 주석, `Store.swift:520`)는 **sync 몫**(plan §6) — 이 run은 SPEC 문서만 고쳤다.
+
+## 5. 수리 라운드 fix1 (시작 183e07f — 리드 지시서 `.moai/reports/t43/fix1-brief.md`, sync 증거 `sync-verdict.md`)
+
+배정: ①③ ui-design(t43-ui-fix1) · ② swift-impl(t43-swift) · 문서·게이트·증거 오케스트레이터 · 재판정 code-safety(t43-safety). 경과: t43-ui-fix1가 이번엔 429 없이 완주했다.
+
+### 5.1 ① 자동 스크롤 띠 좌표·속도 상한(sync §3.1 차단) — 커밋 `954bb68`
+
+`autoScrollTick`: `fingerY = gr.location(in: scroll).y - scroll.contentOffset.y`(보이는 창 기준 — UIScrollView의 bounds 원점 = contentOffset이라 location(in: scroll)은 콘텐츠 좌표, 틀린 주석 교체) · 두 띠 모두 `min(max(speed, ±autoScrollMaxSpeed))` 상한 · `AutoScrollProxy.tick` target nil이면 `link.invalidate()`.
+
+**좌표 하네스 원문 출력**(sync의 scrollcoord.swift를 확장 — 옛 식과 고친 식 나란히, Mac Catalyst 실제 UIScrollView 점 변환, 소스·출력 `.moai/state/verify/t43/fix1/scrollcoord-fix1*.swift·txt`):
+
+```text
+offset=0.0 visibleY=-30.0 inScroll=-30.0 band=72.0 old=  -850.0 new=  -600.0
+offset=0.0 visibleY=10.0  inScroll=10.0  band=72.0 old=  -516.7 new=  -516.7
+offset=0.0 visibleY=300.0 inScroll=300.0 band=72.0 old=     0.0 new=     0.0
+offset=0.0 visibleY=590.0 inScroll=590.0 band=72.0 old=   516.7 new=   516.7
+offset=448.0 visibleY=-30.0 inScroll=418.0 band=72.0 old=     0.0 new=  -600.0
+offset=448.0 visibleY=10.0  inScroll=458.0 band=72.0 old=     0.0 new=  -516.7
+offset=448.0 visibleY=300.0 inScroll=748.0 band=72.0 old=  1833.3 new=     0.0
+offset=448.0 visibleY=590.0 inScroll=1038.0 band=72.0 old=  4250.0 new=   516.7
+```
+
+offset 0은 양성 대조(옛 식 = 새 식), offset 448에서 가운데 손가락 0 · 아래 가장자리 516.7 ≤ 600 · 위쪽 띠 작동 · 영역 밖(−30)은 ±600 클램프 — 브리프의 세 조건 모두 관측. 앱 코드의 식이 이 하네스의 new 열과 일치함을 diff로 확인.
+
+### 5.2 ③ 활동 span 분 단위(sync §4.1) — 같은 커밋 `954bb68`
+
+start·end를 `(timeIntervalSince(dayStart)/60).rounded(.down)`로 초를 내려 분 단위로, 길이 = end − start(저장·드래그 경로 공통). 초가 0이면 내림이 항등이라 기존 값 불변(항등 논증 주석 명시). 산술: 10:00:00–11:00:00 → (600, 60) 불변 · 10:00:30–11:00:30 → (600.5, 60) → (600, 60) — 반폭 분할 회귀 해소.
+
+### 5.3 ② 출발 없는 복귀 구간의 짝(sync §3.2 회귀) — 커밋 `8bb15cf`
+
+`private extension ScheduledEvent { anchorComparisonTime }`(Store.swift 파일 끝, 출발 기준 `departureDate ?? arrivalDate` · 도착 기준 `arrivalDate`)이 estimatedLegs 출발 대조·owningActivity 동률 필터 두 곳을 함께 읽는다(계산 한 곳 — 도착 갈래 불변). 드라이버: AF-018-21b 재작성(arrival ≠ 끝이면 소유 없음) + **AF-018-29** 양성 대조(출발 nil 복귀 → 소유·묶음·활동 +30에 arrival +30·departure nil 유지 — 28은 t48 인계 번호라 건너뜀) → **T = B + 25 = 523**. shiftEvent 확인: departure는 `if let` 안에서만 움직이고 arrival은 항상 움직여 nil이 유지된다 — AF-018-29가 실행으로 입증.
+
+### 5.4 게이트(오케스트레이터 관측 원문)
+
+```text
+$ 드라이버(CLAUDE.md 블록, 로그 .moai/state/verify/t43/fix1/driver-fix1-orchestrator.log)
+driver-exit=0 · 523/523 통과 · [실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다
+✗ 0 · AF-018-29 라벨 1회 · ls -d $TMPDIR/besir-gd-* → 없음      (네트워크성 실패 없음 — 1회 실행)
+$ xcodebuild … build-exit=0 · BUILD SUCCEEDED 1 · 경고 필터 뒤 0건 (build-fix1-orchestrator.log)
+$ awk moveActivity → ab65d72c40fb86a311fe8b9eabe27d7a96d3a758  (b59fcaa와 동일)
+$ awk realignReturnLeg → a6ca6f17d69f86a6e67d2eff7fa06759f5ff4a0d  (동일)
+$ git diff --name-only 183e07f → Shared/ContentView.swift · Shared/Store.swift · Tools/GuardDriver.swift + SPEC 문서 4종(0.7.3)
+$ 인용 대조 python3 -I …/sync/check.py …/fix1/checklist-diff.txt . → 인용 22건(중복 제거 18) 전부 심볼 일치 + 양성 대조 작동
+```
+
+재번호(28→29) 뒤 구현자 재검증도 523/523·exit 0(로그 `driver-fix1-renumber.log`, 바이너리 /tmp/gd2). 그 첫 실행 한 번은 exit=1이었는데 오케스트레이터 게이트가 같은 `/tmp/gd` 경로를 동시에 재컴파일한 탓(두 로그의 같은 시각 대조) — 바이너리·로그 경로를 갈라 재실행한 위 두 결과가 깨끗한 관측이다. 커밋 `8bb15cf` 안 "AF-018-28" 문자열 0건·"AF-018-29" 3건(git show 확인).
+
+### 5.5 문서(SPEC 0.7.3 · CHECKLIST)
+
+SPEC 0.7.3(미감사): REQ-004·REQ-016 대조 시각 문구 · §0 단언 수(고쳐 쓰기 5·추가 25)·REQ-013(T = B + 25, 04~27·29)·plan §5·D-10 표·research §10 표(생성 시 첫 회차 추정 실패 행)·AC-015 G(`anchorComparisonTime` 대조로)·AC-011·AC-015 D. CHECKLIST: K13 ✅ → **⚠️**(화면 미관측 + sync 차단 수리 뒤 S-16 확인 필요, 드라이버 523/523)·D8·K7·K5·K9 인용 밀림 수리(ContentView +14줄 — `:916/:924`·`:1071-1073`·`:660`·`:882`·`:897`, Store 인용은 불변)·:310/:313 요약 갱신 — check.py 원문 대조 18건 통과.
+
+### 5.6 code-safety 재판정(fix diff 한정) — **PASS(차단 0)** (t43-safety, 2026-10-08)
+
+범위 `git diff 183e07f..HEAD -- Shared Tools`(954bb68·8bb15cf). ① 좌표 보정·대칭 클램프·proxy 무효화 전부 정확(되먹임 경로 소거, 기존 6경로 약화 없음 — 일곱째 안전망) · ② `anchorComparisonTime`이 정확히 두 곳만 쓰이고 도착 갈래 불변(전수 grep), AF-018-21b 재작성은 게임화 아님(불성립 픽스처 + 29 양성 대조 분리), `realignLegs`의 날것 비교를 안 고친 것이 맞음(명시 연결 전용·바이트 불변 판정)까지 확인 · ③ 분 내림 항등성·30초 조각 최소 높이 유지 확인 · 신규 async/force 0건. 판정자가 드라이버를 재컴파일·재실행해 523/523·exit 0 재확인. [정보 6-1] 앵커 시각 선택 규칙이 `anchorComparisonTime`(Store)과 `failedBlockAnchor`(Models)에 같은 3줄로 두 곳 — 의미가 다르고 주석이 서로를 지목하므로 의도적 분리, 기록만. 못 한 것: 판정 시점에 fix1-brief.md가 이 트리에 없어 sync-verdict 원문으로 판독(→ 이번 커밋에서 브리프를 워크트리에 보존함) · S-16 화면 재관측(운영자 몫) · 빌드·해시·하네스는 오케스트레이터 관측 인용.

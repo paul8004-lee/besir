@@ -146,7 +146,7 @@ AF-018-14(경고 블록 ±15) · AF-018-25(이틀 넘는 구간 +15 → 0, −15
 ## AC-011 — 드라이버 마감 · 범위 · 빌드 ⬜
 
 1. 기준 실행: `P/T 통과` 원문(기대 `498/498`) → B.
-2. 마감: ✗ 0 · exit 0 · **T = B + 24**(고쳐 쓴 4 · 더한 24). AF-018-01~27·AF-015-09·11의 ✓ 줄을 §E.2에.
+2. 마감: ✗ 0 · exit 0 · **T = B + 25**(고쳐 쓴 5 — 02·03·21b·AF-015-09·11 · 더한 25 — AF-018-04~27·29, 0.7.3). AF-018-01~27·29·AF-015-09·11의 ✓ 줄을 §E.2에.
 3. 결정성: `git diff b59fcaa -- Tools/GuardDriver.swift | grep '^+' | grep -c 'addRecurringEvents\|await store.addEvent'` 0.
 4. 범위: `git diff --name-only b59fcaa -- Shared Tools proxy project.yml` ∪ `git status --porcelain -- Shared Tools proxy project.yml` = 정확히 `Shared/ContentView.swift` · `Shared/Store.swift` · `Tools/GuardDriver.swift`. `ls Shared | wc -l` = 27.
 5. iOS 빌드 성공, 소스 경고 0(`CADisplayLink`·상수 격리 〔가설〕). 맥 빌드 없음.
@@ -166,8 +166,8 @@ AF-018-14(경고 블록 ±15) · AF-018-25(이틀 넘는 구간 +15 → 0, −15
 
 근거: 운영자 2차 Q-6 "자정을 넘겨도 가는 이동과 오는이동까지 한 묶음으로 결정하여 이동과 편집이 연계되던 연결성을 유지".
 
-- **D**: AF-018-27(넘긴 추정 구간이 묶음에 남고 활동 이동에 따라온다 · 밤샘 반복에서 10분 어긋난 오는 편은 소유 없음이고, `moveActivity` "전체" +30에서 두 번 옮겨지는 구간이 없다 — 픽스처 시각은 `plan.md` §5 AF-018-27) · AF-015-09 · AF-015-11(고쳐 쓰기). 기준 ✗.
-- **G**: `awk '/private func estimatedLegs/,/^    }$/' Shared/Store.swift | grep -c 'arrivalDate == activity.startDate\|departureDate == activity.endDate'` 1 이상, 기준 **0**(양성 대조) · 같은 범위 `grep -c 'inSameDayAs'` **0**(같은 날 규칙 삭제 — 0.7.0), 기준 **1**(양성 대조).
+- **D**: AF-018-27(넘긴 추정 구간이 묶음에 남고 활동 이동에 따라온다 · 밤샘 반복에서 10분 어긋난 오는 편은 소유 없음이고, `moveActivity` "전체" +30에서 두 번 옮겨지는 구간이 없다 — 픽스처 시각은 `plan.md` §5 AF-018-27) · AF-015-09 · AF-015-11(고쳐 쓰기) · **AF-018-29**(출발 nil 복귀 구간 양성 대조 — 소유·묶음·활동 +30 연동, 0.7.3). 기준 ✗.
+- **G**: `awk '/private func estimatedLegs/,/^    }$/' Shared/Store.swift | grep -c 'arrivalDate == activity.startDate\|anchorComparisonTime == activity.endDate'` 1 이상, 기준 **0**(양성 대조 — 0.7.3에서 출발 기준 대조가 `anchorComparisonTime` 헬퍼로 바뀌었다) · 같은 범위 `grep -c 'inSameDayAs'` **0**(같은 날 규칙 삭제 — 0.7.0), 기준 **1**(양성 대조).
 
 ## AC-016 — 가장자리 자동 스크롤 ⬜
 

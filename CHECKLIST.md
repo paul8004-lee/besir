@@ -90,7 +90,7 @@
 | D5 | "장소 바꿔줘" / "제목 바꿔줘" | ✅ | `new_place_query`(`AIAssistant.swift:2812-2813`)·활동 갈래(`AIAssistant.swift:2816-2828`) — 활동을 고치면 묶인 구간이 따라온다(`realignLegs` `Store.swift:581`). 〔빌드·코드〕 |
 | D6 | 회차마다 여유를 따로 바꾼 시리즈에 "전체 여유 0으로" | ✅ | 0 판정이 시리즈 전체 값을 본다(`AIAssistant.swift:2502-2506`). 〔드:N절〕 |
 | D7 | 모델이 말도 안 되는 값을 보내도 (여유 -5분 등) | ✅ | `clampBuffer`·`clampNotifyLead`(`Store.swift:62`·`Store.swift:66`)를 네 경로가 쓴다: 단발 `AIAssistant.swift:1742-1743`·활동 `AIAssistant.swift:2012-2013`·반복 `AIAssistant.swift:2146-2147`·수정 `Store.swift:1041-1042`. 〔드:O절〕 |
-| D8 | 화면에서 블록 드래그로 시간 이동 | ✅ | 꾹 눌러 드래그(0.35초, `ContentView.swift:1062-1064`). 반복이면 "전체/이 일정만"(`ContentView.swift:183-188`, 적용 `ContentView.swift:912`·`ContentView.swift:920`). 〔빌드·코드 + 시뮬(2026-10-05) 18번〕 |
+| D8 | 화면에서 블록 드래그로 시간 이동 | ✅ | 꾹 눌러 드래그(0.35초, `ContentView.swift:1071-1073`). 반복이면 "전체/이 일정만"(`ContentView.swift:183-188`, 적용 `ContentView.swift:916`·`ContentView.swift:924`). 〔빌드·코드 + 시뮬(2026-10-05) 18번〕 |
 | D9 | 화면에서 활동을 고치면(시간·장소·이동 줄) 이동이 활동에서 떨어지지 않는다 | ✅ | 이동 상세의 편집은 연결된 구간이면 활동 편집 카드를 연다(`EventDetailView.swift:94`, 조회 `Store.swift:415`). 활동 카드는 생성 카드와 같은 구간 줄 문법(`LegCardForm.seeded` `EditCard.swift:566`, 줄 키 `EditCard.swift:255`), 시간은 활동에서 유도. 저장 순서: `modifyActivity`(`Store.swift:311`) → 제거 → `realignLegs`(`Store.swift:581`) → `LegSavePlanner`(`EditCard.swift:627`)의 수정·추가(`ActivityDetailView.swift:311`). 오는 이동을 나중에 더하기(`addLeg` `Store.swift:461`). 연결 없는 반복 회차는 구간 줄이 없다(`EditCard.swift:319`). 〔드:AF·AG절 + 시뮬(2026-10-05) AC-023 1~13번 전부 같음〕 |
 | D10 | 활동 장소를 '장소 없음'으로 / 종료를 시작 이전으로 저장 | ✅ | `modifyActivity(clearPlace:)`(`Store.swift:311`) — 장소를 지우면 연결 구간도 지운다. 종료 ≤ 시작이면 종료·구간 그대로. 〔드:AF-004〕 |
 | D11 | 이동시간을 못 구한 채 저장 | ⚠️ | 안내 '이동시간을 계산하지 못했어요'(`ActivityDetailView.swift:384`), 구간 연산 결과 `LegOutcome`(`Store.swift:366`). **끝점이 그대로인 nil 구간은 다시 저장해도 재추정되지 않는다**(plan.md 후속 30). 화면 문구·시트는 오프라인이 필요해 **실기기 이월**(AC-023 13a·AC-024 20). 〔드:AF-003-06·AF-010·AH-010〕 |
@@ -191,15 +191,15 @@
 | K2 | 월간·주간·일간 좌우 스와이프 | ✅ | `SwipePager`(`ContentView.swift:791`). 〔빌드·코드〕 |
 | K3 | 스와이프 중 날짜가 잘못 선택됨 | ✅ | 탭 문턱 `@GestureState`(`ContentView.swift:34`). 〔빌드·코드〕 |
 | K4 | 블록 위에서 세로 스크롤 | ✅ | UIKit 오버레이가 스크롤 팬과 동시 인식(`ContentView.swift:966-967`). 〔빌드·코드〕 |
-| K5 | 블록 탭 → 상세 | ✅ | 렌더와 히트테스트가 `span(for:on:)`(`ContentView.swift:620`·`ContentView.swift:656`)과 칸 함수(`Models.swift:395`·`Models.swift:314`)를 공유 — 렌더 `columnFrame`(`ContentView.swift:878`), 히트 `block(atX:)`(`ContentView.swift:893`). 〔드:AH-016 + 시뮬(2026-10-05) 16번〕 |
+| K5 | 블록 탭 → 상세 | ✅ | 렌더와 히트테스트가 `span(for:on:)`(`ContentView.swift:620`·`ContentView.swift:660`)과 칸 함수(`Models.swift:395`·`Models.swift:314`)를 공유 — 렌더 `columnFrame`(`ContentView.swift:882`), 히트 `block(atX:)`(`ContentView.swift:897`). 〔드:AH-016 + 시뮬(2026-10-05) 16번〕 |
 | K6 | 겹친 블록 중 짧은 것 선택 | ✅ | 지속시간 최소 우선(`ContentView.swift:756-762`). 〔빌드·코드〕 |
-| K7 | 꾹 눌러 드래그로 시간 이동 | ✅ | D8과 같다(`ContentView.swift:912`·`ContentView.swift:920`). 〔빌드·코드〕 |
+| K7 | 꾹 눌러 드래그로 시간 이동 | ✅ | D8과 같다(`ContentView.swift:916`·`ContentView.swift:924`). 〔빌드·코드〕 |
 | K8 | 활동을 옮기면 묶인 이동도 이동 | ✅ | `linkedActivityId`(`Models.swift:191`) + `linkedLegs`(`Store.swift:1414-1434`), 카드 저장은 `realignLegs`(`Store.swift:581`) — 끝점이 그대로면 저장된 이동시간을 쓴다(`legAnchor` `Store.swift:378`, 연산 `Store.swift:461`·`Store.swift:523`·`Store.swift:567`). 〔드:AF절 + 시뮬(2026-10-05) 5·6번(AC-023)〕 |
-| K9 | 자정을 넘기는 블록 표시 | ✅ | 나열(`ContentView.swift:94-95` → `isListed` `Models.swift:229`, 활동은 `ContentView.swift:107` → `Store.swift:38`) + 그리는 날로 자르기(`ContentView.swift:620`·`ContentView.swift:656`) + 점(`recomputeDaysWithSchedule` `Store.swift:134`, `listedSpan` `Models.swift:219`). 〔드:X절·AH-010 (12)(13) + 리드 기록(2026-09-24) 6번 — 단 그 관찰은 t17 이전 빌드다. t17 이후 화면의 자정 넘는 오는 편은 **실기기 이월**(AC-024 21)〕 |
+| K9 | 자정을 넘기는 블록 표시 | ✅ | 나열(`ContentView.swift:94-95` → `isListed` `Models.swift:229`, 활동은 `ContentView.swift:107` → `Store.swift:38`) + 그리는 날로 자르기(`ContentView.swift:620`·`ContentView.swift:660`) + 점(`recomputeDaysWithSchedule` `Store.swift:134`, `listedSpan` `Models.swift:219`). 〔드:X절·AH-010 (12)(13) + 리드 기록(2026-09-24) 6번 — 단 그 관찰은 t17 이전 빌드다. t17 이후 화면의 자정 넘는 오는 편은 **실기기 이월**(AC-024 21)〕 |
 | K10 | 빠르게 연속 스와이프 | ⚠️ | `asyncAfter(0.22)`(`ContentView.swift:828`·`ContentView.swift:835`) 경합 가능 — 재현 안 됨. 〔코드 읽기〕 |
 | K11 | 겹친 블록 — 활동과 그 이동 블록이 함께 줄어든다 | ✅ | `Store.packingGroups`(`Store.swift:438`)가 구간 → 활동 대응을, `ScheduleLogic.overlapSlots`(`Models.swift:395`)가 두 단계 칸을 정한다. 〔드:AH-015·016·017 + 시뮬(2026-10-05) AC-024 14~19번 전부 같음〕 |
 | K12 | 이동시간을 못 구한 구간 — 앵커 시각에서 아래로 경고 블록 하나 | ⚠️ | `failedBlockAnchor`(`Models.swift:210`) 하나가 블록 선택(`ContentView.swift:509`)·세로 자리(`ContentView.swift:564`)·나열(`Models.swift:229`)·점(`Store.swift:134`)을 정한다. 화면 확인은 오프라인이 필요해 **실기기 이월**(AC-023 13a·AC-024 20·20b — 시뮬레이터의 네트워크 차단이 MapKit 시스템 데몬을 막지 못한다). 〔드:AH-010 (5)–(8)(11)–(13)〕 |
-| K13 | 오는 편 이동 블록을 아래로 끌면 활동이 그만큼 길어지고, 가는 편을 끌면 활동 시작이 바뀐다 | ✅ | 활동에 연결된 구간을 끌면 활동 가장자리가 따라 움직인다 — 오는 편은 끝, 가는 편은 시작, 구간은 통째로(`adjustTravelLeg` `Store.swift:1418` → `applyLinkedLegDrag` `Store.swift:1454`, 소유 조회 `owningActivity` `Store.swift:429`, 한계 `effectiveDragMinutes` `Store.swift:1523`). 연결 없는 구간은 예전대로 여유·출발 시각만 바뀐다(`adjustBuffer` `Store.swift:1648`·`shiftEvent` `Store.swift:1636`). 운영자 요청(시뮬 18번 메모) — **카드 t43**(SPEC-UIKIT-012). 〔드:AF-018-02~27·AF-015-09·11·12 — 드라이버 522/522·exit 0. **시뮬레이터 미관측**: 끄는 중 미리보기·24:00 아래 연장·가장자리 자동 스크롤·5분 블록 탭은 S-1~S-18 운영자 몫〕 |
+| K13 | 오는 편 이동 블록을 아래로 끌면 활동이 그만큼 길어지고, 가는 편을 끌면 활동 시작이 바뀐다 | ⚠️ | 활동에 연결된 구간을 끌면 활동 가장자리가 따라 움직인다 — 오는 편은 끝, 가는 편은 시작, 구간은 통째로(`adjustTravelLeg` `Store.swift:1418` → `applyLinkedLegDrag` `Store.swift:1454`, 소유 조회 `owningActivity` `Store.swift:429`, 한계 `effectiveDragMinutes` `Store.swift:1523`). 연결 없는 구간은 예전대로 여유·출발 시각만 바뀐다(`adjustBuffer` `Store.swift:1648`·`shiftEvent` `Store.swift:1636`). 운영자 요청(시뮬 18번 메모) — **카드 t43**(SPEC-UIKIT-012). 〔드:AF-018-02~27·29·AF-015-09·11·12 — 드라이버 523/523·exit 0(fix1 후, B 498 + 25). **화면 미관측 + sync 차단 수리 뒤 S-16 확인 필요**: 끄는 중 미리보기·24:00 아래 연장·가장자리 자동 스크롤·5분 블록 탭은 S-1~S-18 운영자 몫〕 |
 
 ## L. 연동·예외 상황
 
@@ -309,8 +309,9 @@ AC-024 14~19), 장소 검색 재오픈 강조(P6 — AC-015), AI 카드 1~16a �
 
 **⚠️ 현존**: D11·K12·L10(오프라인 화면 — 실기기), H5(알림 권한 거부 무고지), H6(지난 출발 알림 화면 — 실기기),
 G10·G15(프롬프트 전용), I3·L5(iOS 백그라운드 시점), K10(스와이프 경합), L9(설정 연결 없음),
-Q1·Q7·Q8·Q9(장소 채택 — t47 뒤: 실제 카카오 목록·"검색 → 보류" 첫 실행 미관찰), Q16(t47 카드 문구 — 혼합 턴·가드 첫머리·드라이버 단언 없음), Q14·Q15(모델 행동 관찰), S6(테스트용 버튼), S8(공유 유실 가설).
-**❌ 현존**: J8·J9(계획된 뒤 Day), Q10·Q11(t30). (K13은 t43 sync에서 ❌ → ✅ — 드라이버 522/522, 시뮬레이터 미관측이라 화면 동작은 S-1~S-18 운영자 몫.)
+Q1·Q7·Q8·Q9(장소 채택 — t47 뒤: 실제 카카오 목록·"검색 → 보류" 첫 실행 미관찰), Q16(t47 카드 문구 — 혼합 턴·가드 첫머리·드라이버 단언 없음), Q14·Q15(모델 행동 관찰), S6(테스트용 버튼), S8(공유 유실 가설),
+K13(t43 이동 블록 드래그 — 화면 미관측 + sync 차단 수리 뒤 S-16 확인 필요).
+**❌ 현존**: J8·J9(계획된 뒤 Day), Q10·Q11(t30). (K13은 t43 fix1까지 마친 뒤 ⚠️ — 드라이버 523/523·exit 0, 화면 동작은 S-1~S-18 운영자 몫.)
 
 ## 확인 목록
 
