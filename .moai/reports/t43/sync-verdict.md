@@ -159,3 +159,124 @@ ContentView.swift:1 | import SwiftUI
 3. K13 상태 — 브리프대로 ✅로 적었다. 다만 이 파일의 관례(Q7·Q9)는 화면 미관측이면 ⚠️라서, §3.1 차단이 있는 동안은 ⚠️로 바꾸는 쪽이 더 맞을 수 있다.
 
 **t44(인용 재사상) 인계**: 이 카드가 `Store.swift`(+27행 @`:420` 부근, +150행 @`:1451` 부근 등)와 `ContentView.swift`(+7행 @`:67`, +140행 안팎 이후 구간)의 줄을 밀었다. 위 표의 행은 이미 새 좌표(`c50754a`)이므로 t44 원장이 건너뛰면 된다. 그 밖의 `CHECKLIST.md` 인용(`ContentView.swift`/`Store.swift` 약 49건)·`plan.md` 6건·`Tools/GuardDriver.swift` 주석 `Store.swift:698-700`·`:1001`·`:1026`은 손대지 않았다.
+
+## 7. 좁은 재검증(fix1) — 2026-10-08, 수리 HEAD `1cce4a4`
+
+범위는 `git diff 183e07f..1cce4a4`(Store 16줄·ContentView 28줄·GuardDriver 36줄)와 CHECKLIST·SPEC 문서 변경이다. 리드의 브리프(`resync-brief.md`)대로 **드라이버 전체 실행·iOS 빌드는 하지 않았다**(리드 몫) — 예외로, 항목 4의 "옛 규칙이면 실패하는가"를 보려고 독립 경로에서 드라이버를 옛 규칙 Store 사본에 컴파일해 1회 돌렸고 리드에게 먼저 알렸다(게이트 숫자로는 쓰지 않는다). 자기 코드를 자기가 판정하지 않았다: 아래 전부 sync 레인이 직접 돌린 것이다. 증거 원본은 `.moai/state/verify/t43/sync/`(`scrollcoord-fix1.swift`·`resync/main.swift`·`resync-span/main.swift`·`driver-oldrule-negative-control.log`·`doc-diff-fix1.txt`), 바이너리는 세션 스크래치다.
+
+### 7.0 판정 요약
+
+| # | 항목 | 판정 |
+|---|---|---|
+| 1 | [차단] 자동 스크롤 좌표·상한 | **해소** — 고친 식을 좌표 하네스에 넣어 재현 |
+| 2 | [회귀] 출발 없는 복귀 구간 | **해소** — F3 `owner=true packed=true` +1800초, 옛 규칙에서는 실패 재현 |
+| 3 | [주의] 활동 span 분 내림 | **해소** — 초 0 데이터 항등 5,174,850건, 재현 값 `[0,1]`로 복귀 (복제 산술) |
+| 4 | 드라이버 단언 게임화 | **통과** — 손 계산 일치, AF-018-29는 옛 규칙에서 실제로 실패(522/523, ✗ 그 하나) |
+| 5 | 문서 | **부분** — K13 ⚠️·인용 18건·B + 25 대부분 일치, 한 줄 낡음(`plan.md:268`) |
+
+새 차단 결함은 없다. 아래 §7.6에 정보·주의 3건이 있다.
+
+### 7.1 [차단 해소] 자동 스크롤 좌표 · 상한
+
+**코드 순서** (`git diff 183e07f..1cce4a4 -- Shared/ContentView.swift`): `autoScrollTick`에서 `fingerY = gr.location(in: scroll).y - scroll.contentOffset.y`, 띠 비례식 뒤에 `speed = min(max(speed, -autoScrollMaxSpeed), autoScrollMaxSpeed)`가 오고, 그 **다음에** `guard speed != 0`·`if speed > 0 { scrolledDown = true }`·`setContentOffset`이 이어진다 — 클램프가 셋 모두보다 앞이다. 반대쪽 띠(`-`)도 대칭 클램프.
+
+**재현** — 이전 §3.1 하네스를 확장(`scrollcoord-fix1.swift`, 보이는 높이 600 · 콘텐츠 1344 · 오버레이는 콘텐츠 안, Mac Catalyst UIKit 실제 `UIScrollView` 점 변환; `old`는 183e07f의 식, `new`는 고친 식 — 식은 앱 소스에서 옮겨 쓴 복제본이다):
+
+```text
+$ xcrun swiftc -target arm64-apple-ios17.0-macabi -sdk …/MacOSX.sdk -Fsystem …/iOSSupport/System/Library/Frameworks -o …/scrollcoord-fix1 scrollcoord-fix1.swift && …/scrollcoord-fix1
+offset=0.0 visibleY=-80.0 raw=-80.0 fixedFinger=-80.0 old=-1266.67 new=-600.0
+offset=0.0 visibleY=10.0 raw=10.0 fixedFinger=10.0 old=-516.67 new=-516.67
+offset=0.0 visibleY=300.0 raw=300.0 fixedFinger=300.0 old=0.0 new=0.0
+offset=0.0 visibleY=590.0 raw=590.0 fixedFinger=590.0 old=516.67 new=516.67
+offset=0.0 visibleY=680.0 raw=680.0 fixedFinger=680.0 old=1266.67 new=600.0
+offset=448.0 visibleY=-80.0 raw=368.0 fixedFinger=-80.0 old=0.0 new=-600.0
+offset=448.0 visibleY=10.0 raw=458.0 fixedFinger=10.0 old=0.0 new=-516.67
+offset=448.0 visibleY=300.0 raw=748.0 fixedFinger=300.0 old=1833.33 new=0.0
+offset=448.0 visibleY=590.0 raw=1038.0 fixedFinger=590.0 old=4250.0 new=516.67
+offset=448.0 visibleY=680.0 raw=1128.0 fixedFinger=680.0 old=5000.0 new=600.0
+```
+
+(표는 소수 둘째 자리까지 줄였다. 원문은 `…/scrollcoord-fix1` 실행 출력.) offset 0 행은 양성 대조 — 옛 식과 새 식이 같다(설계대로). offset 448에서는 가운데 손가락이 1833 → **0**, 아래 가장자리가 4250 → **516.67**, 위쪽 띠가 0 → **−516.67**(다시 걸린다), 스크롤 영역 밖(−80·680)은 ±600으로 잘린다. 이전에 "속도 상한 없음"이던 `old` 열이 offset 0·영역 밖에서 ±1266을 내는 것도 같이 닫혔다.
+
+**`AutoScrollProxy.tick`** 의 `guard let target else { link.invalidate(); return }` — `target`은 `weak var`라 이 갈래는 코디네이터가 이미 사라졌을 때만 닿는다. 코디네이터가 살아 있으면 `target`이 non-nil이라 지나가고, `startAutoScrollIfNeeded`의 `guard displayLink == nil`은 **살아 있는 코디네이터의** 필드라서 죽은 코디네이터의 링을 끊는 이 갈래와 만나지 않는다 — 재시작을 막지 않는다(코드 열람; 실행 재현은 하지 못했다, 코디네이터 해제 시점을 만들 수단이 없다).
+
+한계: 이전과 같이 `gr.location(in:)` 대신 같은 bounds 좌표계를 쓰는 `overlay.convert(_:to: scroll)`를 썼다. 앱 시뮬레이터 실행은 하지 않았다.
+
+### 7.2 [회귀 해소] 출발 없는 복귀 구간
+
+`git diff`로 확인한 변경: `Store.swift` 파일 끝의 `private extension ScheduledEvent { var anchorComparisonTime }` — `(anchor ?? .arrival) == .departure ? (departureDate ?? arrivalDate) : arrivalDate`(Models.swift의 `failedBlockAnchor`와 같은 규칙) — 와 이를 읽는 두 자리(`owningActivity`의 동률 필터 `:441`, `estimatedLegs`의 출발 대조 `:1628`)뿐이다.
+
+**재현** — 이전 F3 하네스를 `resync/main.swift`로 다시 쓰고(같은 시나리오 + AF-018-29 복제 + 동률·도착 기준·밤샘), **같은 소스를 수리 트리 Store와, 두 줄을 옛 규칙(`departureDate ==`)으로 되돌린 Store 사본에 각각 컴파일**해 돌렸다(`sed 's/\.anchorComparisonTime == /.departureDate == /g'`, `diff`가 정확히 그 두 줄만 다름을 보였다). 실제 `Store.swift`·`Models.swift`를 쓴다(샌드박스 홈, 실행 전후 실제 지원 디렉터리 3파일 mtime·크기 동일 — activities.json 9/23 16:31:28 · config.json 9/9 12:26:52 · events.json 10/5 14:50:37).
+
+```text
+수리 트리 (1cce4a4)                                          옛 규칙 사본
+F3 dep-nil leg: owner=true packed=true                       F3 dep-nil leg: owner=false packed=false
+F3 control dep 18:00: owner=true packed=true                 F3 control dep 18:00: owner=true packed=true
+F3 activity +30: dep-nil leg arrival+1800.0s dep+nil         F3 activity +30: dep-nil leg arrival+0.0s dep+nil
+AF29 replica: owned=true grouped=true arrivalShift=1800.0    AF29 replica: owned=false grouped=false arrivalShift=0.0
+              depNil=true  => PASS                                          depNil=true  => FAIL
+TIE dep present 13:00→13:20: owningActivity=nil packingGroup=점심   (동일)
+TIE dep nil, arrival 13:00:  owningActivity=nil packingGroup=점심   TIE dep nil, arrival 13:00: owningActivity=nil packingGroup=nil
+21b-new dep nil arrival=end+20m: owner=nil                   (동일)
+ARR: exact owner=L off-by-1s owner=nil                       (동일)
+N5-1 groups: #1=A0 #2=A0 #3=A1 #4=none                       (동일)
+N5-1 moveActivity(A0,+30,whole): arrival shifts #1..#4 = 1800.0, 1800.0, 1800.0, 0.0   (동일)
+```
+
+판독:
+- F3(이전 §3.2의 회귀 모양) — 수리 트리에서 `owner=true packed=true`, 활동 +30에 구간 arrival **+1800초**, departure는 nil 유지. 옛 규칙에서는 같은 입력이 `false/false/+0`이라 이 하네스가 회귀를 실제로 잡는다(양성 대조).
+- **새 이중 주장(한 구간을 두 활동이 소유)** — 같은 끝 활동 둘(체류 11–13·점심 12–13) + 복귀 구간 한 개로 출발 있음/없음을 나란히 돌렸다. 둘 다 `owningActivity=nil`(동률 → 소유 없음)이고 `packingGroup=점심`으로 **똑같다**: 같은 끝 활동 둘이 한 구간을 각자 집는 `packingGroups`의 동작은 출발 있는 구간에서 이미 있던 것이고, 출발 nil 구간이 그와 같은 모양이 됐을 뿐 새 종류의 이중 주장이 아니다. `owningActivity`는 동률을 막는다.
+- 도착 기준 갈래 — 정확히 맞으면 소유, 1초 어긋나면 `nil`(변함없음). AF-018-21b 새 모양(출발 nil · arrival = 끝 + 20분) → `nil`.
+- N5-1 밤샘 어긋남 모양(AF-018-27) — 묶음 `#1·#2 → A0, #3 → A1, #4 없음`, "전체" +30에 `#1·#2·#3 = +1800`, `#4 = 0` — 수리 트리와 옛 규칙이 같다(헬퍼가 이 모양을 바꾸지 않는다). 손 계산(`#4` 출발 D+2 02:10 ≠ A1 끝 02:00)과 일치.
+- `moveActivity`·`realignReturnLeg` 본문은 이 diff에 없다(리드가 해시 확인).
+
+### 7.3 [주의 해소] 활동 span 분 단위 내림
+
+`ContentView.swift`의 `span(for activity:)`는 private이라 직접 못 부르므로 세 판의 산술만 소스에서 그대로 옮겼다(`resync-span/main.swift` — **복제본**; 하루 한계는 평소 1440, 한국 시간대이므로 일광절약 없음). `baseline` = b59fcaa(`minutesSinceMidnight` + 같은 날 판정 0/1440), `v183` = 183e07f(초 포함 소수 분), `head` = 1cce4a4(`floor`).
+
+```text
+GRID checked=269448 baseline≠head=0 baseline≠v183(양성 대조: 0보다 커야 도구가 차이를 잡는다)=185544
+ZERO-SECONDS 전수 checked=5174850 mismatch=0
+PACK b59fcaa: act=(600.0,660.0) ret=(660.0,680.0) → act[0.0,1.0] ret[0.0,1.0]
+PACK 183e07f: act=(600.5,660.5) ret=(660.0,680.0) → act[0.0,0.5] ret[0.5,1.0]
+PACK 1cce4a4: act=(600.0,660.0) ret=(660.0,680.0) → act[0.0,1.0] ret[0.0,1.0]
+```
+
+- 초 0·1·30·59 격자(269,448 입력)에서 `b59fcaa`와 `1cce4a4`가 **한 건도 다르지 않다**(초가 있는 입력도 기준선과 같은 "초 버림" 의미). 양성 대조: 같은 격자에서 183e07f는 185,544건 다르다.
+- 초 0 데이터는 시작 −300…+1700분 × 길이 1…3000분 **전수 5,174,850건 불일치 0** — 분 내림이 항등이다(실제 `ScheduleLogic.overlapSlots`를 `Models.swift`로 돌림).
+- 이전 §4.1 재현 값: 활동 10:00:30–11:00:30 + 출발 11:00:30 오는 편이 `[0,1]`(전폭)로 돌아온다(183e07f는 `[0,0.5]`/`[0.5,1]`).
+- 끄는 중 미리보기: 드롭의 `effectiveDragMinutes`는 초를 0쪽으로 자른 정수 분만 더하므로 활동의 초는 그대로 남고 `span`이 내림하는 값은 저장 뒤와 같다 — 활동 쪽에서 어긋나는 자리는 없다. **다만** [정보] 끌리는 구간 자신의 드래그 갈래(`span(for event:)`의 `shift != 0` 분기, `:668-692`)는 이번 diff에 없어 여전히 초를 포함한 소수 분으로 계산한다(저장된 구간은 `minutesSinceMidnight`). 초가 0이 아닌 데이터에서만, 끄는 동안만 일어나며 어긋남은 1분 미만(<1pt)이다 — 예: 도착 기준 구간의 도착이 활동 시작 10:00:30이면 끄는 중 구간 끝 600.5 · 활동 시작 600 → 미리보기 동안 반폭 가능성(손 계산, 실행하지 않음). 초 0 데이터에는 영향 없다.
+
+### 7.4 드라이버 단언 게임화 점검
+
+- **AF-018-21b 고쳐 쓰기**(`git diff`): 픽스처가 `arrival: ba.endDate` → `arrival: ba.endDate.addingTimeInterval(1200)`로 바뀌었다. 손 계산: 출발 nil이므로 비교 시각 = arrival = 끝 + 20분 ≠ 어느 활동의 끝 → 후보 0 → 소유 없음 → `adjustTravelLeg(+15)`은 소유 없음 갈래(REQ-005: 출발 기준 구간은 통째로 이동)라 `departureDate`는 nil 유지, `arrivalDate`는 +15분 — 새 기대값 `b.arrivalDate == legB.arrivalDate + 15분`과 일치(§7.2의 `21b-new … owner=nil`로 소유 없음도 실행 확인). 구현 출력을 따라 쓴 기대가 아니라 SPEC 산식(REQ-005)에서 나온 값이다.
+- **AF-018-29 신규**: 손 계산 — 활동 12:00–13:00(반복) + 출발 nil 복귀(arrival = 13:00): 비교 시각 = arrival = 활동 끝 → 소유 성립·배치 묶음, 활동 +30분 → arrival +1800초, departure nil 유지. 기대값(`+1800`·`depNil`)은 리터럴이다.
+- **옛 규칙에서 실제로 실패하는가 — 실제 드라이버를 실행**:
+
+```text
+$ (driver 소스 + 옛 규칙 StoreOld.swift 컴파일, 독립 경로 …/scratchpad/resync/gd-old-bin)
+old-driver-exit=1
+522/523 통과
+[실제 데이터] 대조 통과 — 시작 3개, 끝 3개의 이름·바이트가 같다
+$ grep -n '✗' gd-old-run.log
+515:  ✗ AF-018-29 출발 nil 복귀 구간(대조 시각 = arrival = 활동 끝) → 소유 성립·배치 묶음 && 활동 +30에 arrival도 +30(departure는 nil 유지)
+$ grep -c '✓' gd-old-run.log → 522
+```
+
+  옛 규칙이면 523개 중 **정확히 AF-018-29 하나만** 실패한다 — 기능이 틀리면 실제로 실패하는 대조다. 샌드박스 잔여 `$TMPDIR/besir-gd-*` 없음, 실제 지원 디렉터리 3파일 불변.
+- [정보] 커버리지 구멍(결함 아님): 21b가 "출발 nil + 동률"에서 "출발 nil + 끝 불일치"로 바뀌면서, 출발 nil · arrival == 끝 · 같은 끝 활동 둘(= 동률) 모양은 드라이버가 고정하지 않는다. §7.2의 `TIE dep nil` 실행이 `owningActivity=nil`임을 보였으므로 현재 동작은 올바르나 단언은 없다.
+
+### 7.5 문서
+
+- **CHECKLIST K13 ⚠️** — 행 근거 "드라이버 523/523·exit 0(fix1 후, B 498 + 25)" · "화면 미관측 + sync 차단 수리 뒤 S-16 확인 필요"가 사실이다: 523은 리드 관측(브리프)이고 제가 옛 규칙 사본에서 본 `522 ✓ + 1 ✗ = 523`이 총 단언 수로 일치한다. 화면 관측은 없다. ⚠️ 요약 줄(`CHECKLIST.md:313`)에도 K13이 올라가 있다.
+- **인용 재대조** — `git diff -U0 183e07f..HEAD -- CHECKLIST.md`의 추가 줄을 `check.py`로 원문 줄과 대조: **22건(중복 제거 18건) 전부 이름이 맞는 심볼이 그 줄에 있다**(`ContentView.swift:1071-1073` 제스처 · `:183-188` 대화상자 · `:916`·`:924` 적용 · `:620`·`:660` span · `:882` columnFrame · `:897` block(atX:) · `:94-95`·`:107` · `Store.swift:38`·`:134`·`:1418`·`:1454`·`:429`·`:1523`·`:1648`·`:1636`). 양성 대조(`ContentView.swift:1` → `import SwiftUI`) 정상. 원문은 `doc-diff-fix1.txt`.
+- **T = B + 25 = 523** — `spec.md` §0 표(고쳐 쓰기 5 · 추가 25)·REQ-013(AF-018-21b + 29, T = B + 25)·`plan.md` §5 통과 수 줄(`:213`)·`acceptance.md` AC-011(`:149`)이 같다. 이력 행(`spec.md:136`·`plan.md:282` 대응표, HISTORY의 옛 `B + 24`)은 이력이라 둔다.
+- **낡은 곳 2** — (a) `plan.md:268` §9 ③ "`Store`·`ContentView`·`GuardDriver`(고쳐 쓰기 4 · 추가 24)"는 현재형 문장인데 5 · 25로 안 바뀌었다. (b) SPEC `progress.md`는 0.7.3(fix1) 항목이 없고 마지막 "현재 수치" 줄이 `T = B + 24`(0.6.0, `:361`)에 머문다 — fix1의 증거는 `run-progress.md` §5에 있다. 둘 다 문서 드리프트이고 구현·게이트에는 영향 없다.
+
+### 7.6 새 결함 · 남은 주의 · 못 본 것
+
+- **새 차단 없음.** 수리 diff 안에서 새로 만든 결함을 찾지 못했다.
+- [정보] 끌리는 구간 자신의 드래그 미리보기 span이 초를 포함한 소수 분을 쓰는 비대칭(§7.3) — 초 0이 아닌 데이터에서만.
+- [정보] 드라이버가 "출발 nil · arrival == 끝 · 동률"을 고정하지 않는다(§7.4).
+- [정보] 문서 낡음 2곳(§7.5) — `plan.md:268`, SPEC `progress.md` 현재 수치.
+- 못 본 것: 시뮬레이터·실기기 전부(S-16에서 **스크롤한 뒤에** 끄는 경우를 반드시 본다 — 이번 수리의 사람 눈 확인), `gr.location(in:)` 실제 호출(변환만 재현), `span` 복제 산술의 실제 함수 호출, 코디네이터 해제 시 `tick`의 `invalidate` 실행, 일광절약 시간대. 이전 §3·§4의 범위 밖 항목("다음 날 00" 눈금 폭 등)은 브리프대로 다시 열지 않았다.
