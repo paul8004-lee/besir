@@ -187,7 +187,7 @@
 | 즐겨찾기 장소 | "집" 등 자주 쓰는 장소 저장 → 일정 추가 화면에서 칩으로 빠른 선택, AI가 목적지/출발지명을 즐겨찾기와 우선 매칭 | `Shared/FavoritesView.swift` |
 | 복합 반복 출퇴근 일정 | "매주 평일 9시~18시 교육, 점심 1~2시" 같은 표현 → 출근+퇴근 왕복 이동을 자동 생성, 점심도 "근처 식당" 등 다른 장소로 명시하면 왕복 이동 생성(같은 건물이면 생성 안 함), 출발지·복귀 여부·이동수단이 애매하면 AI가 등록 전에 먼저 되물음 | `Shared/AIAssistant.swift`, `Shared/Store.swift`(`addRecurringActivities`), `Shared/Models.swift`(`ActivityBlock`, `ScheduleAnchor`) |
 | AI 대화 기록 영구 저장 | 재설치해도 대화 이력이 사라지지 않도록 `ai_history.json`으로 저장/로드 | `Shared/AIAssistant.swift` |
-| 캘린더 UI 전면 개편 | 일간/주간/월간 탭 제거 → 월간 그리드 기본, 날짜 탭하면 그 날 시간표+상단 주간 스트립, 좌우 스와이프로 날짜/월 이동(실시간 손가락 추적 애니메이션), 블록 꾹 눌러 드래그로 5분 단위 재조정(반복 일정이면 전체/이 일정만 이동 확인 다이얼로그), 활동 블록 이동 시 연계된 이동 블록도 같이 이동, 이동 블록만 옮기면 활동은 고정하고 버퍼만 조정 | `Shared/ContentView.swift`(대규모 재작성), `Shared/Store.swift` |
+| 캘린더 UI 전면 개편 | 일간/주간/월간 탭 제거 → 월간 그리드 기본, 날짜 탭하면 그 날 시간표+상단 주간 스트립, 좌우 스와이프로 날짜/월 이동(실시간 손가락 추적 애니메이션), 블록 꾹 눌러 드래그로 5분 단위 재조정(반복 일정이면 전체/이 일정만 이동 확인 다이얼로그), 활동 블록 이동 시 연계된 이동 블록도 같이 이동, 이동 블록만 옮기면 활동은 고정하고 버퍼만 조정(2026-10-08 카드 t43 SPEC-UIKIT-012로 바뀜 — 활동에 연결된 이동 블록을 끌면 오는 편은 활동 끝, 가는 편은 활동 시작이 함께 움직이고, 연결 없는 이동 블록만 이 방식 그대로) | `Shared/ContentView.swift`(대규모 재작성), `Shared/Store.swift` |
 | 월간 스와이프 렉 수정 | `Store.daysWithSchedule`(`Set<DateComponents>` 캐시)로 O(n)→O(1) | `Shared/Store.swift`, `Shared/ContentView.swift` |
 | 탭→상세정보 안 뜨던 버그 수정 | `NavigationSplitView` detail 컬럼 전환 대신 `.sheet` 사용 | `Shared/ContentView.swift` |
 

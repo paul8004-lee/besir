@@ -544,7 +544,7 @@ final class Store: ObservableObject {
     }
 
     /// 연결 구간의 줄을 고친다(주어진 것만). 앵커 시각은 활동의 **현재** 값에서 다시 유도한다
-    /// (legAnchor) — 오는 편을 끌어 벌어진 틈은 이 저장으로 닫힌다(design §4). 활동이 사라진
+    /// (legAnchor) — 옛 버전에서 오는 편을 끌어 벌어진 틈은 이 저장으로 닫힌다(design §4). 활동이 사라진
     /// 매달린 구간은 유도를 못 하므로 저장된 시각을 그대로 쓴다.
     @discardableResult
     func updateLeg(legId: UUID,
