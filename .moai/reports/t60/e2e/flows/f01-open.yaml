@@ -1,0 +1,16 @@
+# t60 재현 — 공통 진입: 앱 실행 → 서비스 선택 → 월간 그리드에서 오늘(9일) 탭 → 일간 시간표.
+# selector 는 전역 정규식이라 부분문자열 오매칭 위험이 있어 앵커(^...$)를 쓴다(t47 교훈).
+appId: com.iseongmin.besir
+---
+- launchApp
+- waitForAnimationToEnd:
+    timeout: 8000
+- tapOn:
+    text: "be on-time sir"
+- waitForAnimationToEnd:
+    timeout: 5000
+# 월간 그리드에서 오늘 날짜(2026-10-09) — 셀의 숫자 텍스트가 "^9$" 로만 걸린다(제목·주간 스트립은 다른 문양).
+- tapOn:
+    text: "^9$"
+- waitForAnimationToEnd:
+    timeout: 5000
