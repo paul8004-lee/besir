@@ -41,6 +41,12 @@
 // 심고 일찍 돌아가며 장소 확정을 건너뛰어 confirmedPlaces가 비는 결함. T58-1~5 추가 5
 // (1·2 시드 좌표·판정, 3 저장 경로, 4 "장소 없음" REQ-004 보존 회귀선, 5 단발·명시 회귀선).
 // 마감 하한은 **534**(t49 마감 529 + 5) — 단언을 지우면 하한 밑으로 떨어진다.
+//
+// T56절(2026-10-09) — 반복 전체 이동(S-8·S-9) 관측 재현(카드 t56): 운영자 관측 "가는/오는
+// 이동 드래그 '전체'에 체류의 시작·끝이 같이 −30"이 어느 Store 호출로 나오는지 확정.
+// T56-1~3은 SPEC 기대치(REQ-001·002·003·010), T56-4는 moveActivity(.activity 드롭)의
+// 지금 동작 특성화(관측 모양 고정), T56-5는 배치·히트테스트 분류의 뷰 판정식 재현(결함 없음
+// 회귀선). 추가 5. 마감 하한은 **539**(t58 마감 534 + 5) — 단언을 지우면 하한 밑으로 떨어진다.
 
 
 var drvPass = 0, drvFail = 0
@@ -5330,6 +5336,183 @@ struct Drv {
             agAi.drvCheck("T58-5 단발 활동·명시 연결 회차 시드의 location 좌표는 그대로 보존된다",
                           t58LocPlace(t58Sole) == afOffice && t58LocPlace(t58Linked) == afOffice,
                           "단발=\(String(describing: t58LocPlace(t58Sole))), 명시=\(String(describing: t58LocPlace(t58Linked)))")
+        }
+
+        // ── T56절(2026-10-09) — 반복 전체 이동(S-8·S-9) 관측 재현(카드 t56): 운영자 관측은
+        //        "가는/오는 이동 드래그 '전체'에 체류의 시작·끝이 같이 −30(길이 불변, 시간대
+        //        통째 이동)" — SPEC 기대(REQ-002 시작만·REQ-010 각 회차 적용)와 다르고 REQ-005
+        //        (소유 없음)도 아니다. T56-1~3은 SPEC이 바라는 동작으로 쓴다(t58절과 같은 규칙 —
+        //        수리 전 ✗는 결함의 기록). T56-4는 대조용: moveActivity(.activity 드롭)가 관측
+        //        모양을 내는지 지금 동작 그대로 고정한다.
+        print("\nT56. 반복 전체 이동 관측 재현(카드 t56 — S-8·S-9)")
+        let t56Lunch = Place(name: "T56식당", address: "서울 L", latitude: 37.520, longitude: 127.050)
+        func t56Fixture(_ rid: UUID, _ d: Date) ->
+            (work: ActivityBlock, lunch: ActivityBlock, out: ScheduledEvent,
+             ret: ScheduledEvent, lOut: ScheduledEvent, lRet: ScheduledEvent) {
+            // 매 회차: 체류 09:00–18:00(회사) · 점심 12:00–13:00(식당) · 출근 가는/오는 · 점심 가는/오는.
+            // 구간은 전부 명시 연결 없는 추정 구간(시뮬레이터 데이터 실측과 같은 모양 — linked nil).
+            let work = af18Act("T56 출근", d.addingTimeInterval(9 * 3600), d.addingTimeInterval(18 * 3600), rid)
+            let lunch = ActivityBlock(title: "T56 점심", location: t56Lunch,
+                                      startDate: d.addingTimeInterval(12 * 3600),
+                                      endDate: d.addingTimeInterval(13 * 3600), recurrenceId: rid)
+            let out = af18LegOut(nil, d.addingTimeInterval(8 * 3600 + 40 * 60), d.addingTimeInterval(9 * 3600), rid)
+            let ret = af18LegRet(nil, d.addingTimeInterval(18 * 3600), d.addingTimeInterval(18 * 3600 + 1200), rid)
+            let lOut = afInjectedLeg(title: "T56 점심 가는", anchor: .arrival, arrival: d.addingTimeInterval(12 * 3600),
+                                     departure: d.addingTimeInterval(11 * 3600 + 50 * 60), origin: afOffice,
+                                     destination: t56Lunch, linked: nil, recurrence: rid)
+            let lRet = afInjectedLeg(title: "T56 점심 오는", anchor: .departure,
+                                     arrival: d.addingTimeInterval(13 * 3600 + 600),
+                                     departure: d.addingTimeInterval(13 * 3600), origin: t56Lunch,
+                                     destination: afOffice, linked: nil, recurrence: rid)
+            return (work, lunch, out, ret, lOut, lRet)
+        }
+        func t56Append(_ fs: [(work: ActivityBlock, lunch: ActivityBlock, out: ScheduledEvent,
+                               ret: ScheduledEvent, lOut: ScheduledEvent, lRet: ScheduledEvent)]) {
+            store.activities.append(contentsOf: fs.flatMap { [$0.work, $0.lunch] })
+            store.events.append(contentsOf: fs.flatMap { [$0.out, $0.ret, $0.lOut, $0.lRet] })
+        }
+        func t56Act(_ id: UUID) -> ActivityBlock { store.activities.first { $0.id == id }! }
+        func t56Leg(_ id: UUID) -> ScheduledEvent { store.events.first { $0.id == id }! }
+
+        // T56-1 — S-9 장면(점심 있는 반복)의 가는 편 '전체' −30: 체류 시작만 당겨진다(SPEC 바람).
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400), d3 = af18d0.addingTimeInterval(2 * 86400)
+            let f1 = t56Fixture(rid, d1), f2 = t56Fixture(rid, d2), f3 = t56Fixture(rid, d3)
+            t56Append([f1, f2, f3])
+            store.adjustTravelLeg(f1.out, byMinutes: -30, wholeSeries: true)
+            let m = -30.0 * 60
+            let w1 = t56Act(f1.work.id), w2 = t56Act(f2.work.id), w3 = t56Act(f3.work.id)
+            agAi.drvCheck("T56-1 S-9 가는 편 '전체' −30 → 세 회차 체류 시작만 −30(끝 18:00 유지), 점심·점심이동·오는편 불변(REQ-002·003·010)",
+                          w1.startDate == f1.work.startDate.addingTimeInterval(m)
+                              && w2.startDate == f2.work.startDate.addingTimeInterval(m)
+                              && w3.startDate == f3.work.startDate.addingTimeInterval(m)
+                              && w1.endDate == f1.work.endDate && w2.endDate == f2.work.endDate
+                              && w3.endDate == f3.work.endDate
+                              && t56Leg(f1.out.id).arrivalDate == f1.out.arrivalDate.addingTimeInterval(m)
+                              && t56Leg(f3.out.id).arrivalDate == f3.out.arrivalDate.addingTimeInterval(m)
+                              && afRecBytes(t56Act(f1.lunch.id)) == afRecBytes(f1.lunch)
+                              && afRecBytes(t56Act(f3.lunch.id)) == afRecBytes(f3.lunch)
+                              && afLegBytes(t56Leg(f1.ret.id)) == afLegBytes(f1.ret)
+                              && afLegBytes(t56Leg(f1.lOut.id)) == afLegBytes(f1.lOut)
+                              && afLegBytes(t56Leg(f1.lRet.id)) == afLegBytes(f1.lRet),
+                          "시작=\([w1, w2, w3].map { Int($0.startDate.timeIntervalSince(af18d0) / 60) }), 끝=\([w1, w2, w3].map { Int($0.endDate.timeIntervalSince(af18d0) / 60) })분")
+        }
+
+        // T56-2 — S-9 재확인의 오는 편 변이(운영자는 이쪽도 통째 이동으로 봄): 끝만 −30이 SPEC 바람.
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400)
+            let f1 = t56Fixture(rid, d1), f2 = t56Fixture(rid, d2)
+            t56Append([f1, f2])
+            store.adjustTravelLeg(f1.ret, byMinutes: -30, wholeSeries: true)
+            let m = -30.0 * 60
+            let w1 = t56Act(f1.work.id), w2 = t56Act(f2.work.id)
+            agAi.drvCheck("T56-2 S-9 오는 편 '전체' −30 → 두 회차 체류 끝만 −30(시작 09:00 유지), 점심·가는편 불변(REQ-001·003·010)",
+                          w1.endDate == f1.work.endDate.addingTimeInterval(m)
+                              && w2.endDate == f2.work.endDate.addingTimeInterval(m)
+                              && w1.startDate == f1.work.startDate && w2.startDate == f2.work.startDate
+                              && t56Leg(f1.ret.id).departureDate == f1.ret.departureDate?.addingTimeInterval(m)
+                              && afRecBytes(t56Act(f1.lunch.id)) == afRecBytes(f1.lunch)
+                              && afLegBytes(t56Leg(f1.out.id)) == afLegBytes(f1.out)
+                              && afLegBytes(t56Leg(f2.lOut.id)) == afLegBytes(f2.lOut),
+                          "시작=\([w1, w2].map { Int($0.startDate.timeIntervalSince(af18d0) / 60) }), 끝=\([w1, w2].map { Int($0.endDate.timeIntervalSince(af18d0) / 60) })분")
+        }
+
+        // T56-3 — S-8 장면: '이 일정만'으로 내린 회차(S-7)를 가는 편 '전체' −30로 움직여도
+        //          그 회차의 편집된 끝(18:30)은 유지된다(SPEC 바람 — 관측은 18:00으로 올라감).
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400)
+            let f1 = t56Fixture(rid, d1), f2 = t56Fixture(rid, d2)
+            t56Append([f1, f2])
+            store.adjustTravelLeg(f1.ret, byMinutes: 30, wholeSeries: false)   // S-7: 첫 회차만 18:30
+            let s7OK = t56Act(f1.work.id).endDate == f1.work.endDate.addingTimeInterval(30 * 60)
+            store.adjustTravelLeg(f1.out, byMinutes: -30, wholeSeries: true)   // S-8: 전체 −30
+            let m = -30.0 * 60
+            let w1 = t56Act(f1.work.id), w2 = t56Act(f2.work.id)
+            agAi.drvCheck("T56-3 S-8 '이 일정만' +30 뒤 가는 편 '전체' −30 → 편집 회차 끝은 18:30 그대로, 둘째 회차 끝은 18:00(REQ-003·010)",
+                          s7OK && w1.startDate == f1.work.startDate.addingTimeInterval(m)
+                              && w1.endDate == f1.work.endDate.addingTimeInterval(30 * 60)
+                              && w2.startDate == f2.work.startDate.addingTimeInterval(m)
+                              && w2.endDate == f2.work.endDate,
+                          "첫 회차 시작=\(Int(w1.startDate.timeIntervalSince(d1) / 60)), 끝=\(Int(w1.endDate.timeIntervalSince(d1) / 60))분")
+        }
+
+        // T56-4 — 대조(.activity 드롭 경로): moveActivity '전체'는 체류·점심의 시작·끝을 모두
+        //          옮긴다(길이 불변) — 운영자 관측 "시간대 전체 이동"과 일치하는 모양을 여기 고정한다.
+        do {
+            let rid = UUID()
+            let d1 = af18d0, d2 = af18d0.addingTimeInterval(86400)
+            let f1 = t56Fixture(rid, d1), f2 = t56Fixture(rid, d2)
+            t56Append([f1, f2])
+            store.moveActivity(f1.work, byMinutes: -30, wholeSeries: true)
+            let m = -30.0 * 60
+            let w1 = t56Act(f1.work.id), w2 = t56Act(f2.work.id)
+            let l1 = t56Act(f1.lunch.id), l2 = t56Act(f2.lunch.id)
+            agAi.drvCheck("T56-4 대조 — 활동 드래그 '전체'(moveActivity) −30 → 체류·점심 모두 시작·끝 같이 −30, 구간도 같이 −30(시간대 통째 이동 — 관측 모양)",
+                          w1.startDate == f1.work.startDate.addingTimeInterval(m)
+                              && w1.endDate == f1.work.endDate.addingTimeInterval(m)
+                              && w2.startDate == f2.work.startDate.addingTimeInterval(m)
+                              && w2.endDate == f2.work.endDate.addingTimeInterval(m)
+                              && l1.startDate == f1.lunch.startDate.addingTimeInterval(m)
+                              && l1.endDate == f1.lunch.endDate.addingTimeInterval(m)
+                              && l2.startDate == f2.lunch.startDate.addingTimeInterval(m)
+                              && l2.endDate == f2.lunch.endDate.addingTimeInterval(m)
+                              && t56Leg(f1.out.id).arrivalDate == f1.out.arrivalDate.addingTimeInterval(m)
+                              && t56Leg(f1.ret.id).departureDate == f1.ret.departureDate?.addingTimeInterval(m)
+                              && t56Leg(f1.lOut.id).arrivalDate == f1.lOut.arrivalDate.addingTimeInterval(m)
+                              && t56Leg(f1.lRet.id).departureDate == f1.lRet.departureDate?.addingTimeInterval(m),
+                          "체류=\(Int(w1.startDate.timeIntervalSince(d1) / 60))~\(Int(w1.endDate.timeIntervalSince(d1) / 60)), 점심=\(Int(l1.startDate.timeIntervalSince(d1) / 60))~\(Int(l1.endDate.timeIntervalSince(d1) / 60))분")
+        }
+
+        // T56-5 — 뷰 히트테스트 분류(배치 산술 인라인 재현): 이동 블록의 세로 범위 안 좌표는
+        //          어느 배치에서도 .event다 — 09:00 전 세로 구간에 활동 블록이 없고, 09:00 경계점
+        //          에서도 짧은 이동 블록이 이긴다(positionedBlocks·block(atX:)의 판정식을 t58절
+        //          방식으로 그대로 옮긴다. 칸 간격 3은 ContentView.columnGap, 최소 높이는 뷰
+        //          상수와 무관하게 픽스처 시각이 그대로 살아 규칙만 재현한다).
+        do {
+            let rid = UUID()
+            let f1 = t56Fixture(rid, af18d0)
+            t56Append([f1])
+            let dayEvents = store.events.filter { $0.recurrenceId == rid }
+            let dayActs = store.activities.filter { $0.recurrenceId == rid }
+            let groups = store.packingGroups(events: dayEvents, activities: dayActs)
+            // positionedBlocks의 Item — 그 날(초 0·하루 안)이라 분 산술 그대로.
+            let items: [(id: String, start: CGFloat, end: CGFloat, key: String?)] = [
+                ("a-\(f1.work.id)", 540, 1080, f1.work.id.uuidString),
+                ("a-\(f1.lunch.id)", 720, 780, f1.lunch.id.uuidString),
+                ("e-\(f1.out.id)", 520, 540, groups[f1.out.id]?.uuidString),
+                ("e-\(f1.ret.id)", 1080, 1100, groups[f1.ret.id]?.uuidString),
+                ("e-\(f1.lOut.id)", 710, 720, groups[f1.lOut.id]?.uuidString),
+                ("e-\(f1.lRet.id)", 780, 790, groups[f1.lRet.id]?.uuidString),
+            ]
+            let slots = ScheduleLogic.overlapSlots(items.map {
+                ScheduleLogic.LayoutItem(id: $0.id, start: $0.start, end: $0.end, groupKey: $0.key)
+            })
+            let byID = Dictionary(uniqueKeysWithValues: zip(items, slots).map { ($1.id, ($0.start, $0.end)) })
+            // block(atX:) 판정식 — 세로 경계 포함 · 가로 range.points 사각형 · 짧은 블록 우선.
+            func t56Hit(_ target: String, yMinutes: CGFloat, total: CGFloat = 400) -> String? {
+                guard let slot = slots.first(where: { $0.id == target }) else { return nil }
+                let f = slot.points(in: total, gap: 3)   // ContentView.columnGap
+                let px = (f.x + f.width / 2) / total     // 그 블록의 가로 정중앙
+                var best: (duration: CGFloat, id: String)?
+                for p in slots {
+                    let se = byID[p.id]!
+                    guard yMinutes >= se.0, yMinutes <= se.1 else { continue }
+                    let pf = p.points(in: total, gap: 3)
+                    guard px >= pf.x, px <= pf.x + pf.width else { continue }
+                    let duration = max(se.1 - se.0, 1)
+                    if best == nil || duration < best!.duration { best = (duration, p.id) }
+                }
+                return best?.id
+            }
+            agAi.drvCheck("T56-5 배치·히트 재현 — 이동 블록 몸통(08:50)·09:00 경계·오는 편(18:10) 좌표는 모두 .event, 체류 몸통(10:00)만 .activity(뷰 분류 결함 없음)",
+                          t56Hit("e-\(f1.out.id)", yMinutes: 530) == "e-\(f1.out.id)"
+                              && t56Hit("e-\(f1.out.id)", yMinutes: 540) == "e-\(f1.out.id)"
+                              && t56Hit("e-\(f1.ret.id)", yMinutes: 1090) == "e-\(f1.ret.id)"
+                              && t56Hit("a-\(f1.work.id)", yMinutes: 600) == "a-\(f1.work.id)",
+                          "08:50→\(t56Hit("e-\(f1.out.id)", yMinutes: 530) ?? "nil"), 09:00→\(t56Hit("e-\(f1.out.id)", yMinutes: 540) ?? "nil"), 10:00→\(t56Hit("a-\(f1.work.id)", yMinutes: 600) ?? "nil")")
         }
 
         // ── AH. t17-c(SPEC-UIKIT-009 MC) — C1 특성화: 겹침 배치 순수 함수(ScheduleLogic
