@@ -250,7 +250,7 @@
 | P1 | 장소를 검색해서 고른다 | ✅ | `[장소 검색]` 칩(`EditCardView.swift:131`), 후보 편집기(`EditCardView.swift:320-354`), 후보 행(`EditCardView.swift:357-378`), 5건 상한(`AIAssistant.swift:1097`). 〔드:P절 + 관찰(2026-09-16)〕 |
 | P2 | 일반명사 거절과 검색은 다르다 — 기준은 좌표 | ✅ | 자유 텍스트로 일반명사 확정은 거절(`AIAssistant.swift:1154-1157`), 후보에서 고른 이름은 통과(`choose(field:place:)` `AIAssistant.swift:1063-1067`). 〔드:P절 + 관찰(2026-09-16)〕 |
 | P3 | 고른 지점이 그대로 등록된다 (이름이 재검색되지 않음) | ✅ | 열쇠는 인자에, 좌표는 `confirmedPlaces`(`AIAssistant.swift:57`). 이름이 겹치면 `confirmedPlaceKey`(`AIAssistant.swift:1083`)가 갈라 준다. 실행부는 고른 좌표 그대로(`AIAssistant.swift:3087`). 즐겨찾기가 이긴다. 〔드:P절〕 |
-| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 350 ms 묶음(`searchPlaces` `AIAssistant.swift:1104`, 상수 `EditCard.swift:741`) + 같은 질의 재호출 차단(`EditCard.swift:764`). 〔드:P절 P-4·P-5〕 |
+| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 350 ms 묶음(`searchPlaces` `AIAssistant.swift:1104`, 상수 `EditCard.swift:748`) + 같은 질의 재호출 차단(`EditCard.swift:771`). 〔드:P절 P-4·P-5〕 |
 | P5 | 카드가 사라진 뒤 돌아온 결과·0건 처리 | ✅ | 줄 id로 자리를 다시 찾아 없으면 버린다(`setLookup` `AIAssistant.swift:1131`). 0건·오프라인 문구 L8. 〔드:P절 P-6〕 |
 | P6 | 장소 검색을 다시 열면 옛 선택 강조가 남지 않는다 (U-2) | ✅ | 열린 동안 그 줄의 칩 강조를 끄는 판정 한 자리(`EditCardView.swift:89`). 〔시뮬(2026-10-05) AC-015 17~20번 네 화면 전부 같음〕 |
 
