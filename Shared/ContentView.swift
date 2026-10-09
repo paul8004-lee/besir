@@ -969,23 +969,33 @@ private struct SwipePager<Content: View>: View {
                         animated = true
                         if value.translation.width < -threshold {
                             dragOffset = -width
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                                date = step(date, 1)
-                                animated = false
-                                dragOffset = 0
-                            }
+                            commitPage(delta: 1)
                         } else if value.translation.width > threshold {
                             dragOffset = width
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                                date = step(date, -1)
-                                animated = false
-                                dragOffset = 0
-                            }
+                            commitPage(delta: -1)
                         } else {
                             dragOffset = 0
                         }
                     }
             )
+        }
+    }
+
+    /// 임계치를 넘긴 스와이프의 확정. 세 쓰기(부모 date, animated, dragOffset)를 한 트랜잭션에
+    /// 애니메이션 없이 묶는다 — 낱개 쓰기로 흩어지면 0.25초 이징이 아직 붙어 있는 사이(t60의
+    /// 커밋은 0.22초에 발사) 갱신 경계를 넘으며 하위트리 일부(주간 스트립·시트 제시)만 낡은
+    /// 상태에 남는다. 그 모양이 "날짜를 바꾼 뒤 끌기·탭이 전부 죽는" 운영자 관측(t60)으로
+    /// 재현됐다 — 같은 페이지 자리를 위치 기준으로 재사용하는 페이저라 이질러도 화면이
+    /// 멀쩡해 보여 조용히 남는다.
+    private func commitPage(delta: Int) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            var transaction = Transaction()
+            transaction.disablesAnimations = true
+            withTransaction(transaction) {
+                date = step(date, delta)
+                animated = false
+                dragOffset = 0
+            }
         }
     }
 }

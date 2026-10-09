@@ -1,0 +1,4 @@
+appId: com.iseongmin.besir
+---
+- tapOn:
+    point: 51%, 82%
