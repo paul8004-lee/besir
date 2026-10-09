@@ -36,6 +36,11 @@
 // t49절(2026-10-08) — 편집 끝 시각 변경의 추정 복귀 구간 연계(카드 t49 — t43이 범위 밖으로
 // 미뤄둔 편집 쪽 조각): T49-1~6 추가 6. 마감 하한은 **529**(t43 마감 523 + 6) — 단언을 지우면
 // 하한 밑으로 떨어진다.
+//
+// T58절(2026-10-09) — 연결 없는 반복 회차 편집 저장의 장소 유실(카드 t58): 시드가 깃발만
+// 심고 일찍 돌아가며 장소 확정을 건너뛰어 confirmedPlaces가 비는 결함. T58-1~5 추가 5
+// (1·2 시드 좌표·판정, 3 저장 경로, 4 "장소 없음" REQ-004 보존 회귀선, 5 단발·명시 회귀선).
+// 마감 하한은 **534**(t49 마감 529 + 5) — 단언을 지우면 하한 밑으로 떨어진다.
 
 
 var drvPass = 0, drvFail = 0
@@ -5235,6 +5240,97 @@ struct Drv {
         agAi.drvCheck("AG-011-04 반복 회차 폼에서 장소를 고른 뒤에도 구간 줄(토글 포함)이 0개다",
                       ag114Form.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.isEmpty,
                       "남은 구간 줄=\(ag114Form.card.fields.filter { LegRowKeys.allKeys.contains($0.key) }.map(\.key))")
+
+        // ── T58절(2026-10-09) — 연결 없는 반복 회차 편집 저장의 장소 유실: 시드가 깃발만 심고
+        //        일찍 돌아가며 장소 확정(choose)을 건너뛰어 confirmedPlaces가 비고, 저장 판정이
+        //        clearPlace=true가 되는 결함(운영자 관측 — 수정 뒤 오는 이동이 안 따라옴,
+        //        시뮬레이터 데이터에서 편집된 회차만 location이 비어 있었음). 저장 판정식은
+        //        ActivityDetailView.save가 내리는 것과 같은 식(chosen==nil → nil, 아니면
+        //        confirmedPlaces[줄id])을 여기 인라인으로 둔다 — 뷰는 컴파일 대상이 아니라
+        //        드라이버가 그 판정을 재현하는 유일한 길이다. 수리 전에 바라는 동작으로 쓴
+        //        단언이라 수리 전 ✗는 실패가 아니라 결함의 기록이다(t49절과 같은 규칙).
+        let t58Rec = UUID()
+        let t58Act = agSeedActivity(t58Rec)
+        let t58Seed = LegCardForm.seeded(activity: t58Act, outbound: nil, returnLeg: nil,
+                                         noPlaceValue: "__no_place__", placeOptions: [],
+                                         favoriteOptions: [])
+        let t58Loc = t58Seed.card.fields.first { $0.key == "location_query" }!
+        agAi.drvCheck("T58-1 연결 없는 반복 회차 시드가 location 좌표를 confirmedPlaces에 보존한다",
+                      t58Seed.confirmedPlaces[t58Loc.id] == agOffice,
+                      "좌표=\(String(describing: t58Seed.confirmedPlaces[t58Loc.id]))")
+        let t58Place = t58Loc.chosen == nil ? nil : t58Seed.confirmedPlaces[t58Loc.id]
+        agAi.drvCheck("T58-2 무변경 폼의 저장 판정(뷰 save의 clearPlace 식)이 장소 유지(newPlace non-nil)",
+                      t58Place != nil,
+                      "판정 장소=\(String(describing: t58Place))")
+        // 저장 경로 — 시트 저장 순서(design §3)의 ① modifyActivity를 판정이 낸 그 인자로
+        // 부른다. 시드의 장소가 살아 있으면(newPlace non-nil) t49의 추정 복귀 연계가 걸리고,
+        // 결함 상태(clearPlace=true)면 REQ-004가 짝을 안 잡게 해 이동이 그대로 남는다.
+        do {
+            let t58Rid = UUID()
+            let t58Base = af18d0.addingTimeInterval(18 * 3600)
+            let t58EditAct = af18Act("T58 회차", t58Base, t58Base.addingTimeInterval(3600), t58Rid)
+            let t58EditLeg = af18LegRet(nil, t58EditAct.endDate, t58EditAct.endDate.addingTimeInterval(1200), t58Rid)
+            store.activities.append(t58EditAct); store.events.append(t58EditLeg)
+            let t58Form = LegCardForm.seeded(activity: t58EditAct, outbound: nil, returnLeg: nil,
+                                             noPlaceValue: "__no_place__", placeOptions: [],
+                                             favoriteOptions: [])
+            let t58FLoc = t58Form.card.fields.first { $0.key == "location_query" }!
+            let t58FPlace = t58FLoc.chosen == nil ? nil : t58Form.confirmedPlaces[t58FLoc.id]
+            let t58NewEnd = t58EditAct.endDate.addingTimeInterval(1800)
+            _ = store.modifyActivity(id: t58EditAct.id, newEnd: t58NewEnd,
+                                     newPlace: t58FPlace, clearPlace: t58FPlace == nil)
+            let t58LegA = store.events.first { $0.id == t58EditLeg.id }!
+            agAi.drvCheck("T58-3 시드가 낸 판정 그대로 저장한 끝 +30분 편집에 추정 복귀 구간이 따라온다(출발 = 새 끝)",
+                          t58LegA.departureDate == t58NewEnd
+                              && t58LegA.arrivalDate == t58EditLeg.arrivalDate.addingTimeInterval(1800),
+                          "출발=\(String(describing: t58LegA.departureDate)), 새끝=\(t58NewEnd), 판정=\(String(describing: t58FPlace))")
+        }
+        // "장소 없음" 칩을 직접 고른 저장은 계속 장소 삭제(REQ-004) — 수리가 이 문을 못 닫게
+        // 하는 회귀선. 판정뿐 아니라 그 저장에서 추정 구간이 짝을 못 잡고 그대로 남는 것까지
+        // 고정한다(장소 없는 활동의 구간은 존재할 수 없다는 설계의 실행형).
+        do {
+            var t58NoPlace = t58Seed
+            t58NoPlace.choose(field: t58Loc.id, value: "__no_place__", place: nil)
+            let t58NPlace = t58Loc.chosen == nil ? nil : t58NoPlace.confirmedPlaces[t58Loc.id]
+            let t58NRid = UUID()
+            let t58NBase = af18d0.addingTimeInterval(20 * 3600)
+            let t58NAct = af18Act("T58 없음", t58NBase, t58NBase.addingTimeInterval(3600), t58NRid)
+            let t58NLeg = af18LegRet(nil, t58NAct.endDate, t58NAct.endDate.addingTimeInterval(1200), t58NRid)
+            store.activities.append(t58NAct); store.events.append(t58NLeg)
+            _ = store.modifyActivity(id: t58NAct.id, newEnd: t58NAct.endDate.addingTimeInterval(1800),
+                                     newPlace: t58NPlace, clearPlace: t58NPlace == nil)
+            let t58NLegA = store.events.first { $0.id == t58NLeg.id }!
+            agAi.drvCheck("T58-4 \"장소 없음\" 칩을 고른 폼은 판정 nil(clearPlace=true) && 그 저장에서 추정 구간은 움직이지 않는다(REQ-004)",
+                          t58NPlace == nil
+                              && t58NLegA.departureDate == t58NLeg.departureDate
+                              && t58NLegA.arrivalDate == t58NLeg.arrivalDate,
+                          "판정=\(String(describing: t58NPlace)), 출발=\(String(describing: t58NLegA.departureDate))")
+        }
+        // 기존 경로 회귀선 — 단발 활동과 명시 연결 회차의 시드는 원래부터 choose를 지나므로
+        // 좌표가 그대로다(수리가 이 경로를 못 바꾸게 고정).
+        do {
+            let t58Sole = LegCardForm.seeded(activity: af18Act("T58 단발", af18d0.addingTimeInterval(22 * 3600),
+                                                                af18d0.addingTimeInterval(23 * 3600)),
+                                             outbound: nil, returnLeg: nil,
+                                             noPlaceValue: "__no_place__", placeOptions: [],
+                                             favoriteOptions: [])
+            let t58LinkedRid = UUID()
+            let t58LinkedAct = af18Act("T58 명시", af18d0.addingTimeInterval(24 * 3600),
+                                       af18d0.addingTimeInterval(25 * 3600), t58LinkedRid)
+            let t58LinkedOut = af18LegOut(t58LinkedAct.id, af18d0.addingTimeInterval(23 * 3600),
+                                          af18d0.addingTimeInterval(24 * 3600), t58LinkedRid)
+            store.activities.append(t58LinkedAct); store.events.append(t58LinkedOut)
+            let t58Linked = LegCardForm.seeded(activity: t58LinkedAct, outbound: t58LinkedOut, returnLeg: nil,
+                                               noPlaceValue: "__no_place__", placeOptions: [],
+                                               favoriteOptions: [])
+            func t58LocPlace(_ f: LegCardForm) -> Place? {
+                let row = f.card.fields.first { $0.key == "location_query" }!
+                return row.chosen == nil ? nil : f.confirmedPlaces[row.id]
+            }
+            agAi.drvCheck("T58-5 단발 활동·명시 연결 회차 시드의 location 좌표는 그대로 보존된다",
+                          t58LocPlace(t58Sole) == afOffice && t58LocPlace(t58Linked) == afOffice,
+                          "단발=\(String(describing: t58LocPlace(t58Sole))), 명시=\(String(describing: t58LocPlace(t58Linked)))")
+        }
 
         // ── AH. t17-c(SPEC-UIKIT-009 MC) — C1 특성화: 겹침 배치 순수 함수(ScheduleLogic
         //        .overlapColumns)의 실제 출력을 단언으로 고정한다. 값은 손 계산(design §6.3)이

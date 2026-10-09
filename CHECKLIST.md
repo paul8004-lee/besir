@@ -91,7 +91,7 @@
 | D6 | 회차마다 여유를 따로 바꾼 시리즈에 "전체 여유 0으로" | ✅ | 0 판정이 시리즈 전체 값을 본다(`AIAssistant.swift:2502-2506`). 〔드:N절〕 |
 | D7 | 모델이 말도 안 되는 값을 보내도 (여유 -5분 등) | ✅ | `clampBuffer`·`clampNotifyLead`(`Store.swift:62`·`Store.swift:66`)를 네 경로가 쓴다: 단발 `AIAssistant.swift:1742-1743`·활동 `AIAssistant.swift:2012-2013`·반복 `AIAssistant.swift:2146-2147`·수정 `Store.swift:1048-1049`. 〔드:O절〕 |
 | D8 | 화면에서 블록 드래그로 시간 이동 | ✅ | 꾹 눌러 드래그(0.35초, `ContentView.swift:1071-1073`). 반복이면 "전체/이 일정만"(`ContentView.swift:183-188`, 적용 `ContentView.swift:916`·`ContentView.swift:924`). 〔빌드·코드 + 시뮬(2026-10-05) 18번〕 |
-| D9 | 화면에서 활동을 고치면(시간·장소·이동 줄) 이동이 활동에서 떨어지지 않는다 | ✅ | 이동 상세의 편집은 연결된 구간이면 활동 편집 카드를 연다(`EventDetailView.swift:94`, 조회 `Store.swift:422`). 활동 카드는 생성 카드와 같은 구간 줄 문법(`LegCardForm.seeded` `EditCard.swift:566`, 줄 키 `EditCard.swift:255`), 시간은 활동에서 유도. 저장 순서: `modifyActivity`(`Store.swift:311`) → 제거 → `realignLegs`(`Store.swift:588`) → `LegSavePlanner`(`EditCard.swift:627`)의 수정·추가(`ActivityDetailView.swift:311`). 오는 이동을 나중에 더하기(`addLeg` `Store.swift:468`). 연결 없는 반복 회차는 구간 줄이 없다(`EditCard.swift:319`). 〔드:AF·AG절 + 시뮬(2026-10-05) AC-023 1~13번 전부 같음〕 |
+| D9 | 화면에서 활동을 고치면(시간·장소·이동 줄) 이동이 활동에서 떨어지지 않는다 | ✅ | 이동 상세의 편집은 연결된 구간이면 활동 편집 카드를 연다(`EventDetailView.swift:94`, 조회 `Store.swift:422`). 활동 카드는 생성 카드와 같은 구간 줄 문법(`LegCardForm.seeded` `EditCard.swift:566`, 줄 키 `EditCard.swift:255`), 시간은 활동에서 유도. 저장 순서: `modifyActivity`(`Store.swift:311`) → 제거 → `realignLegs`(`Store.swift:588`) → `LegSavePlanner`(`EditCard.swift:634`)의 수정·추가(`ActivityDetailView.swift:311`). 오는 이동을 나중에 더하기(`addLeg` `Store.swift:468`). 연결 없는 반복 회차는 구간 줄이 없다(`EditCard.swift:319`). 〔드:AF·AG절 + 시뮬(2026-10-05) AC-023 1~13번 전부 같음〕 |
 | D10 | 활동 장소를 '장소 없음'으로 / 종료를 시작 이전으로 저장 | ✅ | `modifyActivity(clearPlace:)`(`Store.swift:311`) — 장소를 지우면 연결 구간도 지운다. 종료 ≤ 시작이면 종료·구간 그대로. 〔드:AF-004〕 |
 | D11 | 이동시간을 못 구한 채 저장 | ⚠️ | 안내 '이동시간을 계산하지 못했어요'(`ActivityDetailView.swift:384`), 구간 연산 결과 `LegOutcome`(`Store.swift:373`). **끝점이 그대로인 nil 구간은 다시 저장해도 재추정되지 않는다**(plan.md 후속 30). 화면 문구·시트는 오프라인이 필요해 **실기기 이월**(AC-023 13a·AC-024 20). 〔드:AF-003-06·AF-010·AH-010〕 |
 
@@ -250,7 +250,7 @@
 | P1 | 장소를 검색해서 고른다 | ✅ | `[장소 검색]` 칩(`EditCardView.swift:131`), 후보 편집기(`EditCardView.swift:320-354`), 후보 행(`EditCardView.swift:357-378`), 5건 상한(`AIAssistant.swift:1097`). 〔드:P절 + 관찰(2026-09-16)〕 |
 | P2 | 일반명사 거절과 검색은 다르다 — 기준은 좌표 | ✅ | 자유 텍스트로 일반명사 확정은 거절(`AIAssistant.swift:1154-1157`), 후보에서 고른 이름은 통과(`choose(field:place:)` `AIAssistant.swift:1063-1067`). 〔드:P절 + 관찰(2026-09-16)〕 |
 | P3 | 고른 지점이 그대로 등록된다 (이름이 재검색되지 않음) | ✅ | 열쇠는 인자에, 좌표는 `confirmedPlaces`(`AIAssistant.swift:57`). 이름이 겹치면 `confirmedPlaceKey`(`AIAssistant.swift:1083`)가 갈라 준다. 실행부는 고른 좌표 그대로(`AIAssistant.swift:3087`). 즐겨찾기가 이긴다. 〔드:P절〕 |
-| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 350 ms 묶음(`searchPlaces` `AIAssistant.swift:1104`, 상수 `EditCard.swift:741`) + 같은 질의 재호출 차단(`EditCard.swift:764`). 〔드:P절 P-4·P-5〕 |
+| P4 | 한글을 빨리 쳐도 검색이 폭주하지 않는다 | ✅ | 350 ms 묶음(`searchPlaces` `AIAssistant.swift:1104`, 상수 `EditCard.swift:748`) + 같은 질의 재호출 차단(`EditCard.swift:771`). 〔드:P절 P-4·P-5〕 |
 | P5 | 카드가 사라진 뒤 돌아온 결과·0건 처리 | ✅ | 줄 id로 자리를 다시 찾아 없으면 버린다(`setLookup` `AIAssistant.swift:1131`). 0건·오프라인 문구 L8. 〔드:P절 P-6〕 |
 | P6 | 장소 검색을 다시 열면 옛 선택 강조가 남지 않는다 (U-2) | ✅ | 열린 동안 그 줄의 칩 강조를 끄는 판정 한 자리(`EditCardView.swift:89`). 〔시뮬(2026-10-05) AC-015 17~20번 네 화면 전부 같음〕 |
 

@@ -586,6 +586,13 @@ extension LegCardForm {
         // 깃발을 심는다(sync 1차 B1).
         guard activity.recurrenceId == nil || outbound != nil || returnLeg != nil else {
             f.recurrenceEpisodeWithoutLegs = true
+            // 깃발을 먼저 심은 뒤에 장소를 고른다 — 순서가 바뀌면 choose의 전이가 구간 토글 줄을
+            // end_iso 뒤에 세운다(깃발이 참이어야 :345의 삽입 건너뛰기가 돈다, AG-011-04). 옛
+            // 가드는 일찍 돌아가며 장소 확정까지 건너뛰어 confirmedPlaces가 비고, 저장 판정이
+            // clearPlace=true로 굳어져 편집만 열어 닫아도 장소가 지워졌다(t58). location이 nil인
+            // 활동은 choose(place: nil)로 좌표가 지워질 뿐이라 "장소 없음" 저장(REQ-004)은 그대로다.
+            f.choose(field: locationRow.id, value: activity.location?.name ?? noPlaceValue,
+                     place: activity.location)
             return f
         }
         // 장소 칩을 고른 것으로 전이를 돈다 — 좌표가 실리는 순간 토글 둘이 end_iso 뒤에 선다.
